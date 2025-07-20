@@ -911,7 +911,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return className.equals("net.alshanex.alshanex_familiars.entity.ClericPetEntity");
     }
 
-    protected void clericSetGoal(){
+    protected void clericSetGoal(ServerPlayer player){
 
     }
 
@@ -950,7 +950,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                         SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5F, 2.0F);
 
                 if(isClericPet()){
-                    clericSetGoal();
+                    clericSetGoal(serverPlayer);
                 }
             } else {
                 FamiliarHelper.spawnTamingParticles(false, this);

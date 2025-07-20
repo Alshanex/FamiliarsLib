@@ -134,7 +134,7 @@ public class FamiliarManager {
         }
     }
 
-    private static void summonFamiliar(ServerPlayer player, UUID familiarId) {
+    public static void summonFamiliar(ServerPlayer player, UUID familiarId) {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
         CompoundTag familiarNBT = familiarData.getFamiliarData(familiarId);
 
@@ -187,7 +187,7 @@ public class FamiliarManager {
         syncFamiliarData(player, familiarData);
     }
 
-    private static void desummonFamiliar(ServerPlayer player, UUID familiarId) {
+    public static void desummonFamiliar(ServerPlayer player, UUID familiarId) {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
         ServerLevel level = player.serverLevel();
 
@@ -295,7 +295,7 @@ public class FamiliarManager {
         return spawn;
     }
 
-    private static void syncFamiliarData(ServerPlayer player, PlayerFamiliarData familiarData) {
+    public static void syncFamiliarData(ServerPlayer player, PlayerFamiliarData familiarData) {
         try {
             Map<UUID, CompoundTag> familiarsData = familiarData.getAllFamiliars();
             UUID selectedId = familiarData.getSelectedFamiliarId();
@@ -649,7 +649,7 @@ public class FamiliarManager {
         return "Unknown";
     }
 
-    private static void updateSummonedFamiliarsData(ServerPlayer player) {
+    public static void updateSummonedFamiliarsData(ServerPlayer player) {
         try {
             PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
             ServerLevel level = player.serverLevel();
