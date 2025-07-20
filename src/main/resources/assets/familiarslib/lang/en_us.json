@@ -39,5 +39,9 @@
   "message.familiarslib.familiar_not_in_storage": "Familiar not found in storage",
   "message.familiarslib.retrieval_failed": "Failed to retrieve familiar",
 
+  "itemGroup.familiarslib.main_tab": "FamiliarsLib",
+
+  "item.familiarslib.sound_rune": "Sound Rune",
+  "item.familiarslib.sound_upgrade_orb": "Sound Upgrade Orb",
   "item.familiarslib.familiar_spellbook.desc": "When equipped, this spellbook connects you with your tamed familiars, allowing you to share your magic attributes with them."
 }
