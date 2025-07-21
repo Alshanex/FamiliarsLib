@@ -3,10 +3,13 @@ package net.alshanex.familiarslib.block;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.network.OpenFamiliarStoragePacket;
 import net.alshanex.familiarslib.network.UpdateFamiliarStoragePacket;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionResult;
@@ -47,6 +50,8 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
                 if (!storageEntity.isOwner(serverPlayer)) {
+                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                            Component.translatable("message.familiarslib.not_storage_owner").withStyle(ChatFormatting.RED)));
                     return InteractionResult.FAIL;
                 }
 
