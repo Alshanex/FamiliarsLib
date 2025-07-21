@@ -5,12 +5,14 @@ import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -38,6 +40,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private int ticksSinceLastRelease = 0;
     private static final int MAX_TICKS_WITHOUT_RELEASE = 400; // 20 segundos máximo sin actividad
 
+    private boolean wasNightTime = false;
+
     private UUID ownerUUID;
     public final Map<UUID, FamiliarData> storedFamiliars = new HashMap<>();
     public final Set<UUID> outsideFamiliars = new HashSet<>();
@@ -55,38 +59,45 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private void tick() {
         if (level == null || level.isClientSide) return;
 
-        // En Store Mode: NO liberar familiares
+        boolean isNight = !isDaytime();
+
+        if (isNight && !wasNightTime && !storeMode) {
+            recallAllOutsideFamiliars();
+        }
+
+        wasNightTime = isNight;
+
         if (storeMode) {
-            // Solo limpiar familiares afuera que ya no existen (no debería haber, pero por seguridad)
             cleanupMissingFamiliars();
             return;
         }
 
-        // En Wander Mode: comportamiento normal
+        if (isNight) {
+            cleanupMissingFamiliars();
+            handleDistantFamiliars();
+            return;
+        }
+
         if (!storedFamiliars.isEmpty()) {
             ticksSinceLastRelease++;
 
-            // Chance normal cada tick
             if (level.random.nextInt(RELEASE_CHANCE_PER_TICK) == 0) {
                 if (releaseRandomFamiliar()) {
                     ticksSinceLastRelease = 0;
                 }
             }
 
-            // Garantizar actividad cada 20 segundos
             if (ticksSinceLastRelease >= MAX_TICKS_WITHOUT_RELEASE) {
                 if (releaseRandomFamiliar()) {
                     ticksSinceLastRelease = 0;
                 }
             }
 
-            // Extra actividad con múltiples familiares
             if (storedFamiliars.size() >= 3 && level.random.nextInt(80) == 0) {
                 releaseRandomFamiliar();
             }
 
-            // Actividad extra durante el día
-            if (isDaytime() && level.random.nextInt(60) == 0) {
+            if (level.random.nextInt(60) == 0) {
                 releaseRandomFamiliar();
             }
         } else {
@@ -113,7 +124,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             setChanged();
             syncToClient();
 
-            FamiliarsLib.LOGGER.info("Storage mode changed to: {}", storeMode ? "Store" : "Wander");
+            FamiliarsLib.LOGGER.debug("Storage mode changed to: {}", storeMode ? "Store" : "Wander");
         }
     }
 
@@ -136,15 +147,18 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                 // Despawnear del mundo
                 familiar.remove(Entity.RemovalReason.DISCARDED);
 
-                FamiliarsLib.LOGGER.info("Recalled familiar {} due to Store Mode activation", familiarId);
+                FamiliarsLib.LOGGER.debug("Recalled familiar {} due to Store Mode activation or nighttime", familiarId);
             }
         }
 
-        // Limpiar lista de afuera
         outsideFamiliars.clear();
     }
 
     private boolean releaseRandomFamiliar() {
+        if (!isDaytime()) {
+            return false;
+        }
+
         if (storeMode || storedFamiliars.isEmpty()) return false;
 
         List<UUID> availableFamiliars = new ArrayList<>();
@@ -176,6 +190,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     }
 
     private void releaseFamiliar(UUID familiarId) {
+        if (!isDaytime()) {
+            return;
+        }
+
         FamiliarData familiarData = storedFamiliars.get(familiarId);
         if (familiarData == null) return;
 
@@ -184,13 +202,13 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
 
         if (entityType == null) {
-            FamiliarsLib.LOGGER.warn("Unknown entity type: {}", entityTypeString);
+            FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
             return;
         }
 
         Entity entity = entityType.create(serverLevel);
         if (!(entity instanceof AbstractSpellCastingPet familiar)) {
-            FamiliarsLib.LOGGER.warn("Entity is not a familiar: {}", entity);
+            FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
             return;
         }
 
@@ -227,7 +245,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         setChanged();
         syncToClient();
 
-        FamiliarsLib.LOGGER.info("Released familiar {} from storage at {}", familiarId, getBlockPos());
+        FamiliarsLib.LOGGER.debug("Released familiar {} from storage at {}", familiarId, getBlockPos());
     }
 
     private void cleanupMissingFamiliars() {
@@ -238,13 +256,25 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         for (UUID familiarId : outsideFamiliars) {
             Entity entity = serverLevel.getEntity(familiarId);
-            if (!(entity instanceof AbstractSpellCastingPet)) {
+            if (entity == null) {
                 familiarsToRemove.add(familiarId);
-                FamiliarsLib.LOGGER.info("Familiar {} no longer exists, removed from tracking", familiarId);
+                FamiliarsLib.LOGGER.debug("Familiar {} no longer exists in world, removed from tracking", familiarId);
+            } else if (entity instanceof AbstractSpellCastingPet familiar) {
+                if (!familiar.isAlive() || familiar.isRemoved()) {
+                    familiarsToRemove.add(familiarId);
+                    FamiliarsLib.LOGGER.debug("Familiar {} is dead or removed, cleaning up", familiarId);
+                }
+            } else {
+                familiarsToRemove.add(familiarId);
+                FamiliarsLib.LOGGER.debug("Entity {} is not a familiar, removing from tracking", familiarId);
             }
         }
 
-        outsideFamiliars.removeAll(familiarsToRemove);
+        if (!familiarsToRemove.isEmpty()) {
+            outsideFamiliars.removeAll(familiarsToRemove);
+            setChanged();
+            syncToClient();
+        }
     }
 
     private void handleDistantFamiliars() {
@@ -259,9 +289,16 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             if (entity instanceof AbstractSpellCastingPet familiar) {
                 double distance = familiar.position().distanceTo(Vec3.atCenterOf(storagePos));
 
-                // Solo forzar entrada si están REALMENTE lejos (para evitar que se pierdan)
+                if (!isDaytime()) {
+                    FamiliarsLib.LOGGER.debug("Night time - forcing recall of familiar {}", familiarId);
+                    if (tryRecallFamiliar(familiar)) {
+                        familiarsToRecall.add(familiarId);
+                    }
+                    continue;
+                }
+
                 if (distance > MAX_DISTANCE_FROM_HOUSE) {
-                    FamiliarsLib.LOGGER.info("Familiar {} too far from house ({}), forcing recall", familiarId, distance);
+                    FamiliarsLib.LOGGER.debug("Familiar {} too far from house ({}), forcing recall", familiarId, distance);
                     if (tryRecallFamiliar(familiar)) {
                         familiarsToRecall.add(familiarId);
                     }
@@ -329,7 +366,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             setChanged();
             syncToClient();
 
-            FamiliarsLib.LOGGER.info("Recalled familiar {} to storage", familiarId);
+            FamiliarsLib.LOGGER.debug("Recalled familiar {} to storage", familiarId);
             return true;
         }
 
@@ -437,7 +474,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                             playerData.setSelectedFamiliarId(familiarId);
                         }
 
-                        FamiliarsLib.LOGGER.info("Returned familiar {} to owner {}", familiarId, owner.getName().getString());
+                        FamiliarsLib.LOGGER.debug("Returned familiar {} to owner {}", familiarId, owner.getName().getString());
                     }
                 }
 
@@ -447,7 +484,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                     if (entity instanceof AbstractSpellCastingPet familiar) {
                         familiar.setIsInHouse(false, null);
                         familiar.remove(Entity.RemovalReason.DISCARDED);
-                        FamiliarsLib.LOGGER.info("Removed outside familiar {} from world due to house destruction", familiarId);
+                        FamiliarsLib.LOGGER.debug("Removed outside familiar {} from world due to house destruction", familiarId);
                     }
                 }
 
@@ -470,6 +507,36 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return storedFamiliars.containsKey(familiarId) || outsideFamiliars.contains(familiarId);
     }
 
+    public void handleFamiliarDeath(UUID familiarId) {
+        if (level == null || level.isClientSide) return;
+
+        boolean wasTracked = false;
+
+        if (outsideFamiliars.remove(familiarId)) {
+            wasTracked = true;
+            FamiliarsLib.LOGGER.debug("Removed dead familiar {} from outside tracking", familiarId);
+        }
+
+        if (storedFamiliars.remove(familiarId) != null) {
+            wasTracked = true;
+            FamiliarsLib.LOGGER.debug("Removed dead familiar {} from stored familiars (unusual case)", familiarId);
+        }
+
+        if (wasTracked) {
+            setChanged();
+            syncToClient();
+
+            if (ownerUUID != null && level instanceof ServerLevel serverLevel) {
+                ServerPlayer owner = serverLevel.getServer().getPlayerList().getPlayer(ownerUUID);
+                if (owner != null) {
+                    owner.displayClientMessage(
+                            Component.translatable("message.familiarslib.familiar_died_in_house")
+                                    .withStyle(ChatFormatting.RED), false);
+                }
+            }
+        }
+    }
+
     public void syncToClient() {
         if (level != null && !level.isClientSide) {
             level.sendBlockUpdated(getBlockPos(), getBlockState(), getBlockState(), 3);
@@ -486,6 +553,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         tag.putInt("ticksSinceLastRelease", ticksSinceLastRelease);
         tag.putBoolean("storeMode", storeMode);
+        tag.putBoolean("wasNightTime", wasNightTime);
 
         // Save stored familiars
         ListTag storedList = new ListTag();
@@ -518,6 +586,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         ticksSinceLastRelease = tag.getInt("ticksSinceLastRelease");
         storeMode = tag.getBoolean("storeMode");
+        wasNightTime = tag.getBoolean("wasNightTime");
 
         // Load stored familiars
         storedFamiliars.clear();

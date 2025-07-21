@@ -34,6 +34,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -752,6 +753,15 @@ public class FamiliarManager {
 
             boolean success = storageEntity.storeFamiliar(familiarId, familiarNBT, player);
             if (success) {
+                if(FamiliarsLib.isModLoaded("alshanex_familiars")){
+                    try {
+                        Class<?> clazz = Class.forName("net.alshanex.alshanex_familiars.util.familiars.AlshanexFamiliarsManager");
+                        Method method = clazz.getMethod("cleanFamiliarFromPandoraBox", ServerPlayer.class, UUID.class);
+                        method.invoke(null, player, familiarId);
+                    } catch (Exception e) {
+                        FamiliarsLib.LOGGER.error("Error calling cleanFamiliarFromPandoraBox: ", e);
+                    }
+                }
                 String familiarName = getFamiliarName(familiarNBT);
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.familiar_stored", familiarName).withStyle(ChatFormatting.GREEN)));
@@ -933,17 +943,13 @@ public class FamiliarManager {
         // Cambiar el modo
         storageEntity.setStoreMode(storeMode);
 
-        Component modeText = storeMode ? Component.translatable("ui.familiarslib.familiar_storage_screen.store_mode") : Component.translatable("ui.familiarslib.familiar_storage_screen.wander_mode");
-        Component modeDescription = storeMode ? Component.translatable("ui.familiarslib.familiar_storage_screen.store_mode_message") : Component.translatable("ui.familiarslib.familiar_storage_screen.wander_mode_message");
+        String modeDescription = storeMode ? "ui.familiarslib.familiar_storage_screen.store_mode_message" : "ui.familiarslib.familiar_storage_screen.wander_mode_message";
 
         player.connection.send(new ClientboundSetActionBarTextPacket(
-                Component.literal(modeText + ": " + modeDescription).withStyle(
+                Component.translatable(modeDescription).withStyle(
                         storeMode ? ChatFormatting.GREEN : ChatFormatting.YELLOW)));
 
         Map<UUID, CompoundTag> storedData = storageEntity.getStoredFamiliars();
         PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(blockPos, storedData, storeMode));
-
-        FamiliarsLib.LOGGER.info("Player {} set storage mode to {} at {}",
-                player.getName().getString(), modeText, blockPos);
     }
 }

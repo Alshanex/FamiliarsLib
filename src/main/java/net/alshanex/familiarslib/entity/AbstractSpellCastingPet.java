@@ -417,7 +417,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         } else if (source.getEntity() != null && source.getEntity() instanceof AbstractSpellCastingPet pet
                     && pet.getSummoner() != null && pet.getSummoner().is(this.getSummoner())){
             return true;
-        } else {
+        } else if (getIsInHouse()){
+            return true;
+        }  else {
             return super.isInvulnerableTo(source);
         }
     }
@@ -591,6 +593,10 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             this.onDeathHelper();
         }
 
+        if (getIsInHouse() && housePosition != null) {
+            FamiliarDeathStorageHandler.notifyFamiliarDeath(this);
+        }
+
         super.die(pDamageSource);
     }
 
@@ -695,6 +701,10 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             if(familiar.getSummoner() != null && familiar.getSummoner().is(getSummoner())){
                 setTarget(null);
             }
+        }
+
+        if(getTarget() != null && getIsInHouse() && this.tickCount % 10 == 0){
+            setTarget(null);
         }
 
         handleBedRegeneration();
@@ -833,6 +843,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         if (!this.level().isClientSide) {
             if(getOwnerUUID() != null){
                 if(getOwnerUUID().equals(player.getUUID())){
+                    if (getSummoner() instanceof ServerPlayer serverPlayer) {
+                        FamiliarHelper.attemptLegacyMigration(serverPlayer, this);
+                    }
                     if (!wasPlayingSleepAnimation) {
                         triggerAnim("interact_controller", "interact");
                     }
@@ -899,16 +912,8 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return BuiltInRegistries.ENTITY_TYPE.get(entityLocation);
     }
 
-    private boolean isHunterPet(){
-        if(!FamiliarsLib.isModLoaded("alshanex_familiars")){return false;}
-        String className = this.getClass().getName();
-        return className.equals("net.alshanex.alshanex_familiars.entity.HunterPetEntity");
-    }
-
-    private boolean isClericPet(){
-        if(!FamiliarsLib.isModLoaded("alshanex_familiars")){return false;}
-        String className = this.getClass().getName();
-        return className.equals("net.alshanex.alshanex_familiars.entity.ClericPetEntity");
+    protected boolean isHunterPet(){
+        return false;
     }
 
     protected void clericSetGoal(ServerPlayer player){
@@ -949,9 +954,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 serverPlayer.level().playSound(null, serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
                         SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5F, 2.0F);
 
-                if(isClericPet()){
-                    clericSetGoal(serverPlayer);
-                }
+                clericSetGoal(serverPlayer);
             } else {
                 FamiliarHelper.spawnTamingParticles(false, this);
             }

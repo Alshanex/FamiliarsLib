@@ -29,6 +29,8 @@
   "message.familiarslib.no_familiars": "You don't have any Familiars!",
   "message.familiarslib.limit_familiars": "You have reached the maximum limit of %d carried familiars!",
   "message.familiarslib.tamed_successfully": "(%d slots remaining)",
+  "message.familiarslib.cannot_break_wander_mode": "Cannot break storage block in Wander Mode! Switch to Store Mode first.",
+  "message.familiarslib.cannot_break_has_familiars": "Cannot break storage block with familiars inside! Remove all familiars first.",
   "message.familiarslib.not_storage_owner": "You are not the owner of this Familiar Storage",
   "message.familiarslib.only_store_mode": "You can only move familiars in Store Mode",
   "message.familiarslib.familiar_data_error": "Error accessing familiar data",
