@@ -7,10 +7,7 @@ import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity
 import net.alshanex.familiarslib.data.BedLinkData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.network.FamiliarDataPacket;
-import net.alshanex.familiarslib.network.SyncBedLinkDataPacket;
-import net.alshanex.familiarslib.network.SyncFamiliarDataPacket;
-import net.alshanex.familiarslib.network.UpdateFamiliarStoragePacket;
+import net.alshanex.familiarslib.network.*;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.screen.BedLinkSelectionScreen;
 import net.alshanex.familiarslib.screen.FamiliarStorageScreen;
