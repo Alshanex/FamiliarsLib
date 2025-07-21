@@ -22,6 +22,7 @@ public class CurioUtils {
         ).orElse(false);
     }
 
+    //Checks for a Familiar Spellbook in the curios inventory
     public static boolean isWearingFamiliarSpellbook(LivingEntity entity) {
         return CuriosApi.getCuriosInventory(entity).map(curios ->
                 !curios.findCurios(item -> item != null && item.getItem() instanceof AbstractFamiliarSpellbookItem).isEmpty()
