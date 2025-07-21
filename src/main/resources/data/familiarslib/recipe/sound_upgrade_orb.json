@@ -10,11 +10,11 @@
       "item": "irons_spellbooks:upgrade_orb"
     },
     "R": {
-      "item": "alshanex_familiars:sound_rune"
+      "item": "familiarslib:sound_rune"
     }
   },
   "result": {
-    "id": "alshanex_familiars:sound_upgrade_orb",
+    "id": "familiarslib:sound_upgrade_orb",
     "count": 1
   }
 }
