@@ -783,11 +783,24 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     @Override
     public void checkDespawn() {
-        if (getSummoner() != null || getOwnerUUID() != null) {
+        // Si tiene dueño o está en casa, nunca despawnear
+        if (getSummoner() != null || getOwnerUUID() != null || getIsInHouse()) {
             this.setPersistenceRequired();
             return;
         }
-        super.checkDespawn();
+
+        Player nearestPlayer = this.level().getNearestPlayer(this, 64.0D);
+
+        if (nearestPlayer != null) {
+            this.noActionTime = 0;
+            return;
+        }
+
+        if (this.tickCount > 24000) { // 20 min
+            if (this.random.nextInt(800) == 0) {
+                this.discard();
+            }
+        }
     }
 
     @Override
