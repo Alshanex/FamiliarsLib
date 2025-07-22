@@ -40,6 +40,7 @@ public abstract class AbstractFamiliarBedBlockEntity extends BlockEntity {
         return ownerUUID != null && ownerUUID.equals(player.getUUID());
     }
 
+    //Gets bed's linked familiar
     public UUID getLinkedFamiliar() {
         if (ownerUUID == null || level == null) return null;
 

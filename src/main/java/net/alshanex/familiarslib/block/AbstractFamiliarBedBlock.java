@@ -40,6 +40,7 @@ public abstract class AbstractFamiliarBedBlock extends BaseEntityBlock {
         if (!level.isClientSide && placer instanceof Player player) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractFamiliarBedBlockEntity petBed) {
+                //Sets the player that placed the block as the owner
                 petBed.setOwnerUUID(player.getUUID());
             }
         }
@@ -98,6 +99,7 @@ public abstract class AbstractFamiliarBedBlock extends BaseEntityBlock {
         return InteractionResult.FAIL;
     }
 
+    //Updates familiars data before bed link screen
     private static void updateSummonedFamiliarsData(ServerPlayer player) {
         try {
             PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
@@ -105,16 +107,12 @@ public abstract class AbstractFamiliarBedBlock extends BaseEntityBlock {
 
             int updatedCount = 0;
 
-            // Recorrer todos los familiares del jugador
             for (Map.Entry<UUID, ?> entry : familiarData.getAllFamiliars().entrySet()) {
                 UUID familiarId = entry.getKey();
 
-                // Buscar el familiar en el mundo
                 Entity entity = level.getEntity(familiarId);
                 if (entity instanceof AbstractSpellCastingPet familiar) {
-                    // Verificar que pertenece al jugador
                     if (familiar.getSummoner() != null && familiar.getSummoner().is(player)) {
-                        // Actualizar sus datos
                         FamiliarManager.updateFamiliarData(familiar);
                         updatedCount++;
                         FamiliarsLib.LOGGER.debug("Updated data for summoned familiar {}", familiarId);
@@ -123,7 +121,7 @@ public abstract class AbstractFamiliarBedBlock extends BaseEntityBlock {
             }
 
             if (updatedCount > 0) {
-                FamiliarsLib.LOGGER.info("Updated data for {} summoned familiars before opening bed link screen", updatedCount);
+                FamiliarsLib.LOGGER.debug("Updated data for {} summoned familiars before opening bed link screen", updatedCount);
             }
 
         } catch (Exception e) {

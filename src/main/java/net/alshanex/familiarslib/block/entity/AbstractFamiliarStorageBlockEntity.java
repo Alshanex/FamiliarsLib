@@ -34,11 +34,11 @@ import java.util.*;
 
 public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private static final int MAX_STORED_FAMILIARS = 10;
-    private static final int MIN_OCCUPATION_TICKS = 100; // 5 segundos
+    private static final int MIN_OCCUPATION_TICKS = 100; // 5 seconds
     private static final int RELEASE_CHANCE_PER_TICK = 40; // 1/40 chance
-    private static final double MAX_DISTANCE_FROM_HOUSE = 25.0; // Zona amplia alrededor de la casa
+    private static final double MAX_DISTANCE_FROM_HOUSE = 25.0; // Max distance to wander before recall
     private int ticksSinceLastRelease = 0;
-    private static final int MAX_TICKS_WITHOUT_RELEASE = 400; // 20 segundos máximo sin actividad
+    private static final int MAX_TICKS_WITHOUT_RELEASE = 400; // 20 seconds without activity
 
     private boolean wasNightTime = false;
 
@@ -56,11 +56,12 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         storageEntity.tick();
     }
 
-    private void tick() {
+    protected void tick() {
         if (level == null || level.isClientSide) return;
 
         boolean isNight = !isDaytime();
 
+        //Recalls all familiars at night to sleep
         if (isNight && !wasNightTime && !storeMode) {
             recallAllOutsideFamiliars();
         }
@@ -78,25 +79,30 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             return;
         }
 
+        //Tries to release familiars from the house
         if (!storedFamiliars.isEmpty()) {
             ticksSinceLastRelease++;
 
+            //Random chance release
             if (level.random.nextInt(RELEASE_CHANCE_PER_TICK) == 0) {
                 if (releaseRandomFamiliar()) {
                     ticksSinceLastRelease = 0;
                 }
             }
 
+            //Forces release of a familiar with a timer
             if (ticksSinceLastRelease >= MAX_TICKS_WITHOUT_RELEASE) {
                 if (releaseRandomFamiliar()) {
                     ticksSinceLastRelease = 0;
                 }
             }
 
+            //Increased chance to release when many familiars inside
             if (storedFamiliars.size() >= 3 && level.random.nextInt(80) == 0) {
                 releaseRandomFamiliar();
             }
 
+            //Additional release chance
             if (level.random.nextInt(60) == 0) {
                 releaseRandomFamiliar();
             }
@@ -104,7 +110,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             ticksSinceLastRelease = 0;
         }
 
-        // Verificar familiares afuera
+        // Check outside familiars
         cleanupMissingFamiliars();
         handleDistantFamiliars();
     }
@@ -128,7 +134,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         }
     }
 
-    private void recallAllOutsideFamiliars() {
+    //Recalls familiars outside the house
+    protected void recallAllOutsideFamiliars() {
         if (outsideFamiliars.isEmpty()) return;
 
         ServerLevel serverLevel = (ServerLevel) level;
@@ -137,14 +144,14 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         for (UUID familiarId : familiarsToRecall) {
             Entity entity = serverLevel.getEntity(familiarId);
             if (entity instanceof AbstractSpellCastingPet familiar) {
-                // Crear NBT del familiar actual
+                // Crear NBT of the familiar
                 CompoundTag nbtData = FamiliarManager.createFamiliarNBT(familiar);
 
-                // Mover a storage
+                // Move familiar to the storage block
                 FamiliarData data = new FamiliarData(nbtData, 0);
                 storedFamiliars.put(familiarId, data);
 
-                // Despawnear del mundo
+                // Despawn familiar from world
                 familiar.remove(Entity.RemovalReason.DISCARDED);
 
                 FamiliarsLib.LOGGER.debug("Recalled familiar {} due to Store Mode activation or nighttime", familiarId);
@@ -154,7 +161,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         outsideFamiliars.clear();
     }
 
-    private boolean releaseRandomFamiliar() {
+    //Releases a random familiar from the storage block
+    protected boolean releaseRandomFamiliar() {
         if (!isDaytime()) {
             return false;
         }
@@ -189,7 +197,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return false;
     }
 
-    private void releaseFamiliar(UUID familiarId) {
+    //Releases an specific familiar
+    protected void releaseFamiliar(UUID familiarId) {
         if (!isDaytime()) {
             return;
         }
@@ -238,7 +247,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                 SoundEvents.BEEHIVE_EXIT, SoundSource.BLOCKS, 1.0F, 1.0F);
         serverLevel.gameEvent(GameEvent.BLOCK_CHANGE, getBlockPos(), GameEvent.Context.of(familiar, getBlockState()));
 
-        // Move from stored to outside - solo tracking simple
+        // Move from stored to outside
         storedFamiliars.remove(familiarId);
         outsideFamiliars.add(familiarId);
 
@@ -248,7 +257,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         FamiliarsLib.LOGGER.debug("Released familiar {} from storage at {}", familiarId, getBlockPos());
     }
 
-    private void cleanupMissingFamiliars() {
+    //Cleans missing/dead familiars
+    protected void cleanupMissingFamiliars() {
         if (outsideFamiliars.isEmpty()) return;
 
         ServerLevel serverLevel = (ServerLevel) level;
@@ -277,7 +287,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         }
     }
 
-    private void handleDistantFamiliars() {
+    //Handles familiars going outside the max wander distance
+    protected void handleDistantFamiliars() {
         if (outsideFamiliars.isEmpty()) return;
 
         ServerLevel serverLevel = (ServerLevel) level;
@@ -309,9 +320,11 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         outsideFamiliars.removeAll(familiarsToRecall);
     }
 
+    //Direction for the familiars to spawn, recommended to set the opposite to the block's FACING property
     protected abstract Direction getFacingDirection();
 
-    private Vec3 findSafeReleasePosition() {
+    //Finds a safe position to spawn in the set direction
+    protected Vec3 findSafeReleasePosition() {
         BlockPos storagePos = getBlockPos();
 
         Direction facing = getFacingDirection();
@@ -324,7 +337,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return null;
     }
 
-    private boolean isSafeSpawnPosition(BlockPos pos) {
+    //Checks if the position is safe to spawn
+    protected boolean isSafeSpawnPosition(BlockPos pos) {
         return level.getBlockState(pos).isAir() &&
                 level.getBlockState(pos.above()).isAir() &&
                 level.getBlockState(pos.below()).isSolid();
@@ -335,7 +349,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return time >= 1000 && time <= 13000;
     }
 
-    // Method to manually recall a familiar (called when familiar wants to enter)
+    // Method to manually recall a familiar
     public boolean tryRecallFamiliar(AbstractSpellCastingPet familiar) {
         if (!canStoreFamiliar()) {
             return false;
@@ -343,7 +357,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         UUID familiarId = familiar.getUUID();
 
-        // Solo recall si pertenece a esta casa
+        // Only recall if familiar belongs to the house
         if (outsideFamiliars.contains(familiarId) &&
                 familiar.getIsInHouse() &&
                 getBlockPos().equals(familiar.housePosition)) {
@@ -422,6 +436,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return outsideFamiliars.size();
     }
 
+    //Stores familiar in the house
     public boolean storeFamiliar(UUID familiarId, CompoundTag familiarData, ServerPlayer player) {
         if (!isOwner(player)) {
             return false;
@@ -434,6 +449,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return FamiliarManager.storeFamiliarInHouse(familiarId, familiarData, player, getBlockPos());
     }
 
+    //Retrieves familiar from the house
     public boolean retrieveFamiliar(UUID familiarId, ServerPlayer player) {
         if (!isOwner(player)) {
             return false;
@@ -451,6 +467,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return false;
     }
 
+    //Returns stored familiars to the owner
     public void returnFamiliarsToOwner() {
         if (ownerUUID == null || level == null || level.isClientSide) {
             return;
@@ -496,6 +513,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         outsideFamiliars.clear();
     }
 
+    //Update mode in the client
     public void setClientStoreMode(boolean storeMode) {
         if (level != null && level.isClientSide) {
             this.storeMode = storeMode;
@@ -507,6 +525,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return storedFamiliars.containsKey(familiarId) || outsideFamiliars.contains(familiarId);
     }
 
+    //Handles familiar death, unneeded since they can't be killed inside houses, but just in case
     public void handleFamiliarDeath(UUID familiarId) {
         if (level == null || level.isClientSide) return;
 

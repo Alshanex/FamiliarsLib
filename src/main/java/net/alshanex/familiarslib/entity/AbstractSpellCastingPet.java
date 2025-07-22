@@ -652,16 +652,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             FamiliarHelper.handleHouseBehavior(this);
         }
 
-        // Check if familiar should despawn (if retrieved from storage but not summoned by player)
-        if (!level().isClientSide && !getIsInHouse() && getSummoner() == null && this.tickCount % 100 == 0) {
-            // This familiar was retrieved from storage but doesn't have an owner summoner
-            // It should despawn after a short time
-            if (this.tickCount > 1200) { // 1 minute
-                this.remove(RemovalReason.DISCARDED);
-                FamiliarsLib.LOGGER.info("Despawning familiar {} - no longer in house and no summoner", getUUID());
-            }
-        }
-
         if (!level().isClientSide && !hasAttemptedMigration && getSummoner() != null) {
             // Asegurarse de que tenemos un ServerPlayer válido
             if (getSummoner() instanceof ServerPlayer serverPlayer) {
@@ -783,24 +773,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     @Override
     public void checkDespawn() {
-        // Si tiene dueño o está en casa, nunca despawnear
-        if (getSummoner() != null || getOwnerUUID() != null || getIsInHouse()) {
+        if (getSummoner() != null || getOwnerUUID() != null) {
             this.setPersistenceRequired();
             return;
         }
-
-        Player nearestPlayer = this.level().getNearestPlayer(this, 64.0D);
-
-        if (nearestPlayer != null) {
-            this.noActionTime = 0;
-            return;
-        }
-
-        if (this.tickCount > 24000) { // 20 min
-            if (this.random.nextInt(800) == 0) {
-                this.discard();
-            }
-        }
+        super.checkDespawn();
     }
 
     @Override
