@@ -11,11 +11,11 @@ import top.theillusivec4.curios.api.type.capability.ICurio;
 
 import java.util.Optional;
 
+/**
+ * This is used to check curio inventory for specific curio
+ * Credits to GameTech for sharing.
+ */
 public class CurioUtils {
-    /**
-     * This is used to check curio inventory for specific curio
-     * Credits to GameTech for sharing.
-     */
     public static boolean isWearingCurio(LivingEntity entity, Item curioItem) {
         return CuriosApi.getCuriosInventory(entity).map(curios ->
                 !curios.findCurios(item -> item != null && item.is(curioItem)).isEmpty()

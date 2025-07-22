@@ -16,6 +16,9 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
+/**
+ * Generic class for consumables
+ */
 public abstract class AbstractConsumableItem extends Item {
     public AbstractConsumableItem() {
         super(new Properties().stacksTo(16).rarity(Rarity.UNCOMMON));

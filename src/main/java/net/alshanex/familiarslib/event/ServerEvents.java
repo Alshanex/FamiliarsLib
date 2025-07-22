@@ -6,6 +6,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 
+/**
+ * Handles familiars attacks to not hurt their owner
+ */
 @EventBusSubscriber(modid = FamiliarsLib.MODID)
 public class ServerEvents {
     @SubscribeEvent

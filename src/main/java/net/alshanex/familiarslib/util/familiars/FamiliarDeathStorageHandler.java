@@ -8,6 +8,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 
 import java.util.UUID;
 
+/**
+ * Helper to handle familiar deaths when inside storage blocks, not really needed since they invulnerable inside the blocks
+ */
 public class FamiliarDeathStorageHandler {
 
     public static void notifyFamiliarDeath(AbstractSpellCastingPet familiar) {

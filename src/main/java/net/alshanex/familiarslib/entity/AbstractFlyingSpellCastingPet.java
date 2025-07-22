@@ -21,6 +21,9 @@ import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
 
+/**
+ * Generic class for flying familiars
+ */
 public abstract class AbstractFlyingSpellCastingPet extends AbstractSpellCastingPet{
     protected AbstractFlyingSpellCastingPet(EntityType<? extends AbstractSpellCastingPet> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);

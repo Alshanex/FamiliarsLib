@@ -6,6 +6,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 
+/**
+ * Helper to check the acquisition of important advancements
+ */
 public class FamiliarAdvancementsHelper {
     public static boolean hasCompletedTamingEvents(Player player){
         if(player instanceof ServerPlayer serverPlayer){

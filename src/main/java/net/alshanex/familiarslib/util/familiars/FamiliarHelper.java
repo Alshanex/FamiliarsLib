@@ -26,6 +26,9 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Helper methods for the AbstractSpellCastingPet class
+ */
 public class FamiliarHelper {
 
     public static void attemptLegacyMigration(ServerPlayer player, AbstractSpellCastingPet familiar) {
@@ -34,7 +37,7 @@ public class FamiliarHelper {
             UUID familiarId = familiar.getUUID();
 
             if (!familiarData.hasFamiliar(familiarId)) {
-                FamiliarsLib.LOGGER.info("Migrating legacy familiar {} for player {}",
+                FamiliarsLib.LOGGER.debug("Migrating legacy familiar {} for player {}",
                         familiarId, player.getName().getString());
 
                 CompoundTag familiarNBT = createFamiliarNBT(familiar);
@@ -42,16 +45,16 @@ public class FamiliarHelper {
                 if (familiarData.tryAddTamedFamiliar(familiarId, familiarNBT)) {
                     if (familiarData.getSelectedFamiliarId() == null) {
                         familiarData.setSelectedFamiliarId(familiarId);
-                        FamiliarsLib.LOGGER.info("Set migrated familiar {} as selected", familiarId);
+                        FamiliarsLib.LOGGER.debug("Set migrated familiar {} as selected", familiarId);
                     }
 
                     familiarData.setCurrentSummonedFamiliarId(familiarId);
 
                     FamiliarManager.syncFamiliarDataForPlayer(player);
 
-                    FamiliarsLib.LOGGER.info("Successfully migrated legacy familiar {} to data attachment", familiarId);
+                    FamiliarsLib.LOGGER.debug("Successfully migrated legacy familiar {} to data attachment", familiarId);
                 } else {
-                    FamiliarsLib.LOGGER.warn("Failed to migrate legacy familiar {} - player {} at max capacity ({}/{})",
+                    FamiliarsLib.LOGGER.debug("Failed to migrate legacy familiar {} - player {} at max capacity ({}/{})",
                             familiarId, player.getName().getString(),
                             familiarData.getFamiliarCount(), PlayerFamiliarData.MAX_FAMILIAR_LIMIT);
                 }
@@ -142,36 +145,29 @@ public class FamiliarHelper {
     public static void handleHouseBehavior(AbstractSpellCastingPet familiar) {
         if (familiar.housePosition == null) return;
 
-        // Check if house still exists
         if (!(familiar.level().getBlockEntity(familiar.housePosition) instanceof AbstractFamiliarStorageBlockEntity storageEntity)) {
-            // House was destroyed, disable house mode
             familiar.setIsInHouse(false, null);
             familiar.remove(Entity.RemovalReason.DISCARDED);
-            FamiliarsLib.LOGGER.info("House destroyed, removing familiar {}", familiar.getUUID());
+            FamiliarsLib.LOGGER.debug("House destroyed, removing familiar {}", familiar.getUUID());
             return;
         }
 
-        // Check distance from house
         double distanceToHouse = familiar.position().distanceTo(Vec3.atCenterOf(familiar.housePosition));
         if (distanceToHouse > 35.0) {
-            // Too far from house, try to return
-            if (familiar.tickCount % 20 == 0) { // Check every second
-                FamiliarsLib.LOGGER.info("Familiar {} too far from house, attempting to return", familiar.getUUID());
+            if (familiar.tickCount % 20 == 0) {
+                FamiliarsLib.LOGGER.debug("Familiar {} too far from house, attempting to return", familiar.getUUID());
                 storageEntity.tryRecallFamiliar(familiar);
             }
         }
 
-        // Random chance to return to house (like bees)
         if (familiar.tickCount % 400 == 0 && familiar.level().random.nextFloat() < 0.1F) {
             storageEntity.tryRecallFamiliar(familiar);
         }
 
-        // Return to house if health is low
         if (familiar.getHealth() < familiar.getMaxHealth() * 0.3F) {
             storageEntity.tryRecallFamiliar(familiar);
         }
 
-        // Return at night or during rain
         if ((familiar.level().isNight() || familiar.level().isRaining()) && familiar.level().random.nextFloat() < 0.2F) {
             storageEntity.tryRecallFamiliar(familiar);
         }

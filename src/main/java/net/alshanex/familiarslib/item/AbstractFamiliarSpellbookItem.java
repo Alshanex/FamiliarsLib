@@ -13,6 +13,9 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
+/**
+ * Generic class for Familiar Spellbook items
+ */
 public abstract class AbstractFamiliarSpellbookItem extends UniqueSpellBook {
     private static final Component DESCRIPTION = Component.translatable("item.familiarslib.familiar_spellbook.desc").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
 

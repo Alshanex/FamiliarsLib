@@ -2,6 +2,9 @@ package net.alshanex.familiarslib.util.familiars;
 
 import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
 
+/**
+ * Helper class to set casting animation for the familiars
+ */
 public class FamiliarAnimationUtils {
     public static boolean isLongAnimCast(AbstractSpell spell, int spellLevel){
         return spell.getCastTime(spellLevel) > 15;

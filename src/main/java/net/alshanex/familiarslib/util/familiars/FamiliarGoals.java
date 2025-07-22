@@ -59,6 +59,9 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
 
+/**
+ * Goals which can be added to any familiar
+ */
 public class FamiliarGoals {
     public static class FindAndUsePetBedGoal extends Goal {
         private final AbstractSpellCastingPet pet;
@@ -104,7 +107,7 @@ public class FamiliarGoals {
                 BlockEntity be = pet.level().getBlockEntity(targetBedPos);
                 if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
                     exactSleepPosition = petBed.getSleepPosition();
-                    hasSnappedToBed = false; // Resetear el flag cuando empieza un nuevo objetivo
+                    hasSnappedToBed = false;
                     FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " found linked bed at " + targetBedPos +
                             ", exact sleep position: " + exactSleepPosition);
                     return true;
@@ -139,7 +142,6 @@ public class FamiliarGoals {
             Vec3 petPos = pet.position();
             double distanceToSleepPos = petPos.distanceTo(exactSleepPosition);
 
-            // Si está dentro del radio de 1 bloque y aún no se ha teleportado
             if (distanceToSleepPos <= 1.5 && !hasSnappedToBed) {
                 if (!pet.level().isClientSide) {
                     FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " within snap range, teleporting to exact position");
@@ -161,7 +163,6 @@ public class FamiliarGoals {
                 return;
             }
 
-            // Si ya está en la posición exacta (después del snap), confirmar que está sentada
             if (hasSnappedToBed && distanceToSleepPos <= 0.5) {
                 if (!pet.level().isClientSide && !pet.getIsSitting()) {
                     try {
@@ -173,7 +174,6 @@ public class FamiliarGoals {
                 return;
             }
 
-            // Si está lejos de la cama o la navegación se ha detenido, volver a navegar
             if (!hasSnappedToBed && (pet.getNavigation().isDone() || distanceToSleepPos > 3.0)) {
                 pet.getNavigation().moveTo(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z, 1.2);
             }
@@ -198,7 +198,6 @@ public class FamiliarGoals {
 
             FamiliarsLib.LOGGER.debug("Pet " + petUUID + " searching for linked bed around " + petPos);
 
-            // Get the owner's bed link data
             if (!(pet.getSummoner() instanceof ServerPlayer serverPlayer)) {
                 return null;
             }
@@ -211,20 +210,17 @@ public class FamiliarGoals {
                 return null;
             }
 
-            // Check if the linked bed is within search radius
             double distance = petPos.distSqr(linkedBedPos);
             if (distance > searchRadius * searchRadius) {
                 FamiliarsLib.LOGGER.debug("Linked bed at " + linkedBedPos + " is too far (distance: " + Math.sqrt(distance) + ")");
                 return null;
             }
 
-            // Verify the bed still exists and is valid
             if (isValidLinkedBed(linkedBedPos)) {
                 FamiliarsLib.LOGGER.debug("Found valid linked bed at " + linkedBedPos);
                 return linkedBedPos;
             } else {
                 FamiliarsLib.LOGGER.debug("Linked bed at " + linkedBedPos + " is no longer valid");
-                // Clean up invalid link
                 linkData.unlinkBed(linkedBedPos);
                 return null;
             }
@@ -566,7 +562,6 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
-            // Respetar el movement flag
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -586,7 +581,6 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
-            // Respetar el movement flag
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -723,7 +717,6 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
-            // Respetar el movement flag
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -762,7 +755,6 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
-            // Respetar el movement flag
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -807,7 +799,6 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
-            // Respetar el movement flag
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -817,7 +808,6 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
-            // Respetar el movement flag
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -1070,21 +1060,18 @@ public class FamiliarGoals {
                 return false;
             }
 
-            // Verificar que la casa aún existe
             BlockEntity blockEntity = familiar.level().getBlockEntity(housePos);
             if (!(blockEntity instanceof AbstractFamiliarStorageBlockEntity)) {
                 return false;
             }
 
-            // Cooldown entre movimientos
             if (cooldown > 0) {
                 cooldown--;
                 return false;
             }
 
-            // Solo moverse si no está ya moviéndose y ocasionalmente
             return !familiar.getNavigation().isInProgress() &&
-                    familiar.getRandom().nextInt(60) == 0; // Cada ~3 segundos en promedio
+                    familiar.getRandom().nextInt(60) == 0;
         }
 
         @Override
@@ -1093,10 +1080,9 @@ public class FamiliarGoals {
                 return false;
             }
 
-            // Continuar hasta llegar al destino o si está muy lejos de casa
             double distanceToHouse = familiar.position().distanceTo(Vec3.atCenterOf(housePos));
             if (distanceToHouse > wanderRadius + 5) {
-                return false; // Muy lejos, dejar que StayNearHouseGoal tome control
+                return false;
             }
 
             return familiar.getNavigation().isInProgress() && targetPos != null;
@@ -1107,31 +1093,27 @@ public class FamiliarGoals {
             Vec3 houseCenter = Vec3.atCenterOf(housePos);
             Vec3 currentPos = familiar.position();
 
-            // Encontrar una posición aleatoria alrededor de la casa
             for (int attempt = 0; attempt < 10; attempt++) {
                 double angle = familiar.getRandom().nextDouble() * 2 * Math.PI;
-                double distance = 3 + familiar.getRandom().nextDouble() * (wanderRadius - 3); // Entre 3 y wanderRadius bloques
+                double distance = 3 + familiar.getRandom().nextDouble() * (wanderRadius - 3);
 
                 double offsetX = Math.cos(angle) * distance;
                 double offsetZ = Math.sin(angle) * distance;
 
                 targetPos = houseCenter.add(offsetX, 0, offsetZ);
 
-                // Verificar que no sea muy similar a la posición actual
                 if (currentPos.distanceTo(targetPos) > 2.0) {
                     break;
                 }
             }
 
             if (targetPos != null) {
-                // Buscar posición válida en el suelo
                 targetPos = findGroundPosition(targetPos);
 
                 PathNavigation navigation = familiar.getNavigation();
                 boolean success = navigation.moveTo(targetPos.x, targetPos.y, targetPos.z, speedModifier);
 
                 if (!success) {
-                    // Si no puede llegar, intentar posición más cerca de la casa
                     Vec3 closerPos = houseCenter.add(
                             (targetPos.x - houseCenter.x) * 0.5,
                             0,
@@ -1142,7 +1124,7 @@ public class FamiliarGoals {
                 }
             }
 
-            cooldown = 40 + familiar.getRandom().nextInt(40); // 2-4 segundos de cooldown
+            cooldown = 40 + familiar.getRandom().nextInt(40);
         }
 
         @Override
@@ -1154,7 +1136,6 @@ public class FamiliarGoals {
         private Vec3 findGroundPosition(Vec3 pos) {
             BlockPos blockPos = BlockPos.containing(pos);
 
-            // Buscar superficie sólida hacia abajo
             for (int y = 0; y <= 5; y++) {
                 BlockPos checkPos = blockPos.offset(0, -y, 0);
                 if (familiar.level().getBlockState(checkPos).isSolid() &&
@@ -1163,7 +1144,6 @@ public class FamiliarGoals {
                 }
             }
 
-            // Buscar superficie sólida hacia arriba
             for (int y = 1; y <= 3; y++) {
                 BlockPos checkPos = blockPos.offset(0, y, 0);
                 if (familiar.level().getBlockState(checkPos).isSolid() &&
@@ -1172,7 +1152,7 @@ public class FamiliarGoals {
                 }
             }
 
-            return pos; // Fallback
+            return pos;
         }
     }
 
@@ -1196,7 +1176,7 @@ public class FamiliarGoals {
                 return false;
             }
 
-            if (familiar.getRandom().nextInt(80) != 0) { // Menos frecuente que el normal
+            if (familiar.getRandom().nextInt(80) != 0) {
                 return false;
             }
 
@@ -1283,7 +1263,7 @@ public class FamiliarGoals {
             double angle = Math.random() * 2 * Math.PI;
             this.relX = Math.cos(angle);
             this.relZ = Math.sin(angle);
-            this.lookTime = 20 + familiar.getRandom().nextInt(20); // 1-2 segundos
+            this.lookTime = 20 + familiar.getRandom().nextInt(20);
         }
 
         @Override
@@ -1336,13 +1316,11 @@ public class FamiliarGoals {
 
         @Override
         public void start() {
-            // Moverse hacia la casa pero no directamente a ella
             Vec3 houseCenter = Vec3.atCenterOf(housePos);
             Vec3 currentPos = familiar.position();
             Vec3 direction = houseCenter.subtract(currentPos).normalize();
 
-            // Moverse hacia la casa pero con un poco de aleatoriedad
-            double offsetX = (familiar.getRandom().nextDouble() - 0.5) * 6; // ±3 bloques
+            double offsetX = (familiar.getRandom().nextDouble() - 0.5) * 6;
             double offsetZ = (familiar.getRandom().nextDouble() - 0.5) * 6;
 
             Vec3 targetPos = currentPos.add(direction.scale(8.0)).add(offsetX, 0, offsetZ);

@@ -11,6 +11,9 @@ import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 
+/**
+ * Generic class for familiar shards
+ */
 public abstract class AbstractRuneItem extends Item {
     public AbstractRuneItem() {
         super(new Properties().rarity(Rarity.EPIC).stacksTo(16));

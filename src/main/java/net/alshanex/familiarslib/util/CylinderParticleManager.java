@@ -8,8 +8,10 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Random;
 
+/**
+ * Particle manager, credits to GameTech
+ */
 public abstract class CylinderParticleManager {
-    // Credits to GameTech
 
     private static final Random RANDOM = new Random();
 

@@ -28,6 +28,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Familiar Bed screen
+ */
 public class BedLinkSelectionScreen extends Screen {
     private static final int PANEL_WIDTH = 200;
     private static final int PANEL_HEIGHT = 300;
@@ -46,7 +49,6 @@ public class BedLinkSelectionScreen extends Screen {
     private int rightPanelX;
     private int panelY;
 
-    // Button position variables for click detection
     private int buttonY;
     private int linkButtonX;
     private int unlinkButtonX;
@@ -103,7 +105,6 @@ public class BedLinkSelectionScreen extends Screen {
 
                     float health = nbt.getFloat("currentHealth");
 
-                    // Check if this familiar is already linked to another bed
                     BlockPos linkedBed = linkData.getLinkedBed(id);
                     boolean isLinkedToOtherBed = linkedBed != null && !linkedBed.equals(bedPos);
 
@@ -118,22 +119,19 @@ public class BedLinkSelectionScreen extends Screen {
 
     public void reloadFamiliarData() {
         try {
-            FamiliarsLib.LOGGER.info("=== BedLinkSelectionScreen.reloadFamiliarData() START ===");
+            FamiliarsLib.LOGGER.debug("=== BedLinkSelectionScreen.reloadFamiliarData() START ===");
 
-            // Guardar estado anterior para debugging
             UUID previousSelected = selectedFamiliarId;
             UUID previousLinked = currentLinkedFamiliarId;
             int previousCount = familiarEntries.size();
 
-            FamiliarsLib.LOGGER.info("Previous state - Count: {}, Selected: {}, Linked: {}",
+            FamiliarsLib.LOGGER.debug("Previous state - Count: {}, Selected: {}, Linked: {}",
                     previousCount, previousSelected, previousLinked);
 
-            // Limpiar entradas actuales
             familiarEntries.clear();
 
-            // Verificar que tenemos acceso al jugador y sus datos
             if (minecraft == null || minecraft.player == null) {
-                FamiliarsLib.LOGGER.warn("Minecraft or player is null, cannot reload familiar data");
+                FamiliarsLib.LOGGER.debug("Minecraft or player is null, cannot reload familiar data");
                 return;
             }
 
@@ -141,27 +139,24 @@ public class BedLinkSelectionScreen extends Screen {
             BedLinkData linkData = minecraft.player.getData(AttachmentRegistry.BED_LINK_DATA);
 
             if (familiarData == null || linkData == null) {
-                FamiliarsLib.LOGGER.warn("FamiliarData or BedLinkData is null");
+                FamiliarsLib.LOGGER.debug("FamiliarData or BedLinkData is null");
                 return;
             }
 
-            // Obtener familiar actualmente vinculado a esta cama
             currentLinkedFamiliarId = linkData.getLinkedFamiliar(bedPos);
-            selectedFamiliarId = currentLinkedFamiliarId; // Por defecto, seleccionar el vinculado
+            selectedFamiliarId = currentLinkedFamiliarId;
 
-            FamiliarsLib.LOGGER.info("Current linked familiar for bed {}: {}", bedPos, currentLinkedFamiliarId);
+            FamiliarsLib.LOGGER.debug("Current linked familiar for bed {}: {}", bedPos, currentLinkedFamiliarId);
 
             Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
-            FamiliarsLib.LOGGER.info("Total familiars available: {}", familiars.size());
+            FamiliarsLib.LOGGER.debug("Total familiars available: {}", familiars.size());
 
-            // Si no hay familiares, cerrar la pantalla
             if (familiars.isEmpty()) {
-                FamiliarsLib.LOGGER.info("No familiars found, closing screen");
+                FamiliarsLib.LOGGER.debug("No familiars found, closing screen");
                 onClose();
                 return;
             }
 
-            // Recargar entradas de familiares
             for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
                 UUID id = entry.getKey();
                 CompoundTag nbt = entry.getValue();
@@ -183,7 +178,6 @@ public class BedLinkSelectionScreen extends Screen {
 
                         float health = nbt.getFloat("currentHealth");
 
-                        // Check if this familiar is already linked to another bed
                         BlockPos linkedBed = linkData.getLinkedBed(id);
                         boolean isLinkedToOtherBed = linkedBed != null && !linkedBed.equals(bedPos);
 
@@ -192,21 +186,19 @@ public class BedLinkSelectionScreen extends Screen {
                                 displayName, id, isLinkedToOtherBed);
                     }
                 } else {
-                    FamiliarsLib.LOGGER.warn("Unknown entity type for familiar {}: {}", id, entityTypeString);
+                    FamiliarsLib.LOGGER.debug("Unknown entity type for familiar {}: {}", id, entityTypeString);
                 }
             }
 
-            // Si no hay familiar seleccionado pero hay familiares disponibles, seleccionar el primero
             if (selectedFamiliarId == null && !familiarEntries.isEmpty()) {
                 selectedFamiliarId = familiarEntries.get(0).id;
-                FamiliarsLib.LOGGER.info("No familiar selected, defaulting to first: {}", selectedFamiliarId);
+                FamiliarsLib.LOGGER.debug("No familiar selected, defaulting to first: {}", selectedFamiliarId);
             }
 
-            // Verificar que el familiar seleccionado existe en nuestras entradas
             if (selectedFamiliarId != null) {
                 boolean foundSelected = familiarEntries.stream().anyMatch(entry -> entry.id.equals(selectedFamiliarId));
                 if (!foundSelected) {
-                    FamiliarsLib.LOGGER.warn("Selected familiar {} not found in entries, selecting first available", selectedFamiliarId);
+                    FamiliarsLib.LOGGER.debug("Selected familiar {} not found in entries, selecting first available", selectedFamiliarId);
                     if (!familiarEntries.isEmpty()) {
                         selectedFamiliarId = familiarEntries.get(0).id;
                     } else {
@@ -215,21 +207,18 @@ public class BedLinkSelectionScreen extends Screen {
                 }
             }
 
-            // Calcular scroll máximo
             int visibleItems = 3;
             maxScroll = Math.max(0, (familiarEntries.size() - visibleItems) * FAMILIAR_ITEM_HEIGHT);
 
-            // Asegurar que el scroll esté dentro de los límites
             scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
 
-            FamiliarsLib.LOGGER.info("Reload completed - New count: {}, New selected: {}, New linked: {}, Max scroll: {}",
+            FamiliarsLib.LOGGER.debug("Reload completed - New count: {}, New selected: {}, New linked: {}, Max scroll: {}",
                     familiarEntries.size(), selectedFamiliarId, currentLinkedFamiliarId, maxScroll);
 
-            FamiliarsLib.LOGGER.info("=== BedLinkSelectionScreen.reloadFamiliarData() END ===");
+            FamiliarsLib.LOGGER.debug("=== BedLinkSelectionScreen.reloadFamiliarData() END ===");
 
         } catch (Exception e) {
             FamiliarsLib.LOGGER.error("Error reloading familiar data in BedLinkSelectionScreen: ", e);
-            // En caso de error, cerrar la pantalla para evitar estados inconsistentes
             try {
                 onClose();
             } catch (Exception closeError) {
@@ -315,7 +304,6 @@ public class BedLinkSelectionScreen extends Screen {
             guiGraphics.drawString(font, warningComponent, leftPanelX + (PANEL_WIDTH - warningWidth) / 2, infoY, 0xFFAA00);
         }
 
-        // Render buttons 20 pixels below the last info line
         renderButtons(guiGraphics, mouseX, mouseY, partialTick, infoY + 20);
     }
 
@@ -391,11 +379,9 @@ public class BedLinkSelectionScreen extends Screen {
         int buttonHeight = 20;
         int buttonSpacing = 10;
 
-        // Calculate center position for buttons
         int totalButtonWidth = buttonWidth * 2 + buttonSpacing;
         int startX = leftPanelX + (PANEL_WIDTH - totalButtonWidth) / 2;
 
-        // Link button
         int linkButtonX = startX;
         boolean canLink = selectedFamiliarId != null && !selectedFamiliarId.equals(currentLinkedFamiliarId);
         int linkButtonColor = canLink ? 0xFF006600 : 0xFF333333;
@@ -439,7 +425,6 @@ public class BedLinkSelectionScreen extends Screen {
         int unlinkTextColor = canUnlink ? 0xFFFFFF : 0x666666;
         guiGraphics.drawString(font, unlinkText, unlinkButtonX + (buttonWidth - unlinkTextWidth) / 2, buttonY + 6, unlinkTextColor);
 
-        // Store button positions for click detection
         this.buttonY = buttonY;
         this.linkButtonX = linkButtonX;
         this.unlinkButtonX = unlinkButtonX;
@@ -500,7 +485,6 @@ public class BedLinkSelectionScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
-            // Check familiar list clicks
             if (mouseX >= rightPanelX && mouseX < rightPanelX + PANEL_WIDTH &&
                     mouseY >= panelY && mouseY < panelY + PANEL_HEIGHT) {
 
@@ -514,9 +498,7 @@ public class BedLinkSelectionScreen extends Screen {
                 }
             }
 
-            // Check button clicks - Using stored positions
-            if (buttonY > 0) { // Make sure buttons have been rendered
-                // Link button
+            if (buttonY > 0) {
                 if (mouseX >= linkButtonX && mouseX < linkButtonX + buttonWidth &&
                         mouseY >= buttonY && mouseY < buttonY + buttonHeight) {
 
@@ -527,7 +509,6 @@ public class BedLinkSelectionScreen extends Screen {
                     return true;
                 }
 
-                // Unlink button
                 if (mouseX >= unlinkButtonX && mouseX < unlinkButtonX + buttonWidth &&
                         mouseY >= buttonY && mouseY < buttonY + buttonHeight) {
 
@@ -591,6 +572,7 @@ public class BedLinkSelectionScreen extends Screen {
         RenderSystem.disableScissor();
     }
 
+    //Helper class to store familiars data
     private static class FamiliarEntry {
         final UUID id;
         final AbstractSpellCastingPet familiar;

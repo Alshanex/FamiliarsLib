@@ -42,11 +42,13 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         if (!level.isClientSide && placer instanceof ServerPlayer serverPlayer) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
+                //Sets the owner of the storage block
                 storageEntity.setOwner(serverPlayer);
             }
         }
     }
 
+    //Opens the storage block screen after updating familiars data from the player
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
@@ -71,12 +73,14 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         if (!state.is(newState.getBlock())) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
+                //You can't break the block with familiars inside, but just in case
                 storageEntity.returnFamiliarsToOwner();
             }
             super.onRemove(state, level, pos, newState, isMoving);
         }
     }
 
+    //Prevents the block to break in wander mode or in store mode with familiars inside
     @Override
     protected float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
@@ -107,6 +111,7 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         return super.getDestroyProgress(state, player, level, pos);
     }
 
+    //Prevents the block to break in wander mode or in store mode with familiars inside
     @Override
     public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, net.minecraft.world.level.material.FluidState fluid) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
@@ -131,6 +136,7 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         return ParticleTypes.HAPPY_VILLAGER;
     }
 
+    //Spawns particles when familiars inside, sleep particles at night
     @Override
     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
         if (level.getBlockEntity(pos) instanceof AbstractFamiliarStorageBlockEntity storageEntity) {

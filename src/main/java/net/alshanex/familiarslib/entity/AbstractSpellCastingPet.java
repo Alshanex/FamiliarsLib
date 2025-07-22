@@ -76,6 +76,9 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 
+/**
+ * Generic class with the main methods of all familiars
+ */
 public abstract class AbstractSpellCastingPet extends PathfinderMob implements GeoEntity, IMagicEntity {
     private static final EntityDataAccessor<Boolean> DATA_CANCEL_CAST = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
     protected static final EntityDataAccessor<Boolean> DATA_IS_SITTING;
@@ -110,6 +113,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     protected boolean movementDisabled = false;
 
+    //Percentage power boost for spells when correspondant trinket equipped
     protected static final float DEFAULT_ORIGINAL_MIN_QUALITY = 0.5f;
     protected static final float DEFAULT_ORIGINAL_MAX_QUALITY = 0.7f;
     protected static final float DEFAULT_TRINKET_MIN_QUALITY = 0.7f;
@@ -130,6 +134,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         this.lookControl = createLookControl();
     }
 
+    //Sets the chance of the familiar being a disguised illusionist
     protected void setRandomImpostor(){
         Random rand = new Random();
 
@@ -179,6 +184,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         this.targetSelector.addGoal(5, new HurtByTargetGoal(this));
     }
 
+    //This section handles the trinket power boost
     protected abstract WizardAttackGoal createAttackGoal(float min, float max);
 
     protected float[] getOriginalQualityValues() {
@@ -231,8 +237,10 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         this.pendingGoalUpdate = false;
     }
 
+    //Used to set the valid trinket that will give the boost to the familiar
     protected abstract Item getValidTrinket();
 
+    //Generic owner and ally methods
     @Override
     public boolean isAlliedTo(Entity pEntity) {
         return super.isAlliedTo(pEntity) || this.isAlliedHelper(pEntity);
@@ -263,6 +271,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 .orElseGet(() -> this.entityData.get(DATA_ID_OWNER_UUID).orElse(null));
     }
 
+    //Getters and setters for the familiars data, like consumables, impostor mark, house mark, etc.
     public void setEnragedStacks(Integer level){
         this.entityData.set(DATA_ENRAGED, level);
     }
@@ -359,6 +368,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
+    //Goals set to familiars inside storage blocks
     private void addHouseGoals() {
         if (housePosition == null) return;
 
@@ -374,7 +384,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     private void clearHouseGoals() {
-        // Remover todos los goals relacionados con casa
         this.goalSelector.getAvailableGoals().removeIf(goal ->
                 goal.getGoal() instanceof FamiliarGoals.WanderAroundHouseGoal ||
                         goal.getGoal() instanceof FamiliarGoals.StayNearHouseGoal ||
@@ -382,6 +391,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                         goal.getGoal() instanceof FamiliarGoals.CasualRandomLookGoal);
     }
 
+    //Handles sitting logic
     protected void clearMovementGoals(){
         movementDisabled = true;
         this.navigation.stop();
@@ -409,6 +419,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
+    //Invulnerable to the owner and owner's other familiars, also invulnerable when inside a storage block
     @Override
     public boolean isInvulnerableTo(DamageSource source) {
         if (source.getEntity() != null && source.getEntity().is(this.getSummoner())) {
@@ -509,7 +520,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             }
         }
 
-        // IMPORTANTE: Cargar los valores de stacks ANTES de aplicar atributos
         if(pCompound.contains("enragedStacks")){
             setEnragedStacks(pCompound.getInt("enragedStacks"));
         }
@@ -582,10 +592,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
+    //Owner getter
     public LivingEntity getSummoner() {
         return OwnerHelper.getAndCacheOwner(level(), cachedSummoner, getOwnerUUID());
     }
 
+    //Handle death logic
     @Override
     public void die(DamageSource pDamageSource) {
         if (!level().isClientSide) {
@@ -610,6 +622,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
+    //Move and look controls
     protected LookControl createLookControl() {
         return new LookControl(this) {
             @Override
@@ -652,13 +665,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             FamiliarHelper.handleHouseBehavior(this);
         }
 
+        //Auto-migration to the new system
         if (!level().isClientSide && !hasAttemptedMigration && getSummoner() != null) {
-            // Asegurarse de que tenemos un ServerPlayer válido
             if (getSummoner() instanceof ServerPlayer serverPlayer) {
                 FamiliarHelper.attemptLegacyMigration(serverPlayer, this);
                 hasAttemptedMigration = true;
             } else {
-                // Si no es un ServerPlayer, buscar el jugador en el servidor por UUID
                 UUID ownerUUID = getOwnerUUID();
                 if (ownerUUID != null && level() instanceof ServerLevel serverLevel) {
                     ServerPlayer serverPlayer = serverLevel.getServer().getPlayerList().getPlayer(ownerUUID);
@@ -670,6 +682,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             }
         }
 
+        //Goal update for the trinket boost
         if (this.pendingGoalUpdate && !level.isClientSide) {
             if (this.currentAttackGoal == null || !this.currentAttackGoal.isActing()) {
                 updateGoalSafely(this.pendingTrinketState);
@@ -680,24 +693,29 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             updateAttackGoal();
         }
 
+        //Check to not despawn when tamed
         if (this.tickCount % 600 == 0 && !level.isClientSide) {
             if (getSummoner() != null || getOwnerUUID() != null) {
                 this.setPersistenceRequired();
             }
         }
 
+        //Stop targeting owner's other familiars
         if(getSummoner() != null && getTarget() != null && getTarget() instanceof AbstractSpellCastingPet familiar && this.tickCount % 10 == 0){
             if(familiar.getSummoner() != null && familiar.getSummoner().is(getSummoner())){
                 setTarget(null);
             }
         }
 
+        //Familiars can't attack anyone when inside storage blocks
         if(getTarget() != null && getIsInHouse() && this.tickCount % 10 == 0){
             setTarget(null);
         }
 
+        //Handles health regen when sleeping
         handleBedRegeneration();
 
+        //Handles Familiar Spellbook attribute sharing
         if (getSummoner() != null && this.tickCount % 10 == 0 && getHealth() > 0) {
             if (CurioUtils.isWearingFamiliarSpellbook(getSummoner())) {
                 FamiliarAttributesHelper.applyAttributes(this);
@@ -706,6 +724,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             }
         }
 
+        //Periodic status update for the player
         if (getSummoner() != null && this.tickCount % 40 == 0) {
             if (!level().isClientSide && getSummoner() instanceof ServerPlayer serverPlayer) {
                 PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
@@ -718,6 +737,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
+    //Handles health regen when sleeping
     private void handleBedRegeneration() {
         boolean isOnValidBed = FamiliarBedHelper.isOnCompatibleBed(this);
         boolean shouldPlaySleepAnimation = getIsSitting() && isOnValidBed;
@@ -731,7 +751,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
             if (!level().isClientSide) {
                 bedRegenTimer++;
-                if (bedRegenTimer >= 20) { // Every second
+                if (bedRegenTimer >= 20) {
                     if (getHealth() < getMaxHealth()) {
                         heal(1.0F);
                         FamiliarsLib.LOGGER.debug("Pet " + this.getUUID() + " healed to " + getHealth() + "/" + getMaxHealth());
@@ -771,6 +791,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return false;
     }
 
+    //Prevents despawn of tamed familiars
     @Override
     public void checkDespawn() {
         if (getSummoner() != null || getOwnerUUID() != null) {
@@ -798,10 +819,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return false;
     }
 
+    //Taming, feeding and other interaction logic
     @Override
     public InteractionResult mobInteract(Player player, InteractionHand hand) {
         ItemStack itemstack = player.getItemInHand(hand);
 
+        //Interactions with familiars inside storage blocks
         if (getIsInHouse() && housePosition != null) {
             if (!(level().getBlockEntity(housePosition) instanceof AbstractFamiliarStorageBlockEntity storageEntity)) {
                 return InteractionResult.FAIL;
@@ -824,11 +847,13 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             return InteractionResult.PASS;
         }
 
+        //Sitting interaction
         if(getSummoner() != null && getSummoner().is(player) && itemstack.is(Items.STICK)){
             this.setSitting(!getIsSitting());
             return InteractionResult.SUCCESS;
         }
 
+        //Taming and feeding interaction
         if (!this.level().isClientSide) {
             if(getOwnerUUID() != null){
                 if(getOwnerUUID().equals(player.getUUID())){
@@ -862,6 +887,8 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                         this.gameEvent(GameEvent.EAT);
                         return InteractionResult.sidedSuccess(this.level().isClientSide());
                     }  else if(isHunterPet() && itemstack != null && itemstack != ItemStack.EMPTY){
+                        //Hunter ability interaction
+
                         Item heldItem = itemstack.getItem();
 
                         AABB searchArea = this.getBoundingBox().inflate(20.0D);
@@ -882,6 +909,8 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                     }
                 }
             } else {
+                //Taming interaction
+
                 if (itemstack.is(ModTags.FAMILIAR_TAMING)) {
                     itemstack.consume(1, player);
                     this.tryToTame(player);
@@ -892,27 +921,22 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return super.mobInteract(player, hand);
     }
 
-    private EntityType<?> getModEntityType(String modId, String entityName) {
-        if (!FamiliarsLib.isModLoaded(modId)) {
-            return null;
-        }
-
-        ResourceLocation entityLocation = ResourceLocation.fromNamespaceAndPath(modId, entityName);
-        return BuiltInRegistries.ENTITY_TYPE.get(entityLocation);
-    }
-
+    //Hunter ability check
     protected boolean isHunterPet(){
         return false;
     }
 
+    //Cleric check for special support goal
     protected void clericSetGoal(ServerPlayer player){
 
     }
 
+    //Placeholder food, can be changed in the familiar's class
     protected boolean isFood(ItemStack item){
         return item.is(Items.APPLE);
     }
 
+    //Taming logic
     protected void tryToTame(Player player) {
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return;
@@ -952,10 +976,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
+    //Handles advancement trigger if needed, overriden in familiar classes
     protected void triggerAdvancement(ServerPlayer player){
 
     }
 
+    //Spawning logic and effects
     @Override
     public void onAddedToLevel() {
         super.onAddedToLevel();
@@ -963,11 +989,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
         if (!level().isClientSide && (getHealthStacks() > 0 || getArmorStacks() > 0)) {
             FamiliarAttributesHelper.applyAllConsumableAttributes(this);
-            FamiliarsLib.LOGGER.info("Applied attributes on level join for familiar {}: {} health stacks, {} armor stacks",
+            FamiliarsLib.LOGGER.debug("Applied attributes on level join for familiar {}: {} health stacks, {} armor stacks",
                     getUUID(), getHealthStacks(), getArmorStacks());
         }
     }
 
+    //Despawning logic and effects
     @Override
     public void onRemovedFromLevel() {
         super.onRemovedFromLevel();
@@ -1224,26 +1251,20 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         boolean shouldPlaySleepAnimation = getIsSitting() && isOnValidBed;
 
         if (shouldPlaySleepAnimation) {
-            // Si debe reproducir la animación de sleep
             if (!wasPlayingSleepAnimation) {
-                // Primera vez que entra en sleep - iniciar la animación
+                // Start sleeping animation
                 wasPlayingSleepAnimation = true;
                 event.getController().setAnimation(sleep);
-                FamiliarsLib.LOGGER.debug("Pet " + this.getUUID() + " starting sleep animation");
                 return PlayState.CONTINUE;
             } else {
-                // Ya estaba reproduciendo sleep - continuar
                 return PlayState.CONTINUE;
             }
         } else {
-            // No debe reproducir la animación de sleep
             if (wasPlayingSleepAnimation) {
-                // Estaba reproduciendo sleep pero ahora debe parar
+                // Stop sleeping if was sleeping
                 wasPlayingSleepAnimation = false;
-                FamiliarsLib.LOGGER.debug("Pet " + this.getUUID() + " stopping sleep animation");
                 return PlayState.STOP;
             } else {
-                // No estaba reproduciendo sleep y no debe reproducirla
                 return PlayState.STOP;
             }
         }
@@ -1278,6 +1299,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return PlayState.CONTINUE;
     }
 
+    // Handles spell animations
     protected void setStartAnimationFromSpell(AnimationController controller, AbstractSpell spell, int spellLevel) {
         spell.getCastStartAnimation().getForMob().ifPresentOrElse(animationBuilder -> {
             controller.forceAnimationReset();

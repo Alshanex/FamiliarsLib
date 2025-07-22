@@ -8,9 +8,12 @@ import net.neoforged.neoforge.common.util.INBTSerializable;
 
 import java.util.*;
 
+/**
+ * Stores the tamed familiars for the player
+ */
 public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
 
-    // Límite máximo de familiares que puede tener un jugador
+    // Max limit of familiars per player
     public static final int MAX_FAMILIAR_LIMIT = 10;
 
     private final Map<UUID, CompoundTag> tamedFamiliars = new HashMap<>();
@@ -121,7 +124,6 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
     public CompoundTag serializeNBT(HolderLookup.Provider provider) {
         CompoundTag nbt = new CompoundTag();
 
-        // Guardar familiares
         ListTag familiarsList = new ListTag();
         for (Map.Entry<UUID, CompoundTag> entry : tamedFamiliars.entrySet()) {
             CompoundTag familiarEntry = new CompoundTag();
@@ -160,7 +162,7 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
         tamedFamiliars.clear();
         selectedFamiliarId = null;
         currentSummonedFamiliarId = null;
-        summonedFamiliarIds.clear(); // NUEVO: Limpiar set de summoneados
+        summonedFamiliarIds.clear();
 
         if (nbt.contains("familiars", Tag.TAG_LIST)) {
             ListTag familiarsList = nbt.getList("familiars", Tag.TAG_COMPOUND);

@@ -11,6 +11,9 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * Helper class for handling sleeping mechanic
+ */
 public class FamiliarBedHelper {
     public static void snapToExactBedPosition(AbstractSpellCastingPet familiar) {
         if (familiar.getSummoner() instanceof ServerPlayer serverPlayer) {
@@ -53,7 +56,6 @@ public class FamiliarBedHelper {
                         if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
                             boolean inCorrectPosition = petBed.isPositionCorrectForSleeping(familiar.position());
 
-                            // First check new linking system
                             if (petBed.isLinkedToPet(familiar.getUUID())) {
                                 return inCorrectPosition;
                             }

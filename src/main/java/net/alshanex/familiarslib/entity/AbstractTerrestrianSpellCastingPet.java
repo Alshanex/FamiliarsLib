@@ -12,6 +12,9 @@ import net.minecraft.world.phys.Vec3;
 import javax.annotation.Nullable;
 import java.util.EnumSet;
 
+/**
+ * Generic class for terrestrian familiars
+ */
 public abstract class AbstractTerrestrianSpellCastingPet extends AbstractSpellCastingPet{
     protected AbstractTerrestrianSpellCastingPet(EntityType<? extends AbstractSpellCastingPet> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);

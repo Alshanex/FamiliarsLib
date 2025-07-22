@@ -9,6 +9,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import top.theillusivec4.curios.api.event.CurioChangeEvent;
 
+/**
+ * Handles Familiar Spellbook attribute sharing
+ */
 @EventBusSubscriber(modid = FamiliarsLib.MODID, bus = EventBusSubscriber.Bus.GAME)
 public class FamiliarAttributesEventHandler {
     @SubscribeEvent
