@@ -41,6 +41,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private static final int MAX_TICKS_WITHOUT_RELEASE = 400; // 20 seconds without activity
 
     private boolean wasNightTime = false;
+    private int dayNightTransitionCooldown = 0; // Cooldown to prevent rapid day/night switches
+    private static final int TRANSITION_COOLDOWN_TICKS = 200; // 10 seconds cooldown
 
     private UUID ownerUUID;
     public final Map<UUID, FamiliarData> storedFamiliars = new HashMap<>();
@@ -63,12 +65,21 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         boolean isNight = !isDaytime();
 
-        //Recalls all familiars at night to sleep
-        if (isNight && !wasNightTime && !storeMode) {
-            recallAllOutsideFamiliars();
+        // Reduce transition cooldown
+        if (dayNightTransitionCooldown > 0) {
+            dayNightTransitionCooldown--;
         }
 
-        wasNightTime = isNight;
+        // Only process night transition if not in cooldown and there's an actual change
+        if (isNight && !wasNightTime && !storeMode && dayNightTransitionCooldown == 0) {
+            recallAllOutsideFamiliars();
+            dayNightTransitionCooldown = TRANSITION_COOLDOWN_TICKS;
+        }
+
+        // Update the night state only when cooldown is over or when it's clearly day
+        if (dayNightTransitionCooldown == 0 || !isNight) {
+            wasNightTime = isNight;
+        }
 
         if (storeMode) {
             cleanupMissingFamiliars();
@@ -194,6 +205,11 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             return false;
         }
 
+        // Don't release during transition cooldown
+        if (dayNightTransitionCooldown > 0) {
+            return false;
+        }
+
         if (storeMode || storedFamiliars.isEmpty()) return false;
 
         List<UUID> availableFamiliars = new ArrayList<>();
@@ -224,9 +240,14 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return false;
     }
 
-    //Releases an specific familiar
+    //Releases a specific familiar
     protected void releaseFamiliar(UUID familiarId) {
         if (!isDaytime()) {
+            return;
+        }
+
+        // Don't release during transition cooldown
+        if (dayNightTransitionCooldown > 0) {
             return;
         }
 
@@ -379,7 +400,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
     private boolean isDaytime() {
         long time = level.getDayTime() % 24000;
-        return time >= 1000 && time <= 13000;
+        return time >= 1000 && time <= 12000;
     }
 
     // Method to manually recall a familiar
@@ -622,6 +643,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         tag.putBoolean("wasNightTime", wasNightTime);
         tag.putBoolean("canFamiliarsUseGoals", canFamiliarsUseGoals);
         tag.putInt("maxDistance", maxDistance);
+        tag.putInt("dayNightTransitionCooldown", dayNightTransitionCooldown);
 
         // Save stored familiars
         ListTag storedList = new ListTag();
@@ -657,6 +679,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         wasNightTime = tag.getBoolean("wasNightTime");
         canFamiliarsUseGoals = tag.getBoolean("canFamiliarsUseGoals");
         maxDistance = tag.getInt("maxDistance");
+        dayNightTransitionCooldown = tag.getInt("dayNightTransitionCooldown");
 
         // Load stored familiars
         storedFamiliars.clear();
