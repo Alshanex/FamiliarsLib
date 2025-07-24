@@ -1,3 +1,4 @@
+
 package net.alshanex.familiarslib.screen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -33,11 +34,21 @@ import java.util.UUID;
  * Familiar Storage blocks screen - Store Mode
  */
 public class FamiliarStorageScreen extends Screen {
-    private static final int PANEL_WIDTH = 180;
-    private static final int PANEL_HEIGHT = 300;
-    private static final int BUTTON_PANEL_WIDTH = 100;
-    private static final int FAMILIAR_ITEM_HEIGHT = 60;
-    private static final int SCROLL_SPEED = 20;
+    // Tamaños base independientes del GUI scale
+    private static final int BASE_PANEL_WIDTH = 200;
+    private static final int BASE_PANEL_HEIGHT = 320;
+    private static final int BASE_BUTTON_PANEL_WIDTH = 140;
+    private static final int BASE_FAMILIAR_ITEM_HEIGHT = 60;
+    private static final int BASE_SCROLL_SPEED = 20;
+    private static final int BASE_PADDING = 20;
+
+    // Tamaños escalados que se calculan en init()
+    private int PANEL_WIDTH;
+    private int PANEL_HEIGHT;
+    private int BUTTON_PANEL_WIDTH;
+    private int FAMILIAR_ITEM_HEIGHT;
+    private int SCROLL_SPEED;
+    private int PADDING;
 
     private final BlockPos blockPos;
     private final List<FamiliarEntry> storedFamiliars = new ArrayList<>();
@@ -71,33 +82,52 @@ public class FamiliarStorageScreen extends Screen {
     protected void init() {
         super.init();
 
-        int totalWidth = PANEL_WIDTH * 2 + BUTTON_PANEL_WIDTH + 40;
+        // Calculate scaling
+        double scale = Math.min(this.width / 1000.0, this.height / 600.0);
+        scale = Math.max(0.7, Math.min(1.5, scale));
+
+        // Apply scaling
+        PANEL_WIDTH = (int) (BASE_PANEL_WIDTH * scale);
+        PANEL_HEIGHT = (int) (BASE_PANEL_HEIGHT * scale);
+        BUTTON_PANEL_WIDTH = (int) (BASE_BUTTON_PANEL_WIDTH * scale);
+        FAMILIAR_ITEM_HEIGHT = (int) (BASE_FAMILIAR_ITEM_HEIGHT * scale);
+        SCROLL_SPEED = (int) (BASE_SCROLL_SPEED * scale);
+        PADDING = (int) (BASE_PADDING * scale);
+
+        // Calculate positions
+        int totalWidth = PANEL_WIDTH * 2 + BUTTON_PANEL_WIDTH + PADDING * 2;
         int startX = (this.width - totalWidth) / 2;
 
         this.storedPanelX = startX;
-        this.buttonPanelX = startX + PANEL_WIDTH + 20;
-        this.playerPanelX = startX + PANEL_WIDTH + BUTTON_PANEL_WIDTH + 40;
-        this.panelY = (this.height - PANEL_HEIGHT) / 2 + 20;
+        this.buttonPanelX = startX + PANEL_WIDTH + PADDING;
+        this.playerPanelX = startX + PANEL_WIDTH + BUTTON_PANEL_WIDTH + PADDING * 2;
+        this.panelY = (this.height - PANEL_HEIGHT) / 2 + 30;
 
-        // Switch to Wander Mode button (moved to top)
+        // Calculate scaled measurements
+        int buttonWidth = Math.max(120, (int) (120 * scale));
+        int buttonHeight = Math.max(20, (int) (20 * scale));
+        int smallButtonHeight = Math.max(18, (int) (18 * scale));
+
+        // Switch to Wander Mode button
         this.switchToWanderModeButton = Button.builder(
                         Component.translatable("ui.familiarslib.familiar_storage_screen.switch_to_wander"),
                         button -> switchToWanderMode())
-                .pos(buttonPanelX + 10, panelY + 40)
-                .size(80, 20)
+                .pos(buttonPanelX + (BUTTON_PANEL_WIDTH - buttonWidth) / 2, panelY)
+                .size(buttonWidth, buttonHeight)
                 .build();
 
-        // Move buttons (repositioned relative to screen center)
+        // Move buttons
         int screenCenterY = this.height / 2;
+        int moveButtonWidth = Math.max(80, (int) (80 * scale));
 
         this.storeButton = Button.builder(Component.literal("←"), button -> moveToStorage())
-                .pos(buttonPanelX + 10, screenCenterY - 40)
-                .size(80, 20)
+                .pos(buttonPanelX + (BUTTON_PANEL_WIDTH - moveButtonWidth) / 2, screenCenterY - 30)
+                .size(moveButtonWidth, smallButtonHeight)
                 .build();
 
         this.retrieveButton = Button.builder(Component.literal("→"), button -> moveToPlayer())
-                .pos(buttonPanelX + 10, screenCenterY + 40)
-                .size(80, 20)
+                .pos(buttonPanelX + (BUTTON_PANEL_WIDTH - moveButtonWidth) / 2, screenCenterY + 30)
+                .size(moveButtonWidth, smallButtonHeight)
                 .build();
 
         addRenderableWidget(switchToWanderModeButton);
@@ -225,11 +255,11 @@ public class FamiliarStorageScreen extends Screen {
             int titleWidth = font.width(modeTitle);
             guiGraphics.drawString(font, modeTitle, (this.width - titleWidth) / 2, panelY - 50, 0x00FF00);
 
-            // Render panel titles (moved closer to panels - 5 pixels above)
+            // Render panel titles (ajustados para la nueva escala)
             renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.storage_familiars",
                     storageEntity.getStoredFamiliarCount(),
-                    storageEntity.getMaxStoredFamiliars()), storedPanelX, panelY - 15);
-            renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.player_familiars"), playerPanelX, panelY - 15);
+                    storageEntity.getMaxStoredFamiliars()), storedPanelX, panelY - 20);
+            renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.player_familiars"), playerPanelX, panelY - 20);
         }
 
         // Render panels
@@ -273,10 +303,15 @@ public class FamiliarStorageScreen extends Screen {
             guiGraphics.fill(x, y, x + PANEL_WIDTH, y + FAMILIAR_ITEM_HEIGHT, 0x44FFFFFF);
         }
 
+        // Ajustar tamaño y posición del familiar renderizado según la escala
+        float entityScale = Math.max(15, FAMILIAR_ITEM_HEIGHT * 0.4f);
+        int entityX = x + (int)(FAMILIAR_ITEM_HEIGHT * 0.5f);
+        int entityY = y + (int)(FAMILIAR_ITEM_HEIGHT * 0.7f);
+
         PoseStack poseStack = guiGraphics.pose();
         poseStack.pushPose();
-        poseStack.translate(x + 30, y + 40, 50);
-        poseStack.scale(25, 25, 25);
+        poseStack.translate(entityX, entityY, 50);
+        poseStack.scale(entityScale, entityScale, entityScale);
 
         Quaternionf rotation = new Quaternionf().rotateY((float) Math.toRadians(45));
         poseStack.mulPose(rotation);
@@ -284,8 +319,11 @@ public class FamiliarStorageScreen extends Screen {
         renderEntity(guiGraphics, entry.familiar, 0, 0, 0);
         poseStack.popPose();
 
+        // Ajustar posición del texto según la escala
         Component nameComponent = Component.literal(entry.displayName);
-        guiGraphics.drawString(font, nameComponent, x + 65, y + 25, 0xFFFFFF);
+        int textX = x + (int)(FAMILIAR_ITEM_HEIGHT * 1.1f);
+        int textY = y + FAMILIAR_ITEM_HEIGHT / 2 - font.lineHeight / 2;
+        guiGraphics.drawString(font, nameComponent, textX, textY, 0xFFFFFF);
     }
 
     private void renderEntity(GuiGraphics guiGraphics, LivingEntity entity, float x, float y, float z) {

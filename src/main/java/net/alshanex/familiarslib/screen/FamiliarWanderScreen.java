@@ -61,7 +61,7 @@ public class FamiliarWanderScreen extends Screen {
                 .build();
 
         // Distance slider
-        this.distanceSlider = new DistanceSlider(panelX + 50, panelY + 120, 200, 20, maxDistance);
+        this.distanceSlider = new DistanceSlider(panelX + 50, panelY + 160, 200, 20, maxDistance);
 
         addRenderableWidget(switchToStoreModeButton);
         addRenderableWidget(toggleGoalsButton);
@@ -119,7 +119,7 @@ public class FamiliarWanderScreen extends Screen {
         // Render distance label
         Component distanceLabel = Component.translatable("ui.familiarslib.familiar_wander_screen.max_distance",
                 String.valueOf(maxDistance));
-        guiGraphics.drawString(font, distanceLabel, panelX + 50, panelY + 105, 0xFFFFFF);
+        guiGraphics.drawString(font, distanceLabel, panelX + 90, panelY + 145, 0xFFFFFF);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
