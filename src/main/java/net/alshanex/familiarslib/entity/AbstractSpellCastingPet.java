@@ -1277,7 +1277,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
         var controller = event.getController();
         if (instantCastSpellType != SpellRegistry.none() && controller.getAnimationState() == AnimationController.State.STOPPED) {
-            setStartAnimationFromSpell(controller, instantCastSpellType, castingSpell.getLevel());
+            if(castingSpell != null){
+                setStartAnimationFromSpell(controller, instantCastSpellType, castingSpell.getLevel());
+            } else {
+                setStartAnimationFromSpell(controller, instantCastSpellType, 1);
+            }
             instantCastSpellType = SpellRegistry.none();
         }
         return PlayState.CONTINUE;
@@ -1292,7 +1296,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
         if (isCasting()) {
             if (controller.getAnimationState() == AnimationController.State.STOPPED) {
-                setStartAnimationFromSpell(controller, castingSpell.getSpell(), castingSpell.getLevel());
+                if(castingSpell != null){
+                    setStartAnimationFromSpell(controller, castingSpell.getSpell(), castingSpell.getLevel());
+                }
             }
         }
 
