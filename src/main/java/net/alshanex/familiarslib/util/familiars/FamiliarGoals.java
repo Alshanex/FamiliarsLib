@@ -266,6 +266,9 @@ public class FamiliarGoals {
         public boolean canUse() {
             LivingEntity owner = this.targetEntity.get();
             if(owner == null){ return false;}
+            if (!entity.canExecuteGoalsInHouse()) {
+                return false;
+            }
             if(horizontalDistanceSqr(owner, this.entity.position()) > 400){ return false;}
             return ++tickCounter >= interval;
         }
@@ -289,6 +292,9 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
+            if (!entity.canExecuteGoalsInHouse()) {
+                return false;
+            }
             return canUse();
         }
     }
@@ -852,6 +858,9 @@ public class FamiliarGoals {
             LivingEntity getOwner = this.owner.get();
             if(getOwner == null){ return false;}
             if(pet.getMovementDisabled()){ return false;}
+            if (!pet.canExecuteGoalsInHouse()) {
+                return false;
+            }
 
             Level level = pet.level();
 
@@ -889,6 +898,9 @@ public class FamiliarGoals {
         public boolean canUse() {
             if(this.creeper != null){ return false;}
             if(pet.getMovementDisabled()){ return false;}
+            if (!pet.canExecuteGoalsInHouse()) {
+                return false;
+            }
             this.creeper = pet.level().getEntitiesOfClass(
                     Creeper.class,
                     pet.getBoundingBox().inflate(15),
@@ -900,7 +912,7 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
-            return this.creeper != null && this.creeper.isAlive() && !this.creeper.isPowered();
+            return this.creeper != null && this.creeper.isAlive() && !this.creeper.isPowered() && pet.canExecuteGoalsInHouse();
         }
 
         @Override
@@ -948,6 +960,9 @@ public class FamiliarGoals {
         public boolean canUse() {
             if(this.skeleton != null){ return false;}
             if(pet.getMovementDisabled()){ return false;}
+            if (!pet.canExecuteGoalsInHouse()) {
+                return false;
+            }
             this.skeleton = pet.level().getEntitiesOfClass(
                     Skeleton.class,
                     pet.getBoundingBox().inflate(15)
@@ -958,7 +973,7 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
-            return this.skeleton != null && this.skeleton.isAlive();
+            return this.skeleton != null && this.skeleton.isAlive() && pet.canExecuteGoalsInHouse();
         }
 
         @Override
@@ -1008,6 +1023,9 @@ public class FamiliarGoals {
         public boolean canUse() {
             LivingEntity owner = this.targetEntity.get();
             if(owner == null){ return false;}
+            if (!controllerEntity.canExecuteGoalsInHouse()) {
+                return false;
+            }
             return controllerEntity.isAlive() && owner.isAlive();
         }
 
@@ -1034,7 +1052,7 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
-            return canUse();
+            return canUse() && controllerEntity.canExecuteGoalsInHouse();
         }
     }
 

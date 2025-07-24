@@ -11,6 +11,7 @@ import net.alshanex.familiarslib.network.*;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.screen.BedLinkSelectionScreen;
 import net.alshanex.familiarslib.screen.FamiliarStorageScreen;
+import net.alshanex.familiarslib.screen.FamiliarWanderScreen;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -537,8 +538,12 @@ public class FamiliarManager {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level != null) {
             BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
-            if (blockEntity instanceof AbstractFamiliarStorageBlockEntity) {
-                minecraft.setScreen(new FamiliarStorageScreen(blockPos));
+            if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
+                if (storageEntity.isStoreMode()) {
+                    minecraft.setScreen(new FamiliarStorageScreen(blockPos));
+                } else {
+                    minecraft.setScreen(new FamiliarWanderScreen(blockPos));
+                }
             }
         }
     }
@@ -772,7 +777,13 @@ public class FamiliarManager {
         }
 
         Map<UUID, CompoundTag> updatedStoredData = storageEntity.getStoredFamiliars();
-        PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(blockPos, updatedStoredData, storageEntity.isStoreMode()));
+        PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(
+                blockPos,
+                updatedStoredData,
+                storageEntity.isStoreMode(),
+                storageEntity.canFamiliarsUseGoals(),
+                storageEntity.getMaxDistance()
+        ));
     }
 
     private static String getFamiliarName(CompoundTag familiarNBT) {
@@ -789,7 +800,7 @@ public class FamiliarManager {
     }
 
     @OnlyIn(Dist.CLIENT)
-    public static void handleStorageUpdate(BlockPos blockPos, Map<UUID, CompoundTag> storedFamiliars, boolean storeMode) {
+    public static void handleStorageUpdate(BlockPos blockPos, Map<UUID, CompoundTag> storedFamiliars, boolean storeMode, boolean canFamiliarsUseGoals, int maxDistance) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level != null) {
             BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
@@ -801,9 +812,11 @@ public class FamiliarManager {
                 }
 
                 storageEntity.setClientStoreMode(storeMode);
+                storageEntity.setClientCanFamiliarsUseGoals(canFamiliarsUseGoals);
+                storageEntity.setClientMaxDistance(maxDistance);
 
-                FamiliarsLib.LOGGER.debug("Received storage update for position {} with {} stored familiars and mode: {}",
-                        blockPos, storedFamiliars.size(), storeMode ? "Store" : "Wander");
+                FamiliarsLib.LOGGER.debug("Received storage update for position {} with {} stored familiars, mode: {}, goals: {}, distance: {}",
+                        blockPos, storedFamiliars.size(), storeMode ? "Store" : "Wander", canFamiliarsUseGoals, maxDistance);
 
                 if (minecraft.screen instanceof FamiliarStorageScreen storageScreen) {
                     storageScreen.reloadFamiliarData();
@@ -904,13 +917,40 @@ public class FamiliarManager {
 
         storageEntity.setStoreMode(storeMode);
 
-        String modeDescription = storeMode ? "ui.familiarslib.familiar_storage_screen.store_mode_message" : "ui.familiarslib.familiar_storage_screen.wander_mode_message";
+        String modeDescription = storeMode ?
+                "ui.familiarslib.familiar_storage_screen.store_mode_message" :
+                "ui.familiarslib.familiar_storage_screen.wander_mode_message";
 
         player.connection.send(new ClientboundSetActionBarTextPacket(
                 Component.translatable(modeDescription).withStyle(
                         storeMode ? ChatFormatting.GREEN : ChatFormatting.YELLOW)));
 
         Map<UUID, CompoundTag> storedData = storageEntity.getStoredFamiliars();
-        PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(blockPos, storedData, storeMode));
+        PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(blockPos, storedData,
+                storeMode, storageEntity.canFamiliarsUseGoals(), storageEntity.getMaxDistance()));
+    }
+
+    public static void handleUpdateStorageSettings(ServerPlayer player, BlockPos blockPos, boolean canFamiliarsUseGoals, int maxDistance) {
+        BlockEntity blockEntity = player.level().getBlockEntity(blockPos);
+        if (!(blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity)) {
+            return;
+        }
+
+        if (!storageEntity.isOwner(player)) {
+            player.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.translatable("message.familiarslib.not_storage_owner").withStyle(ChatFormatting.RED)));
+            return;
+        }
+
+        storageEntity.setCanFamiliarsUseGoals(canFamiliarsUseGoals);
+        storageEntity.setMaxDistance(maxDistance);
+
+        FamiliarsLib.LOGGER.debug("Updated storage settings for player {}: goals={}, distance={}",
+                player.getName().getString(), canFamiliarsUseGoals, maxDistance);
+
+        // Sync to client
+        Map<UUID, CompoundTag> storedData = storageEntity.getStoredFamiliars();
+        PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(blockPos, storedData,
+                storageEntity.isStoreMode(), canFamiliarsUseGoals, maxDistance));
     }
 }

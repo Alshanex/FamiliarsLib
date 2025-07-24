@@ -16,6 +16,7 @@ public class PayloadHandler {
         payloadRegistrar.playToServer(LinkFamiliarToBedPacket.TYPE, LinkFamiliarToBedPacket.STREAM_CODEC, LinkFamiliarToBedPacket::handle);
         payloadRegistrar.playToServer(MoveFamiliarPacket.TYPE, MoveFamiliarPacket.STREAM_CODEC, MoveFamiliarPacket::handle);
         payloadRegistrar.playToServer(SetStorageModePacket.TYPE, SetStorageModePacket.STREAM_CODEC, SetStorageModePacket::handle);
+        payloadRegistrar.playToServer(UpdateStorageSettingsPacket.TYPE, UpdateStorageSettingsPacket.STREAM_CODEC, UpdateStorageSettingsPacket::handle);
 
         payloadRegistrar.playToClient(FamiliarDataPacket.TYPE, FamiliarDataPacket.STREAM_CODEC, FamiliarDataPacket::handle);
         payloadRegistrar.playToClient(SyncFamiliarDataPacket.TYPE, SyncFamiliarDataPacket.STREAM_CODEC, SyncFamiliarDataPacket::handle);

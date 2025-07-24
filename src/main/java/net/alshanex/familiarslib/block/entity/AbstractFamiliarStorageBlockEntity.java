@@ -36,7 +36,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private static final int MAX_STORED_FAMILIARS = 10;
     private static final int MIN_OCCUPATION_TICKS = 100; // 5 seconds
     private static final int RELEASE_CHANCE_PER_TICK = 40; // 1/40 chance
-    private static final double MAX_DISTANCE_FROM_HOUSE = 25.0; // Max distance to wander before recall
+    private static final int DEFAULT_MAX_DISTANCE = 25; // Default max distance to wander before recall
     private int ticksSinceLastRelease = 0;
     private static final int MAX_TICKS_WITHOUT_RELEASE = 400; // 20 seconds without activity
 
@@ -46,7 +46,9 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     public final Map<UUID, FamiliarData> storedFamiliars = new HashMap<>();
     public final Set<UUID> outsideFamiliars = new HashSet<>();
 
-    private boolean storeMode = false;
+    private boolean storeMode = true; // Default to store mode
+    private boolean canFamiliarsUseGoals = true; // New setting
+    private int maxDistance = DEFAULT_MAX_DISTANCE; // Configurable max distance
 
     public AbstractFamiliarStorageBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
         super(type, pos, blockState);
@@ -134,11 +136,36 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         }
     }
 
+    public boolean canFamiliarsUseGoals() {
+        return canFamiliarsUseGoals;
+    }
+
+    public void setCanFamiliarsUseGoals(boolean canFamiliarsUseGoals) {
+        if (this.canFamiliarsUseGoals != canFamiliarsUseGoals) {
+            this.canFamiliarsUseGoals = canFamiliarsUseGoals;
+            setChanged();
+            syncToClient();
+            FamiliarsLib.LOGGER.debug("Can familiars use goals changed to: {}", canFamiliarsUseGoals);
+        }
+    }
+
+    public int getMaxDistance() {
+        return maxDistance;
+    }
+
+    public void setMaxDistance(int maxDistance) {
+        this.maxDistance = Math.max(1, Math.min(25, maxDistance));
+        setChanged();
+        syncToClient();
+        FamiliarsLib.LOGGER.debug("Max distance changed to: {}", this.maxDistance);
+    }
+
     //Recalls familiars outside the house
     protected void recallAllOutsideFamiliars() {
         if (outsideFamiliars.isEmpty()) return;
 
         ServerLevel serverLevel = (ServerLevel) level;
+        // Create a copy of the set to avoid ConcurrentModificationException
         Set<UUID> familiarsToRecall = new HashSet<>(outsideFamiliars);
 
         for (UUID familiarId : familiarsToRecall) {
@@ -264,7 +291,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         ServerLevel serverLevel = (ServerLevel) level;
         Set<UUID> familiarsToRemove = new HashSet<>();
 
-        for (UUID familiarId : outsideFamiliars) {
+        // Create a copy of the set to avoid ConcurrentModificationException
+        Set<UUID> outsideFamiliarsCopy = new HashSet<>(outsideFamiliars);
+
+        for (UUID familiarId : outsideFamiliarsCopy) {
             Entity entity = serverLevel.getEntity(familiarId);
             if (entity == null) {
                 familiarsToRemove.add(familiarId);
@@ -295,7 +325,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         BlockPos storagePos = getBlockPos();
         Set<UUID> familiarsToRecall = new HashSet<>();
 
-        for (UUID familiarId : outsideFamiliars) {
+        // Create a copy of the set to avoid ConcurrentModificationException
+        Set<UUID> outsideFamiliarsCopy = new HashSet<>(outsideFamiliars);
+
+        for (UUID familiarId : outsideFamiliarsCopy) {
             Entity entity = serverLevel.getEntity(familiarId);
             if (entity instanceof AbstractSpellCastingPet familiar) {
                 double distance = familiar.position().distanceTo(Vec3.atCenterOf(storagePos));
@@ -308,7 +341,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                     continue;
                 }
 
-                if (distance > MAX_DISTANCE_FROM_HOUSE) {
+                if (distance > maxDistance) {
                     FamiliarsLib.LOGGER.debug("Familiar {} too far from house ({}), forcing recall", familiarId, distance);
                     if (tryRecallFamiliar(familiar)) {
                         familiarsToRecall.add(familiarId);
@@ -521,6 +554,20 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         }
     }
 
+    public void setClientCanFamiliarsUseGoals(boolean canFamiliarsUseGoals) {
+        if (level != null && level.isClientSide) {
+            this.canFamiliarsUseGoals = canFamiliarsUseGoals;
+            FamiliarsLib.LOGGER.info("Client updated can familiars use goals to: {}", canFamiliarsUseGoals);
+        }
+    }
+
+    public void setClientMaxDistance(int maxDistance) {
+        if (level != null && level.isClientSide) {
+            this.maxDistance = maxDistance;
+            FamiliarsLib.LOGGER.info("Client updated max distance to: {}", maxDistance);
+        }
+    }
+
     public boolean ownsFamiliar(UUID familiarId) {
         return storedFamiliars.containsKey(familiarId) || outsideFamiliars.contains(familiarId);
     }
@@ -573,6 +620,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         tag.putInt("ticksSinceLastRelease", ticksSinceLastRelease);
         tag.putBoolean("storeMode", storeMode);
         tag.putBoolean("wasNightTime", wasNightTime);
+        tag.putBoolean("canFamiliarsUseGoals", canFamiliarsUseGoals);
+        tag.putInt("maxDistance", maxDistance);
 
         // Save stored familiars
         ListTag storedList = new ListTag();
@@ -606,6 +655,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         ticksSinceLastRelease = tag.getInt("ticksSinceLastRelease");
         storeMode = tag.getBoolean("storeMode");
         wasNightTime = tag.getBoolean("wasNightTime");
+        canFamiliarsUseGoals = tag.getBoolean("canFamiliarsUseGoals");
+        maxDistance = tag.getInt("maxDistance");
 
         // Load stored familiars
         storedFamiliars.clear();

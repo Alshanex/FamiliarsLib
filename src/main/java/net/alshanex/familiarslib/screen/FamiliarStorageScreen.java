@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Familiar Storage blocks screen
+ * Familiar Storage blocks screen - Store Mode
  */
 public class FamiliarStorageScreen extends Screen {
     private static final int PANEL_WIDTH = 180;
@@ -60,10 +60,7 @@ public class FamiliarStorageScreen extends Screen {
 
     private Button storeButton;
     private Button retrieveButton;
-    private Button storeModeButton;
-    private Button wanderModeButton;
-
-    private boolean isStoreMode = false;
+    private Button switchToWanderModeButton;
 
     public FamiliarStorageScreen(BlockPos blockPos) {
         super(Component.translatable("ui.familiarslib.familiar_storage_screen"));
@@ -82,28 +79,28 @@ public class FamiliarStorageScreen extends Screen {
         this.playerPanelX = startX + PANEL_WIDTH + BUTTON_PANEL_WIDTH + 40;
         this.panelY = (this.height - PANEL_HEIGHT) / 2 + 20;
 
-        this.storeModeButton = Button.builder(Component.translatable("ui.familiarslib.familiar_storage_screen.store_mode"), button -> setStoreMode())
+        // Switch to Wander Mode button (moved to top)
+        this.switchToWanderModeButton = Button.builder(
+                        Component.translatable("ui.familiarslib.familiar_storage_screen.switch_to_wander"),
+                        button -> switchToWanderMode())
                 .pos(buttonPanelX + 10, panelY + 40)
                 .size(80, 20)
                 .build();
 
-        this.wanderModeButton = Button.builder(Component.translatable("ui.familiarslib.familiar_storage_screen.wander_mode"), button -> setWanderMode())
-                .pos(buttonPanelX + 10, panelY + 65)
-                .size(80, 20)
-                .build();
+        // Move buttons (repositioned relative to screen center)
+        int screenCenterY = this.height / 2;
 
         this.storeButton = Button.builder(Component.literal("←"), button -> moveToStorage())
-                .pos(buttonPanelX + 10, panelY + 120)
+                .pos(buttonPanelX + 10, screenCenterY - 40)
                 .size(80, 20)
                 .build();
 
         this.retrieveButton = Button.builder(Component.literal("→"), button -> moveToPlayer())
-                .pos(buttonPanelX + 10, panelY + 160)
+                .pos(buttonPanelX + 10, screenCenterY + 40)
                 .size(80, 20)
                 .build();
 
-        addRenderableWidget(storeModeButton);
-        addRenderableWidget(wanderModeButton);
+        addRenderableWidget(switchToWanderModeButton);
         addRenderableWidget(storeButton);
         addRenderableWidget(retrieveButton);
 
@@ -111,20 +108,9 @@ public class FamiliarStorageScreen extends Screen {
         updateButtonStates();
     }
 
-    private void setStoreMode() {
-        if (!isStoreMode) {
-            PacketDistributor.sendToServer(new SetStorageModePacket(blockPos, true));
-            isStoreMode = true;
-            updateButtonStates();
-        }
-    }
-
-    private void setWanderMode() {
-        if (isStoreMode) {
-            PacketDistributor.sendToServer(new SetStorageModePacket(blockPos, false));
-            isStoreMode = false;
-            updateButtonStates();
-        }
+    private void switchToWanderMode() {
+        PacketDistributor.sendToServer(new SetStorageModePacket(blockPos, false));
+        this.onClose();
     }
 
     private void loadFamiliarData() {
@@ -135,8 +121,6 @@ public class FamiliarStorageScreen extends Screen {
 
         BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
-            isStoreMode = storageEntity.isStoreMode();
-
             Map<UUID, CompoundTag> stored = storageEntity.getStoredFamiliars();
             for (Map.Entry<UUID, CompoundTag> entry : stored.entrySet()) {
                 UUID id = entry.getKey();
@@ -210,16 +194,8 @@ public class FamiliarStorageScreen extends Screen {
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
             PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
 
-            storeModeButton.active = !isStoreMode;
-            wanderModeButton.active = isStoreMode;
-
-            if (isStoreMode) {
-                storeButton.active = selectedPlayerFamiliar != null && storageEntity.canStoreFamiliar();
-                retrieveButton.active = selectedStoredFamiliar != null && familiarData.canTameMoreFamiliars();
-            } else {
-                storeButton.active = false;
-                retrieveButton.active = false;
-            }
+            storeButton.active = selectedPlayerFamiliar != null && storageEntity.canStoreFamiliar();
+            retrieveButton.active = selectedStoredFamiliar != null && familiarData.canTameMoreFamiliars();
         }
     }
 
@@ -244,20 +220,21 @@ public class FamiliarStorageScreen extends Screen {
 
         BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
-            PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-            // Render mode title
+            // Render mode title at the top
+            Component modeTitle = Component.translatable("ui.familiarslib.familiar_storage_screen.store_mode_title");
+            int titleWidth = font.width(modeTitle);
+            guiGraphics.drawString(font, modeTitle, (this.width - titleWidth) / 2, panelY - 50, 0x00FF00);
+
+            // Render panel titles (moved closer to panels - 5 pixels above)
             renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.storage_familiars",
                     storageEntity.getStoredFamiliarCount(),
-                    storageEntity.getMaxStoredFamiliars()), storedPanelX, panelY - 30);
-            renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.player_familiars"), playerPanelX, panelY - 30);
+                    storageEntity.getMaxStoredFamiliars()), storedPanelX, panelY - 15);
+            renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.player_familiars"), playerPanelX, panelY - 15);
         }
 
         // Render panels
         renderFamiliarPanel(guiGraphics, storedFamiliars, storedPanelX, panelY, storedScrollOffset, selectedStoredFamiliar, mouseX, mouseY, partialTick);
         renderFamiliarPanel(guiGraphics, playerFamiliars, playerPanelX, panelY, playerScrollOffset, selectedPlayerFamiliar, mouseX, mouseY, partialTick);
-
-        // Render mode info
-        renderModeInfo(guiGraphics);
 
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
@@ -351,12 +328,6 @@ public class FamiliarStorageScreen extends Screen {
 
         RenderSystem.enableCull();
         poseStack.popPose();
-    }
-
-    private void renderModeInfo(GuiGraphics guiGraphics) {
-        Component modeInfo = isStoreMode ? Component.translatable("ui.familiarslib.familiar_storage_screen.store_mode") : Component.translatable("ui.familiarslib.familiar_storage_screen.wander_mode");
-        int color = isStoreMode ? 0x00FF00 : 0xFFAA00;
-        guiGraphics.drawString(font, modeInfo, (buttonPanelX - 20) + (PANEL_WIDTH / 4) - (modeInfo.getString().length() / 2), panelY + 20, color);
     }
 
     @Override

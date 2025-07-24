@@ -24,17 +24,21 @@ public class UpdateFamiliarStoragePacket implements CustomPacketPayload {
 
     private final BlockPos blockPos;
     private final Map<UUID, CompoundTag> storedFamiliars;
-    private final boolean storeMode; // NUEVO: incluir el modo
+    private final boolean storeMode;
+    private final boolean canFamiliarsUseGoals;
+    private final int maxDistance;
 
-    public UpdateFamiliarStoragePacket(BlockPos blockPos, Map<UUID, CompoundTag> storedFamiliars, boolean storeMode) {
+    public UpdateFamiliarStoragePacket(BlockPos blockPos, Map<UUID, CompoundTag> storedFamiliars, boolean storeMode, boolean canFamiliarsUseGoals, int maxDistance) {
         this.blockPos = blockPos;
         this.storedFamiliars = storedFamiliars;
         this.storeMode = storeMode;
+        this.canFamiliarsUseGoals = canFamiliarsUseGoals;
+        this.maxDistance = maxDistance;
     }
 
     // Sobrecarga para mantener compatibilidad
-    public UpdateFamiliarStoragePacket(BlockPos blockPos, Map<UUID, CompoundTag> storedFamiliars) {
-        this(blockPos, storedFamiliars, false); // Por defecto Wander Mode
+    public UpdateFamiliarStoragePacket(BlockPos blockPos, Map<UUID, CompoundTag> storedFamiliars, boolean storeMode) {
+        this(blockPos, storedFamiliars, storeMode, true, 25);
     }
 
     public UpdateFamiliarStoragePacket(FriendlyByteBuf buf) {
@@ -49,7 +53,9 @@ public class UpdateFamiliarStoragePacket implements CustomPacketPayload {
             this.storedFamiliars.put(id, nbt);
         }
 
-        this.storeMode = buf.readBoolean(); // NUEVO: leer el modo
+        this.storeMode = buf.readBoolean();
+        this.canFamiliarsUseGoals = buf.readBoolean();
+        this.maxDistance = buf.readVarInt();
     }
 
     public void write(FriendlyByteBuf buf) {
@@ -62,11 +68,13 @@ public class UpdateFamiliarStoragePacket implements CustomPacketPayload {
         }
 
         buf.writeBoolean(storeMode);
+        buf.writeBoolean(canFamiliarsUseGoals);
+        buf.writeVarInt(maxDistance);
     }
 
     public static void handle(UpdateFamiliarStoragePacket packet, IPayloadContext context) {
         context.enqueueWork(() -> {
-            FamiliarManager.handleStorageUpdate(packet.blockPos, packet.storedFamiliars, packet.storeMode);
+            FamiliarManager.handleStorageUpdate(packet.blockPos, packet.storedFamiliars, packet.storeMode, packet.canFamiliarsUseGoals, packet.maxDistance);
         });
     }
 

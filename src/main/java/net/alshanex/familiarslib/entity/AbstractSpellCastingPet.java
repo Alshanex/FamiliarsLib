@@ -61,6 +61,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -1005,6 +1006,24 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         if(!level.isClientSide){
             MagicManager.spawnParticles(level(), ParticleTypes.POOF, getX(), getY(), getZ(), 25, .4, .8, .4, .03, false);
         }
+    }
+
+    //Helper method to check if familiars can execute goals in wander mode of storage blocks
+    public boolean canExecuteGoalsInHouse() {
+        if (!getIsInHouse() || housePosition == null) {
+            return true;
+        }
+
+        if (level() == null || level().isClientSide) {
+            return false;
+        }
+
+        BlockEntity blockEntity = level().getBlockEntity(housePosition);
+        if (!(blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity)) {
+            return false;
+        }
+
+        return !storageEntity.isStoreMode() && storageEntity.canFamiliarsUseGoals();
     }
 
     public boolean getMovementDisabled(){

@@ -59,7 +59,13 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
                 }
 
                 Map<UUID, CompoundTag> storedData = storageEntity.getStoredFamiliars();
-                PacketDistributor.sendToPlayer(serverPlayer, new UpdateFamiliarStoragePacket(pos, storedData, storageEntity.isStoreMode()));
+                PacketDistributor.sendToPlayer(serverPlayer, new UpdateFamiliarStoragePacket(
+                        pos,
+                        storedData,
+                        storageEntity.isStoreMode(),
+                        storageEntity.canFamiliarsUseGoals(),
+                        storageEntity.getMaxDistance()
+                ));
 
                 PacketDistributor.sendToPlayer(serverPlayer, new OpenFamiliarStoragePacket(pos));
                 return InteractionResult.SUCCESS;
