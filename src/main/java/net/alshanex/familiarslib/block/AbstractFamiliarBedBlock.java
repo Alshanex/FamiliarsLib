@@ -18,6 +18,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -127,5 +128,36 @@ public abstract class AbstractFamiliarBedBlock extends BaseEntityBlock {
         } catch (Exception e) {
             FamiliarsLib.LOGGER.error("Error updating summoned familiars data for bed interaction: ", e);
         }
+    }
+
+    @Override
+    protected float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity instanceof AbstractFamiliarBedBlockEntity petBed) {
+            // Only owner can break it
+            if (player instanceof ServerPlayer serverPlayer && !petBed.isOwner(serverPlayer)) {
+                if (!player.level().isClientSide()) {
+                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                            Component.translatable("message.familiarslib.not_bed_owner")
+                                    .withStyle(ChatFormatting.RED)
+                    ));
+                }
+                return 0.0F;
+            }
+        }
+        return super.getDestroyProgress(state, player, level, pos);
+    }
+
+    @Override
+    public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player, boolean willHarvest, net.minecraft.world.level.material.FluidState fluid) {
+        BlockEntity blockEntity = level.getBlockEntity(pos);
+        if (blockEntity instanceof AbstractFamiliarBedBlockEntity petBed) {
+            // Only owner can break it
+            if (player instanceof ServerPlayer serverPlayer && !petBed.isOwner(serverPlayer)) {
+                return false;
+            }
+        }
+
+        return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
     }
 }
