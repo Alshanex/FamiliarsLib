@@ -24,6 +24,7 @@ import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.CylinderParticleManager;
 import net.alshanex.familiarslib.util.ModTags;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -306,6 +307,11 @@ public class FamiliarGoals {
         private Supplier<LivingEntity> ownerGetter;
         private float teleportDistance;
 
+        private Vec3 lastOwnerPosition = Vec3.ZERO;
+        private int ticksSinceLastCheck = 0;
+        private static final int CHECK_INTERVAL = 10;
+        private static final double INSTANT_TELEPORT_THRESHOLD = 20.0;
+
         public TeleportToOwnerGoal(AbstractSpellCastingPet pTamable, Supplier<LivingEntity> ownerGetter, float teleportDistance) {
             this.mob = pTamable;
             this.ownerGetter = ownerGetter;
@@ -318,7 +324,14 @@ public class FamiliarGoals {
             LivingEntity livingentity = this.ownerGetter.get();
             if (livingentity == null) {
                 return false;
-            } else if (this.mob.distanceToSqr(livingentity) < (double) (this.teleportDistance * this.teleportDistance)) {
+            }
+
+            if (hasOwnerTeleportedInstantly(livingentity)) {
+                this.owner = livingentity;
+                return true;
+            }
+
+            if (this.mob.distanceToSqr(livingentity) < (double) (this.teleportDistance * this.teleportDistance)) {
                 return false;
             } else if (this.mob.getIsSitting()){
                 return false;
@@ -332,16 +345,62 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
+            LivingEntity livingentity = this.ownerGetter.get();
+            if (livingentity == null) {
+                return false;
+            }
+
+            if (hasOwnerTeleportedInstantly(livingentity) || shouldTryTeleportToOwner()) {
+                return true;
+            }
+
             return canUse();
         }
 
         @Override
         public void tick() {
-            boolean flag = this.shouldTryTeleportToOwner();
-            if (!flag) {
+            LivingEntity livingentity = this.ownerGetter.get();
+            if (livingentity == null) return;
+
+            updateOwnerPositionTracking(livingentity);
+
+            boolean needsTeleport = this.shouldTryTeleportToOwner() || hasOwnerTeleportedInstantly(livingentity);
+
+            if (!needsTeleport) {
                 this.mob.getLookControl().setLookAt(this.owner, 10.0F, (float) this.mob.getMaxHeadXRot());
             } else {
                 this.tryToTeleportToOwner();
+            }
+        }
+
+        private boolean hasOwnerTeleportedInstantly(LivingEntity owner) {
+            ticksSinceLastCheck++;
+
+            if (ticksSinceLastCheck >= CHECK_INTERVAL) {
+                Vec3 currentOwnerPos = owner.position();
+
+                if (lastOwnerPosition.equals(Vec3.ZERO)) {
+                    lastOwnerPosition = currentOwnerPos;
+                    ticksSinceLastCheck = 0;
+                    return false;
+                }
+
+                double distanceMoved = lastOwnerPosition.distanceTo(currentOwnerPos);
+
+                boolean hasTeleported = distanceMoved > INSTANT_TELEPORT_THRESHOLD;
+
+                lastOwnerPosition = currentOwnerPos;
+                ticksSinceLastCheck = 0;
+
+                return hasTeleported;
+            }
+
+            return false;
+        }
+
+        private void updateOwnerPositionTracking(LivingEntity owner) {
+            if (ticksSinceLastCheck == 0) {
+                lastOwnerPosition = owner.position();
             }
         }
 
@@ -352,22 +411,47 @@ public class FamiliarGoals {
             }
         }
 
-        public boolean shouldTryTeleportToOwner() {
-            LivingEntity livingentity = this.ownerGetter.get();
-            return livingentity != null && mob.distanceToSqr(livingentity) >= teleportDistance * teleportDistance;
-        }
-
-        private void teleportToAroundBlockPos(BlockPos pPos) {
+        private BlockPos findSafeTeleportPosition(BlockPos ownerPos, Level level) {
             for (int i = 0; i < 10; i++) {
                 int j = mob.getRandom().nextIntBetweenInclusive(-3, 3);
                 int k = mob.getRandom().nextIntBetweenInclusive(-3, 3);
                 if (Math.abs(j) >= 2 || Math.abs(k) >= 2) {
                     int l = mob.getRandom().nextIntBetweenInclusive(-1, 1);
-                    if (this.maybeTeleportTo(pPos.getX() + j, pPos.getY() + l, pPos.getZ() + k)) {
-                        return;
+                    BlockPos testPos = new BlockPos(ownerPos.getX() + j, ownerPos.getY() + l, ownerPos.getZ() + k);
+                    if (this.canTeleportTo(testPos)) {
+                        return testPos;
                     }
                 }
             }
+
+            for (int radius = 1; radius <= 8; radius++) {
+                for (int angle = 0; angle < 8; angle++) {
+                    double radians = (Math.PI * 2 * angle) / 8;
+                    int x = ownerPos.getX() + (int)(Math.cos(radians) * radius);
+                    int z = ownerPos.getZ() + (int)(Math.sin(radians) * radius);
+
+                    for (int yOffset = -2; yOffset <= 3; yOffset++) {
+                        BlockPos testPos = new BlockPos(x, ownerPos.getY() + yOffset, z);
+                        if (canTeleportTo(testPos)) {
+                            return testPos;
+                        }
+                    }
+                }
+            }
+
+            return ownerPos;
+        }
+
+        public boolean shouldTryTeleportToOwner() {
+            LivingEntity livingentity = this.ownerGetter.get();
+            if (livingentity == null) return false;
+
+            return mob.distanceToSqr(livingentity) >= teleportDistance * teleportDistance;
+        }
+
+        private void teleportToAroundBlockPos(BlockPos pPos) {
+            BlockPos safePos = findSafeTeleportPosition(pPos, mob.level());
+            mob.moveTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5, mob.getYRot(), mob.getXRot());
         }
 
         private boolean maybeTeleportTo(int pX, int pY, int pZ) {
@@ -380,18 +464,26 @@ public class FamiliarGoals {
         }
 
         private boolean canTeleportTo(BlockPos pPos) {
+            Level level = mob.level();
+
+            if (!level.isLoaded(pPos)) return false;
+
             PathType pathtype = WalkNodeEvaluator.getPathTypeStatic(mob, pPos);
             if (pathtype != PathType.WALKABLE) {
                 return false;
-            } else {
-                BlockState blockstate = mob.level().getBlockState(pPos.below());
-                if (blockstate.getBlock() instanceof LeavesBlock) {
-                    return false;
-                } else {
-                    BlockPos blockpos = pPos.subtract(mob.blockPosition());
-                    return mob.level().noCollision(mob, mob.getBoundingBox().move(blockpos));
-                }
             }
+
+            BlockState blockstate = level.getBlockState(pPos.below());
+            if (blockstate.getBlock() instanceof LeavesBlock) {
+                return false;
+            }
+
+            if (!level.getBlockState(pPos).isAir() || !level.getBlockState(pPos.above()).isAir()) {
+                return false;
+            }
+
+            BlockPos blockpos = pPos.subtract(mob.blockPosition());
+            return level.noCollision(mob, mob.getBoundingBox().move(blockpos));
         }
     }
 
