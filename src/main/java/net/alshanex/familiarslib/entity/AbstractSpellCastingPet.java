@@ -13,6 +13,7 @@ import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.capabilities.magic.SyncedSpellData;
 import io.redspace.ironsspellbooks.entity.mobs.IMagicSummon;
 import io.redspace.ironsspellbooks.entity.mobs.goals.*;
+import io.redspace.ironsspellbooks.entity.spells.AoeEntity;
 import io.redspace.ironsspellbooks.spells.ender.TeleportSpell;
 import io.redspace.ironsspellbooks.spells.fire.BurningDashSpell;
 import io.redspace.ironsspellbooks.util.OwnerHelper;
@@ -241,7 +242,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     //Used to set the valid trinket that will give the boost to the familiar
     protected abstract Item getValidTrinket();
 
-    //Generic owner and ally methods
+    //Generic owner and allay methods
     @Override
     public boolean isAlliedTo(Entity pEntity) {
         return super.isAlliedTo(pEntity) || this.isAlliedHelper(pEntity);
@@ -252,12 +253,19 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         if (owner == null) {
             return false;
         }
+        if (entity.is(getSummoner())){ return true;}
         if (entity instanceof IMagicSummon magicSummon) {
             var otherOwner = magicSummon.getSummoner();
             return otherOwner != null && (owner == otherOwner || otherOwner.isAlliedTo(otherOwner));
         } else if (entity instanceof OwnableEntity tamableAnimal) {
             var otherOwner = tamableAnimal.getOwner();
             return otherOwner != null && (owner == otherOwner || otherOwner.isAlliedTo(otherOwner));
+        } else if (entity instanceof AbstractSpellCastingPet pet) {
+            var otherOwner = pet.getSummoner();
+            return otherOwner != null && (owner == otherOwner || otherOwner.isAlliedTo(otherOwner));
+        } else if (entity instanceof AoeEntity zone) {
+            var otherOwner = zone.getOwner();
+            return otherOwner != null && (owner == otherOwner || otherOwner.isAlliedTo(otherOwner) || otherOwner.isAlliedTo(owner));
         }
         return false;
     }
@@ -423,12 +431,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     //Invulnerable to the owner and owner's other familiars, also invulnerable when inside a storage block
     @Override
     public boolean isInvulnerableTo(DamageSource source) {
-        if (source.getEntity() != null && source.getEntity().is(this.getSummoner())) {
-            return true;
-        } else if (source.getEntity() != null && source.getEntity() instanceof AbstractSpellCastingPet pet
-                    && pet.getSummoner() != null && pet.getSummoner().is(this.getSummoner())){
-            return true;
-        } else if (getIsInHouse()){
+        if (source.getEntity() != null && this.isAlliedTo(source.getEntity())) {
             return true;
         }  else {
             return super.isInvulnerableTo(source);

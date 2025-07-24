@@ -14,7 +14,7 @@ public class ServerEvents {
     @SubscribeEvent
     public static void onDamageTaken(LivingDamageEvent.Pre event){
         if(event.getSource().getEntity() instanceof AbstractSpellCastingPet pet){
-            if(pet.getSummoner() != null && event.getEntity().is(pet.getSummoner())){
+            if(pet.isAlliedTo(event.getEntity())){
                 event.setNewDamage(0f);
             }
         }
