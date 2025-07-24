@@ -48,7 +48,7 @@
   "message.familiarslib.player_familiar_limit": "You have reached your familiar limit",
   "message.familiarslib.familiar_not_in_storage": "Familiar not found in storage",
   "message.familiarslib.retrieval_failed": "Failed to retrieve familiar",
-  "message.familiarslib.storage_block_chunk_limit": "This area is overcrowded, move the houses further apart",
+  "message.familiarslib.storage_block_chunk_limit": "These houses are too close together!",
 
   "item.familiarslib.familiar_spellbook.desc": "When equipped, this spellbook connects you with your tamed familiars, allowing you to share your magic attributes with them."
 }

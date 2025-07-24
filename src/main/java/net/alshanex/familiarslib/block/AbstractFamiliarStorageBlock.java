@@ -50,12 +50,23 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         }
     }
 
+    protected int getAmountPerChunk(){
+        return 1;
+    }
+
     //Opens the storage block screen after updating familiars data from the player
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
+                if (countStorageBlocksInChunk(level, pos) > getAmountPerChunk()) {
+                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                            Component.translatable("message.familiarslib.storage_block_chunk_limit")
+                                    .withStyle(ChatFormatting.RED)));
+                    return InteractionResult.FAIL;
+                }
+
                 if (!storageEntity.isOwner(serverPlayer)) {
                     return InteractionResult.FAIL;
                 }
@@ -74,6 +85,34 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
             }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
+    }
+
+    private int countStorageBlocksInChunk(Level level, BlockPos pos) {
+        LevelChunk chunk = level.getChunkAt(pos);
+        int count = 0;
+
+        // Get chunk boundaries
+        int chunkX = chunk.getPos().x;
+        int chunkZ = chunk.getPos().z;
+        int startX = chunkX << 4; // chunkX * 16
+        int startZ = chunkZ << 4; // chunkZ * 16
+        int endX = startX + 15;
+        int endZ = startZ + 15;
+
+        // Scan through all positions in the chunk
+        for (int x = startX; x <= endX; x++) {
+            for (int z = startZ; z <= endZ; z++) {
+                for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y++) {
+                    BlockPos checkPos = new BlockPos(x, y, z);
+                    BlockState blockState = level.getBlockState(checkPos);
+                    if (blockState.getBlock() instanceof AbstractFamiliarStorageBlock) {
+                        count++;
+                    }
+                }
+            }
+        }
+
+        return count;
     }
 
     @Override
