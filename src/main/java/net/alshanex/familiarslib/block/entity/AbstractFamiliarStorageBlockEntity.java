@@ -165,7 +165,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     }
 
     public void setMaxDistance(int maxDistance) {
-        this.maxDistance = Math.max(1, Math.min(25, maxDistance));
+        this.maxDistance = Math.max(3, Math.min(25, maxDistance));
         setChanged();
         syncToClient();
         FamiliarsLib.LOGGER.debug("Max distance changed to: {}", this.maxDistance);

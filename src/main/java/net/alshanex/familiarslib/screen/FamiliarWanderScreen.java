@@ -136,7 +136,7 @@ public class FamiliarWanderScreen extends Screen {
 
     // Custom slider for distance
     private class DistanceSlider extends AbstractSliderButton {
-        private static final int MIN_DISTANCE = 1;
+        private static final int MIN_DISTANCE = 3;
         private static final int MAX_DISTANCE = 25;
 
         public DistanceSlider(int x, int y, int width, int height, double initialValue) {
