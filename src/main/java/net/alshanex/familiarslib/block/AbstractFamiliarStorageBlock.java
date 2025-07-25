@@ -60,9 +60,9 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
-                if (countStorageBlocksInChunk(level, pos) > getAmountPerChunk()) {
+                if (countStorageBlocksInRadius(level, pos, 16) > getAmountPerChunk()) {
                     serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                            Component.translatable("message.familiarslib.storage_block_chunk_limit")
+                            Component.translatable("message.familiarslib.storage_block_radius_limit")
                                     .withStyle(ChatFormatting.RED)));
                     return InteractionResult.FAIL;
                 }
@@ -87,22 +87,20 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         return InteractionResult.sidedSuccess(level.isClientSide);
     }
 
-    private int countStorageBlocksInChunk(Level level, BlockPos pos) {
-        LevelChunk chunk = level.getChunkAt(pos);
+    private int countStorageBlocksInRadius(Level level, BlockPos centerPos, int radius) {
         int count = 0;
 
-        // Get chunk boundaries
-        int chunkX = chunk.getPos().x;
-        int chunkZ = chunk.getPos().z;
-        int startX = chunkX << 4; // chunkX * 16
-        int startZ = chunkZ << 4; // chunkZ * 16
-        int endX = startX + 15;
-        int endZ = startZ + 15;
+        int startX = centerPos.getX() - radius;
+        int endX = centerPos.getX() + radius;
+        int startZ = centerPos.getZ() - radius;
+        int endZ = centerPos.getZ() + radius;
 
-        // Scan through all positions in the chunk
+        int minY = level.getMinBuildHeight();
+        int maxY = level.getMaxBuildHeight();
+
         for (int x = startX; x <= endX; x++) {
             for (int z = startZ; z <= endZ; z++) {
-                for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y++) {
+                for (int y = minY; y < maxY; y++) {
                     BlockPos checkPos = new BlockPos(x, y, z);
                     BlockState blockState = level.getBlockState(checkPos);
                     if (blockState.getBlock() instanceof AbstractFamiliarStorageBlock) {

@@ -194,12 +194,18 @@ public class FamiliarManager {
             if (familiar.getSummoner() != null && familiar.getSummoner().is(player) &&
                     familiar.getUUID().equals(familiarId)) {
 
+                if (familiar.isCasting()) {
+                    familiar.cancelCast();
+                    familiar.getMagicData().resetCastingState();
+                }
+
+                familiar.setTarget(null);
+
+                familiar.setHasUsedSingleAttack(false);
+
                 CompoundTag updatedNBT = createFamiliarNBT(familiar);
 
                 familiarData.addTamedFamiliar(familiarId, updatedNBT);
-
-                familiar.setTarget(null);
-                familiar.cancelCast();
 
                 familiar.remove(Entity.RemovalReason.DISCARDED);
                 FamiliarAttributesHelper.handleFamiliarDismissed(player, familiar);
@@ -493,11 +499,17 @@ public class FamiliarManager {
             if (familiar.getSummoner() != null && familiar.getSummoner().is(player) &&
                     familiar.getUUID().equals(familiarId)) {
 
-                CompoundTag updatedNBT = createFamiliarNBT(familiar);
-                familiarData.addTamedFamiliar(familiarId, updatedNBT);
+                if (familiar.isCasting()) {
+                    familiar.cancelCast();
+                    familiar.getMagicData().resetCastingState();
+                }
 
                 familiar.setTarget(null);
-                familiar.cancelCast();
+
+                familiar.setHasUsedSingleAttack(false);
+
+                CompoundTag updatedNBT = createFamiliarNBT(familiar);
+                familiarData.addTamedFamiliar(familiarId, updatedNBT);
 
                 familiar.remove(Entity.RemovalReason.DISCARDED);
                 FamiliarAttributesHelper.handleFamiliarDismissed(player, familiar);

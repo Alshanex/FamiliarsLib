@@ -1,5 +1,6 @@
 package net.alshanex.familiarslib.entity;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.EntityType;
@@ -7,6 +8,7 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nullable;
@@ -25,6 +27,10 @@ public abstract class AbstractTerrestrianSpellCastingPet extends AbstractSpellCa
     protected void registerGoals() {
         super.registerGoals();
         this.goalSelector.addGoal(10, new MovementAwareRandomStrollGoal(this, 1, 60));
+    }
+
+    @Override
+    protected void checkFallDamage(double y, boolean onGround, BlockState state, BlockPos pos) {
     }
 
     @Override
