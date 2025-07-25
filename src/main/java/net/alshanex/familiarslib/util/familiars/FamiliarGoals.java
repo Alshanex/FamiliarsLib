@@ -312,6 +312,8 @@ public class FamiliarGoals {
         private static final int CHECK_INTERVAL = 10;
         private static final double INSTANT_TELEPORT_THRESHOLD = 20.0;
 
+        private static final int SAFE_POSITION_SEARCH_RADIUS = 16;
+
         public TeleportToOwnerGoal(AbstractSpellCastingPet pTamable, Supplier<LivingEntity> ownerGetter, float teleportDistance) {
             this.mob = pTamable;
             this.ownerGetter = ownerGetter;
@@ -369,7 +371,9 @@ public class FamiliarGoals {
             if (!needsTeleport) {
                 this.mob.getLookControl().setLookAt(this.owner, 10.0F, (float) this.mob.getMaxHeadXRot());
             } else {
-                this.tryToTeleportToOwner();
+                if (!this.tryToTeleportToOwnerSafely()) {
+                    this.mob.getLookControl().setLookAt(this.owner, 10.0F, (float) this.mob.getMaxHeadXRot());
+                }
             }
         }
 
@@ -404,42 +408,77 @@ public class FamiliarGoals {
             }
         }
 
-        public void tryToTeleportToOwner() {
+        public boolean tryToTeleportToOwnerSafely() {
             LivingEntity livingentity = this.ownerGetter.get();
             if (livingentity != null) {
-                this.teleportToAroundBlockPos(livingentity.blockPosition());
+                BlockPos safePos = findSafeTeleportPosition(livingentity.blockPosition(), mob.level());
+                if (safePos != null && !safePos.equals(livingentity.blockPosition())) {
+                    mob.moveTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5, mob.getYRot(), mob.getXRot());
+                    return true;
+                }
             }
+            return false;
         }
 
         private BlockPos findSafeTeleportPosition(BlockPos ownerPos, Level level) {
+            BlockPos nearbyPos = findSafeTeleportPositionAtLevel(ownerPos, level, 4);
+            if (nearbyPos != null) return nearbyPos;
+
+            for (int yOffset = -1; yOffset >= -32; yOffset--) {
+                BlockPos lowerPos = ownerPos.offset(0, yOffset, 0);
+                if (level.getBlockState(lowerPos.below()).isSolid()) {
+                    BlockPos safePos = findSafeTeleportPositionAtLevel(lowerPos, level, 4);
+                    if (safePos != null) return safePos;
+                }
+            }
+
+            return findSafeTeleportPositionExtended(ownerPos, level);
+        }
+
+        private BlockPos findSafeTeleportPositionAtLevel(BlockPos centerPos, Level level, int radius) {
             for (int i = 0; i < 10; i++) {
-                int j = mob.getRandom().nextIntBetweenInclusive(-3, 3);
-                int k = mob.getRandom().nextIntBetweenInclusive(-3, 3);
+                int j = mob.getRandom().nextIntBetweenInclusive(-radius, radius);
+                int k = mob.getRandom().nextIntBetweenInclusive(-radius, radius);
                 if (Math.abs(j) >= 2 || Math.abs(k) >= 2) {
-                    int l = mob.getRandom().nextIntBetweenInclusive(-1, 1);
-                    BlockPos testPos = new BlockPos(ownerPos.getX() + j, ownerPos.getY() + l, ownerPos.getZ() + k);
+                    BlockPos testPos = new BlockPos(centerPos.getX() + j, centerPos.getY(), centerPos.getZ() + k);
                     if (this.canTeleportTo(testPos)) {
                         return testPos;
                     }
                 }
             }
 
-            for (int radius = 1; radius <= 8; radius++) {
+            for (int r = 1; r <= radius; r++) {
                 for (int angle = 0; angle < 8; angle++) {
                     double radians = (Math.PI * 2 * angle) / 8;
-                    int x = ownerPos.getX() + (int)(Math.cos(radians) * radius);
-                    int z = ownerPos.getZ() + (int)(Math.sin(radians) * radius);
+                    int x = centerPos.getX() + (int)(Math.cos(radians) * r);
+                    int z = centerPos.getZ() + (int)(Math.sin(radians) * r);
 
-                    for (int yOffset = -2; yOffset <= 3; yOffset++) {
-                        BlockPos testPos = new BlockPos(x, ownerPos.getY() + yOffset, z);
+                    BlockPos testPos = new BlockPos(x, centerPos.getY(), z);
+                    if (canTeleportTo(testPos)) {
+                        return testPos;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private BlockPos findSafeTeleportPositionExtended(BlockPos centerPos, Level level) {
+            for (int radius = 1; radius <= SAFE_POSITION_SEARCH_RADIUS; radius++) {
+                for (int angle = 0; angle < 16; angle++) {
+                    double radians = (Math.PI * 2 * angle) / 16;
+                    int x = centerPos.getX() + (int)(Math.cos(radians) * radius);
+                    int z = centerPos.getZ() + (int)(Math.sin(radians) * radius);
+
+                    for (int yOffset = 10; yOffset >= -10; yOffset--) {
+                        BlockPos testPos = new BlockPos(x, centerPos.getY() + yOffset, z);
                         if (canTeleportTo(testPos)) {
                             return testPos;
                         }
                     }
                 }
             }
-
-            return ownerPos;
+            return null;
         }
 
         public boolean shouldTryTeleportToOwner() {
@@ -449,41 +488,31 @@ public class FamiliarGoals {
             return mob.distanceToSqr(livingentity) >= teleportDistance * teleportDistance;
         }
 
-        private void teleportToAroundBlockPos(BlockPos pPos) {
-            BlockPos safePos = findSafeTeleportPosition(pPos, mob.level());
-            mob.moveTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5, mob.getYRot(), mob.getXRot());
-        }
-
-        private boolean maybeTeleportTo(int pX, int pY, int pZ) {
-            if (!this.canTeleportTo(new BlockPos(pX, pY, pZ))) {
-                return false;
-            } else {
-                mob.moveTo((double) pX + 0.5, (double) pY, (double) pZ + 0.5, mob.getYRot(), mob.getXRot());
-                return true;
-            }
-        }
-
         private boolean canTeleportTo(BlockPos pPos) {
             Level level = mob.level();
 
             if (!level.isLoaded(pPos)) return false;
+
+            if (!level.getBlockState(pPos).isAir() || !level.getBlockState(pPos.above()).isAir()) {
+                return false;
+            }
+
+            BlockState blockstate = level.getBlockState(pPos.below());
+            if (!blockstate.isSolid() || blockstate.getBlock() instanceof LeavesBlock) {
+                return false;
+            }
 
             PathType pathtype = WalkNodeEvaluator.getPathTypeStatic(mob, pPos);
             if (pathtype != PathType.WALKABLE) {
                 return false;
             }
 
-            BlockState blockstate = level.getBlockState(pPos.below());
-            if (blockstate.getBlock() instanceof LeavesBlock) {
-                return false;
-            }
-
-            if (!level.getBlockState(pPos).isAir() || !level.getBlockState(pPos.above()).isAir()) {
-                return false;
-            }
-
             BlockPos blockpos = pPos.subtract(mob.blockPosition());
-            return level.noCollision(mob, mob.getBoundingBox().move(blockpos));
+            if (!level.noCollision(mob, mob.getBoundingBox().move(blockpos))) {
+                return false;
+            }
+
+            return true;
         }
     }
 
