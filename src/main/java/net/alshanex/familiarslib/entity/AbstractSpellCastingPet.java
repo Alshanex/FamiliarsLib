@@ -713,7 +713,19 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
         //Familiars can't attack anyone when inside storage blocks
         if(getTarget() != null && getIsInHouse() && this.tickCount % 10 == 0){
-            setTarget(null);
+            if(isHunterPet()){
+                if(getTarget() instanceof Mob mob){
+                    if(mob.getTarget() != null && this.isAlliedTo(mob.getTarget()) && !mob.getTarget().getType().is(ModTags.HUNTER_CANNOT_ATTACK_IN_HOME)){
+                        this.setTarget(mob);
+                    } else {
+                        setTarget(null);
+                    }
+                } else {
+                    setTarget(null);
+                }
+            } else {
+                setTarget(null);
+            }
         }
 
         //Handles health regen when sleeping
