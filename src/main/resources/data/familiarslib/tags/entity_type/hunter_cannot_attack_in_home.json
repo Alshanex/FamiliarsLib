@@ -1,6 +1,8 @@
 {
   "replace": false,
   "values": [
-      "#c:bosses"
+      "#c:bosses",
+      "#irons_spellbooks:summons",
+      "#alshanex_familiars:familiars"
   ]
 }
