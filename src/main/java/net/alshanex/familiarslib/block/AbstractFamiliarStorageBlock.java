@@ -131,7 +131,13 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
             if (player instanceof ServerPlayer serverPlayer && !storageEntity.isOwner(serverPlayer)) {
-                return 0.0F;
+                if (!serverPlayer.getAbilities().instabuild) {
+                    return 0.0F;
+                }
+            }
+
+            if (player.getAbilities().instabuild) {
+                return super.getDestroyProgress(state, player, level, pos);
             }
 
             if (!storageEntity.isStoreMode()) {
@@ -162,7 +168,13 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
             if (player instanceof ServerPlayer serverPlayer && !storageEntity.isOwner(serverPlayer)) {
-                return false;
+                if (!serverPlayer.getAbilities().instabuild) {
+                    return false;
+                }
+            }
+
+            if (player.getAbilities().instabuild) {
+                return super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
             }
 
             if (!storageEntity.isStoreMode()) {
