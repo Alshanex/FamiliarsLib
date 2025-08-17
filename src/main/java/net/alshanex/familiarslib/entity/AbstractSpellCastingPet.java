@@ -18,6 +18,8 @@ import io.redspace.ironsspellbooks.spells.ender.TeleportSpell;
 import io.redspace.ironsspellbooks.spells.fire.BurningDashSpell;
 import io.redspace.ironsspellbooks.util.OwnerHelper;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
+import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
@@ -370,10 +372,10 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             clearHouseGoals();
             addHouseGoals();
 
-            FamiliarsLib.LOGGER.info("Familiar {} entered house mode at {}", getUUID(), housePos);
+            FamiliarsLib.LOGGER.debug("Familiar {} entered house mode at {}", getUUID(), housePos);
         } else {
             clearHouseGoals();
-            FamiliarsLib.LOGGER.info("Familiar {} exited house mode", getUUID());
+            FamiliarsLib.LOGGER.debug("Familiar {} exited house mode", getUUID());
         }
     }
 
@@ -416,14 +418,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         if (this.isInvulnerableTo(pSource)) {
             return false;
         } else {
-            if (!this.level().isClientSide) {
-                if (wasPlayingSleepAnimation) {
-                    triggerAnim("interact_controller", "interact");
-                    wasPlayingSleepAnimation = false;
-                    bedRegenTimer = 0;
-                }
-                this.setSitting(false);
-            }
+            this.setSitting(false);
             return super.hurt(pSource, pAmount);
         }
     }
@@ -490,9 +485,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
         pCompound.putBoolean("hasTotem", getTotem());
 
-        pCompound.putInt("bedRegenTimer", bedRegenTimer);
-        pCompound.putBoolean("wasPlayingSleepAnimation", wasPlayingSleepAnimation);
-
         pCompound.putBoolean("lastTrinketState", lastTrinketState);
         pCompound.putBoolean("pendingGoalUpdate", pendingGoalUpdate);
         pCompound.putBoolean("pendingTrinketState", pendingTrinketState);
@@ -549,7 +541,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
                 setHealth(Math.min(savedHealth, maxHealth));
 
-                FamiliarsLib.LOGGER.info("Loaded familiar {}: health stacks={}, max health={}, current health={}",
+                FamiliarsLib.LOGGER.debug("Loaded familiar {}: health stacks={}, max health={}, current health={}",
                         getUUID(), getHealthStacks(), maxHealth, getHealth());
             }
         }
@@ -569,13 +561,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
         if(pCompound.contains("hasTotem")){
             setTotem(pCompound.getBoolean("hasTotem"));
-        }
-
-        if (pCompound.contains("bedRegenTimer")) {
-            bedRegenTimer = pCompound.getInt("bedRegenTimer");
-        }
-        if (pCompound.contains("wasPlayingSleepAnimation")) {
-            wasPlayingSleepAnimation = pCompound.getBoolean("wasPlayingSleepAnimation");
         }
 
         lastTrinketState = pCompound.getBoolean("lastTrinketState");
@@ -655,9 +640,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return playerMagicData;
     }
 
-    private int bedRegenTimer = 0;
-    private boolean wasPlayingSleepAnimation = false;
-
     @Override
     public void tick() {
         super.tick();
@@ -728,9 +710,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             }
         }
 
-        //Handles health regen when sleeping
-        handleBedRegeneration();
-
         //Handles Familiar Spellbook attribute sharing
         if (getSummoner() != null && this.tickCount % 10 == 0 && getHealth() > 0) {
             if (CurioUtils.isWearingFamiliarSpellbook(getSummoner())) {
@@ -749,46 +728,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 } else {
                     FamiliarsLib.LOGGER.debug("Familiar {} not in player data, skipping update", getUUID());
                 }
-            }
-        }
-    }
-
-    //Handles health regen when sleeping
-    private void handleBedRegeneration() {
-        boolean isOnValidBed = FamiliarBedHelper.isOnCompatibleBed(this);
-        boolean shouldPlaySleepAnimation = getIsSitting() && isOnValidBed;
-
-        if (shouldPlaySleepAnimation) {
-            if (!wasPlayingSleepAnimation) {
-                if (!level().isClientSide) {
-                    FamiliarsLib.LOGGER.debug("Pet " + this.getUUID() + " starting sleep animation on compatible bed");
-                }
-            }
-
-            if (!level().isClientSide) {
-                bedRegenTimer++;
-                if (bedRegenTimer >= 20) {
-                    if (getHealth() < getMaxHealth()) {
-                        heal(1.0F);
-                        FamiliarsLib.LOGGER.debug("Pet " + this.getUUID() + " healed to " + getHealth() + "/" + getMaxHealth());
-                        CylinderParticleManager.spawnParticlesAtBlockPos(this.level(), this.position(), 1, FParticleRegistry.SLEEP_PARTICLE.get(), CylinderParticleManager.ParticleDirection.UPWARD, 0.1, 0, .8);
-                    } else {
-                        // Full health, stop sleeping
-                        setSitting(false);
-                        FamiliarsLib.LOGGER.debug("Pet " + this.getUUID() + " fully healed, stopping sleep");
-                    }
-                    bedRegenTimer = 0;
-                }
-            }
-        } else {
-            // Not on a valid bed or not sitting
-            if (wasPlayingSleepAnimation) {
-                if (!level().isClientSide) {
-                    FamiliarsLib.LOGGER.debug("Pet " + this.getUUID() + " stopping sleep animation - not on valid bed or not sitting");
-                }
-            }
-            if (bedRegenTimer > 0) {
-                bedRegenTimer = 0;
             }
         }
     }
@@ -876,9 +815,8 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                     if (getSummoner() instanceof ServerPlayer serverPlayer) {
                         FamiliarHelper.attemptLegacyMigration(serverPlayer, this);
                     }
-                    if (!wasPlayingSleepAnimation) {
-                        triggerAnim("interact_controller", "interact");
-                    }
+
+                    triggerAnim("interact_controller", "interact");
 
                     if(itemstack.is(ModTags.BERRY)){
                         itemstack.shrink(1);
@@ -1281,27 +1219,34 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     protected PlayState sleepPredicate(AnimationState event) {
-        boolean isOnValidBed = FamiliarBedHelper.isOnCompatibleBed(this);
-        boolean shouldPlaySleepAnimation = getIsSitting() && isOnValidBed;
+        boolean shouldPlaySleepAnimation = getIsSitting() && isOnBed();
 
         if (shouldPlaySleepAnimation) {
-            if (!wasPlayingSleepAnimation) {
-                // Start sleeping animation
-                wasPlayingSleepAnimation = true;
-                event.getController().setAnimation(sleep);
-                return PlayState.CONTINUE;
-            } else {
-                return PlayState.CONTINUE;
-            }
+            event.getController().setAnimation(sleep);
+            return PlayState.CONTINUE;
         } else {
-            if (wasPlayingSleepAnimation) {
-                // Stop sleeping if was sleeping
-                wasPlayingSleepAnimation = false;
-                return PlayState.STOP;
-            } else {
-                return PlayState.STOP;
+            return PlayState.STOP;
+        }
+    }
+
+    private boolean isOnBed() {
+        BlockPos petPos = blockPosition();
+
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 0; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    BlockPos checkPos = petPos.offset(x, y, z);
+
+                    if (level().getBlockState(checkPos).getBlock() instanceof AbstractFamiliarBedBlock) {
+                        BlockEntity be = level().getBlockEntity(checkPos);
+                        if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
+                            return petBed.isPositionCorrectForSleeping(position());
+                        }
+                    }
+                }
             }
         }
+        return false;
     }
 
     protected PlayState instantCastingPredicate(AnimationState event) {
@@ -1359,10 +1304,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     public boolean isAnimating() {
+        boolean isSleeping = getIsSitting() && isOnBed();
+
         return isCasting()
                 || (animationControllerLongCast.getAnimationState() != AnimationController.State.STOPPED)
                 || (animationControllerInstantCast.getAnimationState() != AnimationController.State.STOPPED)
-                || wasPlayingSleepAnimation;
+                || isSleeping;
     }
 
     public boolean shouldAlwaysAnimateHead() {

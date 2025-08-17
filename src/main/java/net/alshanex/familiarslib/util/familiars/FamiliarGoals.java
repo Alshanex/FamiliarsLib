@@ -1,51 +1,35 @@
 package net.alshanex.familiarslib.util.familiars;
 
 import io.redspace.ironsspellbooks.api.registry.SchoolRegistry;
-import io.redspace.ironsspellbooks.api.registry.SpellRegistry;
-import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
-import io.redspace.ironsspellbooks.api.spells.ISpellContainer;
-import io.redspace.ironsspellbooks.api.spells.SpellRarity;
-import io.redspace.ironsspellbooks.block.pedestal.PedestalTile;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
-import io.redspace.ironsspellbooks.entity.mobs.IMagicSummon;
-import io.redspace.ironsspellbooks.item.Scroll;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
-import io.redspace.ironsspellbooks.registries.BlockRegistry;
-import io.redspace.ironsspellbooks.registries.ItemRegistry;
-import io.redspace.ironsspellbooks.registries.MobEffectRegistry;
 import io.redspace.ironsspellbooks.registries.ParticleRegistry;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
-import net.alshanex.familiarslib.data.BedLinkData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CylinderParticleManager;
 import net.alshanex.familiarslib.util.ModTags;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.target.TargetGoal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
-import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.WitherSkeleton;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -64,6 +48,7 @@ import java.util.function.Supplier;
  * Goals which can be added to any familiar
  */
 public class FamiliarGoals {
+
     public static class FindAndUsePetBedGoal extends Goal {
         private final AbstractSpellCastingPet pet;
         private final double searchRadius;
@@ -72,6 +57,11 @@ public class FamiliarGoals {
         private int cooldownTicks;
         private static final int SEARCH_COOLDOWN = 60;
         private boolean hasSnappedToBed = false;
+        private boolean hasClaimedBed = false;
+
+        // Sleep animation and regeneration variables
+        private int bedRegenTimer = 0;
+        private boolean wasPlayingSleepAnimation = false;
 
         public FindAndUsePetBedGoal(AbstractSpellCastingPet pet, double searchRadius) {
             this.pet = pet;
@@ -102,14 +92,15 @@ public class FamiliarGoals {
                 return false;
             }
 
-            BlockPos foundBed = findLinkedBed();
+            BlockPos foundBed = findAvailableBed();
             if (foundBed != null) {
                 targetBedPos = foundBed;
                 BlockEntity be = pet.level().getBlockEntity(targetBedPos);
                 if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
                     exactSleepPosition = petBed.getSleepPosition();
                     hasSnappedToBed = false;
-                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " found linked bed at " + targetBedPos +
+                    hasClaimedBed = false;
+                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " found available bed at " + targetBedPos +
                             ", exact sleep position: " + exactSleepPosition);
                     return true;
                 }
@@ -121,8 +112,16 @@ public class FamiliarGoals {
 
         @Override
         public boolean canContinueToUse() {
+            if (pet.getHealth() >= pet.getMaxHealth()) {
+                return false;
+            }
+
+            if (pet.getIsSitting() && hasSnappedToBed && targetBedPos != null) {
+                return isValidBed(targetBedPos);
+            }
+
             return !pet.getIsSitting() && targetBedPos != null && exactSleepPosition != null &&
-                    isValidLinkedBed(targetBedPos);
+                    isValidBed(targetBedPos);
         }
 
         @Override
@@ -132,6 +131,9 @@ public class FamiliarGoals {
                 pet.getNavigation().moveTo(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z, 1.0);
             }
             hasSnappedToBed = false;
+            hasClaimedBed = false;
+            bedRegenTimer = 0;
+            wasPlayingSleepAnimation = false;
         }
 
         @Override
@@ -143,16 +145,19 @@ public class FamiliarGoals {
             Vec3 petPos = pet.position();
             double distanceToSleepPos = petPos.distanceTo(exactSleepPosition);
 
-            if (distanceToSleepPos <= 1.5 && !hasSnappedToBed) {
+            // Claim the bed when close enough
+            if (distanceToSleepPos <= 2.0 && !hasClaimedBed) {
+                claimBed();
+            }
+
+            // Snap to bed position when very close
+            if (distanceToSleepPos <= 1.5 && !hasSnappedToBed && hasClaimedBed) {
                 if (!pet.level().isClientSide) {
                     FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " within snap range, teleporting to exact position");
 
                     pet.getNavigation().stop();
-
                     pet.setDeltaMovement(Vec3.ZERO);
-
-                    FamiliarBedHelper.snapToExactBedPosition(pet);
-
+                    pet.setPos(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z);
                     hasSnappedToBed = true;
 
                     try {
@@ -164,17 +169,13 @@ public class FamiliarGoals {
                 return;
             }
 
-            if (hasSnappedToBed && distanceToSleepPos <= 0.5) {
-                if (!pet.level().isClientSide && !pet.getIsSitting()) {
-                    try {
-                        pet.setSitting(true);
-                    } catch (Exception e) {
-                        FamiliarsLib.LOGGER.error("Error setting pet to sitting after snap: ", e);
-                    }
-                }
+            // Handle sleep animation and regeneration when snapped and sitting
+            if (hasSnappedToBed && pet.getIsSitting()) {
+                handleSleepAndRegeneration();
                 return;
             }
 
+            // Continue moving to bed if not snapped yet
             if (!hasSnappedToBed && (pet.getNavigation().isDone() || distanceToSleepPos > 3.0)) {
                 pet.getNavigation().moveTo(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z, 1.2);
             }
@@ -182,67 +183,181 @@ public class FamiliarGoals {
 
         @Override
         public void stop() {
+            if (pet.getIsSitting()) {
+                pet.setSitting(false);
+                FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopped sitting when bed goal ended");
+            }
+
+            // Release the bed when stopping
+            if (hasClaimedBed && targetBedPos != null) {
+                releaseBed();
+            }
+
             targetBedPos = null;
             exactSleepPosition = null;
             hasSnappedToBed = false;
+            hasClaimedBed = false;
             pet.getNavigation().stop();
             cooldownTicks = SEARCH_COOLDOWN;
+
+            // Reset sleep animation variables
+            bedRegenTimer = 0;
+            wasPlayingSleepAnimation = false;
         }
 
-        private BlockPos findLinkedBed() {
-            if (pet.getSummoner() == null) {
-                return null;
-            }
-
+        private BlockPos findAvailableBed() {
             BlockPos petPos = pet.blockPosition();
-            UUID petUUID = pet.getUUID();
 
-            FamiliarsLib.LOGGER.debug("Pet " + petUUID + " searching for linked bed around " + petPos);
+            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " searching for available bed around " + petPos);
 
-            if (!(pet.getSummoner() instanceof ServerPlayer serverPlayer)) {
-                return null;
+            // Search in a radius around the pet
+            int searchRange = (int) searchRadius;
+            for (int x = -searchRange; x <= searchRange; x++) {
+                for (int y = -2; y <= 2; y++) {
+                    for (int z = -searchRange; z <= searchRange; z++) {
+                        BlockPos checkPos = petPos.offset(x, y, z);
+
+                        // Check distance
+                        double distance = petPos.distSqr(checkPos);
+                        if (distance > searchRadius * searchRadius) {
+                            continue;
+                        }
+
+                        if (pet.level().getBlockState(checkPos).getBlock() instanceof AbstractFamiliarBedBlock) {
+                            BlockEntity be = pet.level().getBlockEntity(checkPos);
+                            if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
+                                // Check if bed is available (not taken)
+                                if (!petBed.isBedTaken()) {
+                                    FamiliarsLib.LOGGER.debug("Found available bed at " + checkPos);
+                                    return checkPos;
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
-            BedLinkData linkData = serverPlayer.getData(AttachmentRegistry.BED_LINK_DATA);
-            BlockPos linkedBedPos = linkData.getLinkedBed(petUUID);
-
-            if (linkedBedPos == null) {
-                FamiliarsLib.LOGGER.debug("No linked bed found for pet " + petUUID);
-                return null;
-            }
-
-            double distance = petPos.distSqr(linkedBedPos);
-            if (distance > searchRadius * searchRadius) {
-                FamiliarsLib.LOGGER.debug("Linked bed at " + linkedBedPos + " is too far (distance: " + Math.sqrt(distance) + ")");
-                return null;
-            }
-
-            if (isValidLinkedBed(linkedBedPos)) {
-                FamiliarsLib.LOGGER.debug("Found valid linked bed at " + linkedBedPos);
-                return linkedBedPos;
-            } else {
-                FamiliarsLib.LOGGER.debug("Linked bed at " + linkedBedPos + " is no longer valid");
-                linkData.unlinkBed(linkedBedPos);
-                return null;
-            }
+            FamiliarsLib.LOGGER.debug("No available bed found for pet " + pet.getUUID());
+            return null;
         }
 
-        private boolean isValidLinkedBed(BlockPos pos) {
+        private boolean isValidBed(BlockPos pos) {
             try {
                 if (!(pet.level().getBlockState(pos).getBlock() instanceof AbstractFamiliarBedBlock)) {
                     return false;
                 }
 
                 BlockEntity be = pet.level().getBlockEntity(pos);
-                if (!(be instanceof AbstractFamiliarBedBlockEntity petBed)) {
-                    return false;
-                }
-
-                return petBed.isLinkedToPet(pet.getUUID());
+                return be instanceof AbstractFamiliarBedBlockEntity;
             } catch (Exception e) {
                 FamiliarsLib.LOGGER.error("Error checking if bed is valid: ", e);
                 return false;
             }
+        }
+
+        private void claimBed() {
+            if (targetBedPos == null) return;
+
+            BlockEntity be = pet.level().getBlockEntity(targetBedPos);
+            if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
+                if (!petBed.isBedTaken()) {
+                    petBed.setBedTaken(true);
+                    hasClaimedBed = true;
+                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " claimed bed at " + targetBedPos);
+                }
+            }
+        }
+
+        private void releaseBed() {
+            if (targetBedPos == null) return;
+
+            BlockEntity be = pet.level().getBlockEntity(targetBedPos);
+            if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
+                petBed.setBedTaken(false);
+                hasClaimedBed = false;
+                FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " released bed at " + targetBedPos);
+            }
+        }
+
+        private void handleSleepAndRegeneration() {
+            boolean isOnValidBed = isOnCompatibleBed();
+            boolean shouldPlaySleepAnimation = pet.getIsSitting() && isOnValidBed;
+
+            if (shouldPlaySleepAnimation) {
+                if (!wasPlayingSleepAnimation) {
+                    if (!pet.level().isClientSide) {
+                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " starting sleep animation on compatible bed");
+                    }
+                    wasPlayingSleepAnimation = true;
+                }
+
+                if (!pet.level().isClientSide) {
+                    bedRegenTimer++;
+                    if (bedRegenTimer >= 20) { // Every second
+                        if (pet.getHealth() < pet.getMaxHealth()) {
+                            pet.heal(1.0F);
+                            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " healed to " + pet.getHealth() + "/" + pet.getMaxHealth());
+
+                            // Spawn healing particles
+                            try {
+                                CylinderParticleManager.spawnParticlesAtBlockPos(
+                                        pet.level(),
+                                        pet.position(),
+                                        1,
+                                        FParticleRegistry.SLEEP_PARTICLE.get(),
+                                        CylinderParticleManager.ParticleDirection.UPWARD,
+                                        0.1,
+                                        0,
+                                        .8
+                                );
+                            } catch (Exception e) {
+                                FamiliarsLib.LOGGER.error("Error spawning sleep particles: ", e);
+                            }
+                        } else {
+                            // Full health
+                            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " fully healed, goal will stop");
+                        }
+                        bedRegenTimer = 0;
+                    }
+                }
+            } else {
+                // Not on a valid bed or not sitting
+                if (wasPlayingSleepAnimation) {
+                    if (!pet.level().isClientSide) {
+                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopping sleep animation - not on valid bed or not sitting");
+                    }
+                    wasPlayingSleepAnimation = false;
+                }
+                if (bedRegenTimer > 0) {
+                    bedRegenTimer = 0;
+                }
+            }
+        }
+
+        private boolean isOnCompatibleBed() {
+            if (targetBedPos == null) return false;
+
+            BlockPos petPos = pet.blockPosition();
+
+            // Check if pet is on or very close to the target bed
+            for (int x = -1; x <= 1; x++) {
+                for (int y = -1; y <= 0; y++) {
+                    for (int z = -1; z <= 1; z++) {
+                        BlockPos checkPos = petPos.offset(x, y, z);
+
+                        if (checkPos.equals(targetBedPos)) {
+                            if (pet.level().getBlockState(checkPos).getBlock() instanceof AbstractFamiliarBedBlock) {
+                                BlockEntity be = pet.level().getBlockEntity(checkPos);
+                                if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
+                                    return petBed.isPositionCorrectForSleeping(pet.position());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return false;
         }
     }
 

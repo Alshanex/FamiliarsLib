@@ -571,21 +571,21 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     public void setClientStoreMode(boolean storeMode) {
         if (level != null && level.isClientSide) {
             this.storeMode = storeMode;
-            FamiliarsLib.LOGGER.info("Client updated storage mode to: {}", storeMode ? "Store" : "Wander");
+            FamiliarsLib.LOGGER.debug("Client updated storage mode to: {}", storeMode ? "Store" : "Wander");
         }
     }
 
     public void setClientCanFamiliarsUseGoals(boolean canFamiliarsUseGoals) {
         if (level != null && level.isClientSide) {
             this.canFamiliarsUseGoals = canFamiliarsUseGoals;
-            FamiliarsLib.LOGGER.info("Client updated can familiars use goals to: {}", canFamiliarsUseGoals);
+            FamiliarsLib.LOGGER.debug("Client updated can familiars use goals to: {}", canFamiliarsUseGoals);
         }
     }
 
     public void setClientMaxDistance(int maxDistance) {
         if (level != null && level.isClientSide) {
             this.maxDistance = maxDistance;
-            FamiliarsLib.LOGGER.info("Client updated max distance to: {}", maxDistance);
+            FamiliarsLib.LOGGER.debug("Client updated max distance to: {}", maxDistance);
         }
     }
 

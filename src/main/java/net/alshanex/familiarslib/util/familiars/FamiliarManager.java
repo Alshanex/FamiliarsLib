@@ -4,12 +4,10 @@ import io.redspace.ironsspellbooks.api.util.Utils;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
-import net.alshanex.familiarslib.data.BedLinkData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.network.*;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
-import net.alshanex.familiarslib.screen.BedLinkSelectionScreen;
 import net.alshanex.familiarslib.screen.FamiliarStorageScreen;
 import net.alshanex.familiarslib.screen.FamiliarWanderScreen;
 import net.minecraft.ChatFormatting;
@@ -310,10 +308,6 @@ public class FamiliarManager {
             CompoundTag syncData = familiarData.serializeNBT(player.registryAccess());
             PacketDistributor.sendToPlayer(player, new SyncFamiliarDataPacket(syncData));
 
-            BedLinkData linkData = player.getData(AttachmentRegistry.BED_LINK_DATA);
-            CompoundTag linkSyncData = linkData.serializeNBT(player.registryAccess());
-            PacketDistributor.sendToPlayer(player, new SyncBedLinkDataPacket(linkSyncData));
-
             FamiliarsLib.LOGGER.debug("All data synced to client successfully");
 
         } catch (Exception e) {
@@ -349,10 +343,6 @@ public class FamiliarManager {
 
             FamiliarsLib.LOGGER.debug("Client received familiar data - Count: {}, Selected: {}, Summoned: {}, All Summoned: {}",
                     familiars.size(), selectedFamiliarId, currentSummonedFamiliarId, summonedFamiliarIds != null ? summonedFamiliarIds.size() : 0);
-
-            if (Minecraft.getInstance().screen instanceof BedLinkSelectionScreen bedLinkScreen) {
-                bedLinkScreen.reloadFamiliarData();
-            }
         }
     }
 
@@ -541,11 +531,6 @@ public class FamiliarManager {
     }
 
     @OnlyIn(Dist.CLIENT)
-    public static void openBedScreen(BlockPos bedPos){
-        Minecraft.getInstance().setScreen(new BedLinkSelectionScreen(bedPos));
-    }
-
-    @OnlyIn(Dist.CLIENT)
     public static void openStorageScreen(BlockPos blockPos){
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level != null) {
@@ -558,86 +543,6 @@ public class FamiliarManager {
                 }
             }
         }
-    }
-
-    @OnlyIn(Dist.CLIENT)
-    public static void syncBedData(CompoundTag bedLinkData){
-        Player player = Minecraft.getInstance().player;
-        if (player != null) {
-            BedLinkData data = player.getData(AttachmentRegistry.BED_LINK_DATA);
-            data.deserializeNBT(player.registryAccess(), bedLinkData);
-            FamiliarsLib.LOGGER.debug("Client received bed link data sync");
-        }
-    }
-
-    public static void linkFamiliarToBed(ServerPlayer serverPlayer, BlockPos bedPos, UUID familiarId){
-        FamiliarsLib.LOGGER.debug("Processing LinkFamiliarToBedPacket for player {} at pos {} with familiar {}",
-                serverPlayer.getName().getString(), bedPos, familiarId);
-
-        BlockEntity blockEntity = serverPlayer.level().getBlockEntity(bedPos);
-
-        if (!(blockEntity instanceof AbstractFamiliarBedBlockEntity petBed)) {
-            FamiliarsLib.LOGGER.debug("Block entity is not a PetBedBlockEntity at position {}", bedPos);
-            return;
-        }
-
-        if (!petBed.isOwner(serverPlayer)) {
-            serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.not_bed_owner").withStyle(ChatFormatting.RED)));
-            FamiliarsLib.LOGGER.debug("Player {} is not the owner of bed at {}", serverPlayer.getName().getString(), bedPos);
-            return;
-        }
-
-        BedLinkData linkData = serverPlayer.getData(AttachmentRegistry.BED_LINK_DATA);
-        PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-
-        if (familiarId != null) {
-            if (!familiarData.hasFamiliar(familiarId)) {
-                serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.familiar_not_found").withStyle(ChatFormatting.RED)));
-                FamiliarsLib.LOGGER.debug("Familiar {} not found in player data", familiarId);
-                return;
-            }
-
-            FamiliarsLib.LOGGER.debug("Linking familiar {} to bed at {}", familiarId, bedPos);
-            linkData.linkFamiliarToBed(familiarId, bedPos);
-
-            String familiarName = getFamiliarName(familiarData, familiarId);
-            serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.familiar_linked_to_bed", familiarName).withStyle(ChatFormatting.GREEN)));
-
-            FamiliarsLib.LOGGER.debug("Successfully linked familiar {} to bed", familiarId);
-        } else {
-            UUID previousLinked = linkData.getLinkedFamiliar(bedPos);
-            if (previousLinked != null) {
-                FamiliarsLib.LOGGER.debug("Unlinking familiar {} from bed at {}", previousLinked, bedPos);
-                linkData.unlinkBed(bedPos);
-
-                String familiarName = getFamiliarName(familiarData, previousLinked);
-                serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.familiar_unlinked_from_bed", familiarName).withStyle(ChatFormatting.GREEN)));
-
-                FamiliarsLib.LOGGER.debug("Successfully unlinked familiar {} from bed", previousLinked);
-            } else {
-                FamiliarsLib.LOGGER.debug("No familiar was linked to bed at {}", bedPos);
-            }
-        }
-
-        PacketDistributor.sendToPlayer(serverPlayer, new SyncBedLinkDataPacket(linkData.serializeNBT(serverPlayer.registryAccess())));
-        FamiliarsLib.LOGGER.debug("Bed link data synced to client for player {}", serverPlayer.getName().getString());
-    }
-
-    private static String getFamiliarName(PlayerFamiliarData familiarData, UUID familiarId) {
-        var familiarNBT = familiarData.getFamiliarData(familiarId);
-        if (familiarNBT != null) {
-            if (familiarNBT.contains("customName")) {
-                return familiarNBT.getString("customName");
-            }
-
-            String entityTypeString = familiarNBT.getString("id");
-            String[] parts = entityTypeString.split(":");
-            if (parts.length > 1) {
-                return parts[1].replace("_", " ");
-            }
-            return entityTypeString.substring(entityTypeString.lastIndexOf(':') + 1);
-        }
-        return "Unknown";
     }
 
     public static void updateSummonedFamiliarsData(ServerPlayer player) {
@@ -847,7 +752,6 @@ public class FamiliarManager {
         }
 
         PlayerFamiliarData playerData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        BedLinkData bedLinkData = player.getData(AttachmentRegistry.BED_LINK_DATA);
 
         AbstractFamiliarStorageBlockEntity.FamiliarData data = new AbstractFamiliarStorageBlockEntity.FamiliarData(familiarData, 0);
         storageEntity.storedFamiliars.put(familiarId, data);
@@ -863,7 +767,6 @@ public class FamiliarManager {
         }
 
         playerData.removeTamedFamiliar(familiarId);
-        bedLinkData.unlinkFamiliar(familiarId);
 
         storageEntity.setChanged();
         storageEntity.syncToClient();

@@ -1,7 +1,6 @@
 package net.alshanex.familiarslib.registry;
 
 import net.alshanex.familiarslib.FamiliarsLib;
-import net.alshanex.familiarslib.data.BedLinkData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
@@ -17,11 +16,6 @@ public class AttachmentRegistry {
     public static final Supplier<AttachmentType<PlayerFamiliarData>> PLAYER_FAMILIAR_DATA =
             ATTACHMENT_TYPES.register("player_familiar_data", () ->
                     AttachmentType.serializable(PlayerFamiliarData::new).build());
-
-    public static final Supplier<AttachmentType<BedLinkData>> BED_LINK_DATA =
-            ATTACHMENT_TYPES.register("bed_link_data", () ->
-                    AttachmentType.serializable(BedLinkData::new).build()
-    );
 
     public static void register(IEventBus eventBus) {
         ATTACHMENT_TYPES.register(eventBus);
