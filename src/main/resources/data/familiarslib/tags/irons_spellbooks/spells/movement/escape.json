@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "irons_spellbooks:frost_step",
+    "irons_spellbooks:teleport",
+    "irons_spellbooks:burning_dash"
+  ]
+}

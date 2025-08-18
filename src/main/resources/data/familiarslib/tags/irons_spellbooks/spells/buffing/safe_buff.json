@@ -1,0 +1,16 @@
+{
+  "replace": false,
+  "values": [
+    "irons_spellbooks:evasion",
+    "irons_spellbooks:heartstop",
+    "irons_spellbooks:charge",
+    "irons_spellbooks:invisibility",
+    "irons_spellbooks:oakskin",
+    "irons_spellbooks:cleanse",
+    "irons_spellbooks:haste",
+    {
+      "id": "alshanex_familiars:birds_spell",
+      "required": false
+    }
+  ]
+}

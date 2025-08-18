@@ -1,6 +1,11 @@
 package net.alshanex.familiarslib.util.familiars;
 
+import io.redspace.ironsspellbooks.api.entity.IMagicEntity;
+import io.redspace.ironsspellbooks.api.magic.MagicData;
 import io.redspace.ironsspellbooks.api.registry.SchoolRegistry;
+import io.redspace.ironsspellbooks.api.registry.SpellRegistry;
+import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
+import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
 import io.redspace.ironsspellbooks.registries.ParticleRegistry;
@@ -8,6 +13,7 @@ import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
+import net.alshanex.familiarslib.entity.AbstractFlyingSpellCastingPet;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
@@ -18,15 +24,21 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.TagKey;
+import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.target.TargetGoal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.WitherSkeleton;
 import net.minecraft.world.entity.player.Player;
@@ -38,11 +50,13 @@ import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * Goals which can be added to any familiar
@@ -1581,6 +1595,747 @@ public class FamiliarGoals {
 
             PathNavigation navigation = familiar.getNavigation();
             navigation.moveTo(targetPos.x, targetPos.y, targetPos.z, 1.2);
+        }
+    }
+
+    public static class FamiliarWizardAttackGoal extends Goal {
+
+        protected LivingEntity target;
+        protected final double speedModifier;
+        protected final int spellAttackIntervalMin;
+        protected final int spellAttackIntervalMax;
+        protected float spellcastingRange;
+        protected float spellcastingRangeSqr;
+        protected boolean shortCircuitTemp = false;
+
+        protected boolean hasLineOfSight;
+        protected int seeTime = 0;
+        protected int strafeTime;
+        protected boolean strafingClockwise;
+        protected int spellAttackDelay = -1;
+        protected int projectileCount;
+
+        protected AbstractSpell singleUseSpell = SpellRegistry.none();
+        protected int singleUseDelay;
+        protected int singleUseLevel;
+
+        protected boolean isFlying;
+        protected boolean allowFleeing;
+        protected int fleeCooldown;
+        protected int flyingMovementTimer;
+        protected Vec3 flyingTarget;
+        protected int lastHurtTime = -1;
+
+        protected final ArrayList<AbstractSpell> attackSpells = new ArrayList<>();
+        protected final ArrayList<AbstractSpell> defenseSpells = new ArrayList<>();
+        protected final ArrayList<AbstractSpell> movementSpells = new ArrayList<>();
+        protected final ArrayList<AbstractSpell> supportSpells = new ArrayList<>();
+        protected ArrayList<AbstractSpell> lastSpellCategory = attackSpells;
+
+        protected float minSpellQuality = .1f;
+        protected float maxSpellQuality = .4f;
+
+        protected boolean drinksPotions;
+        protected final PathfinderMob mob;
+        protected final IMagicEntity spellCastingMob;
+
+        public FamiliarWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double pSpeedModifier, int pAttackInterval) {
+            this(abstractSpellCastingMob, pSpeedModifier, pAttackInterval, pAttackInterval);
+        }
+
+        public FamiliarWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double pSpeedModifier, int pAttackIntervalMin, int pAttackIntervalMax) {
+            this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.LOOK, Flag.TARGET));
+            this.spellCastingMob = abstractSpellCastingMob;
+            if (abstractSpellCastingMob instanceof PathfinderMob m) {
+                this.mob = m;
+            } else
+                throw new IllegalStateException("Unable to add " + this.getClass().getSimpleName() + "to entity, must extend PathfinderMob.");
+
+            this.speedModifier = pSpeedModifier;
+            this.spellAttackIntervalMin = pAttackIntervalMin;
+            this.spellAttackIntervalMax = pAttackIntervalMax;
+            this.spellcastingRange = 20;
+            this.spellcastingRangeSqr = spellcastingRange * spellcastingRange;
+            allowFleeing = true;
+            flyingMovementTimer = 0;
+        }
+
+        public FamiliarWizardAttackGoal setSpells(List<AbstractSpell> attackSpells, List<AbstractSpell> defenseSpells, List<AbstractSpell> movementSpells, List<AbstractSpell> supportSpells) {
+            this.attackSpells.clear();
+            this.defenseSpells.clear();
+            this.movementSpells.clear();
+            this.supportSpells.clear();
+
+            this.attackSpells.addAll(attackSpells);
+            this.defenseSpells.addAll(defenseSpells);
+            this.movementSpells.addAll(movementSpells);
+            this.supportSpells.addAll(supportSpells);
+
+            return this;
+        }
+
+        public FamiliarWizardAttackGoal setSpellQuality(float minSpellQuality, float maxSpellQuality) {
+            this.minSpellQuality = minSpellQuality;
+            this.maxSpellQuality = maxSpellQuality;
+            return this;
+        }
+
+        public FamiliarWizardAttackGoal setSingleUseSpell(AbstractSpell abstractSpell, int minDelay, int maxDelay, int minLevel, int maxLevel) {
+            this.singleUseSpell = abstractSpell;
+            this.singleUseDelay = Utils.random.nextIntBetweenInclusive(minDelay, maxDelay);
+            this.singleUseLevel = Utils.random.nextIntBetweenInclusive(minLevel, maxLevel);
+            return this;
+        }
+
+        public FamiliarWizardAttackGoal setIsFlying() {
+            isFlying = true;
+            return this;
+        }
+
+        public FamiliarWizardAttackGoal setDrinksPotions() {
+            drinksPotions = true;
+            return this;
+        }
+
+        public FamiliarWizardAttackGoal setAllowFleeing(boolean allowFleeing) {
+            this.allowFleeing = allowFleeing;
+            return this;
+        }
+
+        public boolean canUse() {
+            LivingEntity livingentity = this.mob.getTarget();
+            if (livingentity != null && livingentity.isAlive()) {
+                this.target = livingentity;
+                return mob.canAttack(target);
+            } else {
+                return false;
+            }
+        }
+
+        public boolean canContinueToUse() {
+            return this.canUse();
+        }
+
+        public void stop() {
+            this.target = null;
+            this.seeTime = 0;
+            this.spellAttackDelay = -1;
+            this.mob.setAggressive(false);
+            this.mob.getMoveControl().strafe(0, 0);
+            this.mob.getNavigation().stop();
+            this.flyingTarget = null;
+            this.flyingMovementTimer = 0;
+            this.lastHurtTime = -1;
+        }
+
+        public boolean requiresUpdateEveryTick() {
+            return true;
+        }
+
+        public void tick() {
+            if (target == null) {
+                return;
+            }
+
+            if (target.isDeadOrDying()) {
+                LivingEntity newTarget = findNearbyTarget();
+                if (newTarget != null) {
+                    this.target = newTarget;
+                    this.mob.setTarget(newTarget);
+                    this.seeTime = 0;
+                    this.spellAttackDelay = Math.max(this.spellAttackDelay, 10);
+                } else {
+                    return;
+                }
+            }
+
+            double distanceSquared = this.mob.distanceToSqr(this.target.getX(), this.target.getY(), this.target.getZ());
+            hasLineOfSight = this.mob.getSensing().hasLineOfSight(this.target);
+            if (hasLineOfSight) {
+                this.seeTime++;
+            } else {
+                this.seeTime--;
+            }
+
+            //default mage movement
+            doMovement(distanceSquared);
+
+            //do attacks
+            if (mob.getLastHurtByMobTimestamp() == mob.tickCount - 1) {
+                spellAttackDelay = (int) (Mth.lerp(.6f, spellAttackDelay, 0) + 1);
+                lastHurtTime = mob.tickCount;
+            }
+
+            //default attack timer
+            handleAttackLogic(distanceSquared);
+
+            singleUseDelay--;
+            flyingMovementTimer--;
+        }
+
+        protected void handleAttackLogic(double distanceSquared) {
+            if (seeTime < -50) {
+                return;
+            }
+            if (--this.spellAttackDelay == 0) {
+                resetSpellAttackTimer(distanceSquared);
+                if (!spellCastingMob.isCasting() && !spellCastingMob.isDrinkingPotion()) {
+                    doSpellAction();
+                }
+
+            } else if (this.spellAttackDelay < 0) {
+                resetSpellAttackTimer(distanceSquared);
+            }
+            if (spellCastingMob.isCasting()) {
+                var spellData = MagicData.getPlayerMagicData(mob).getCastingSpell();
+                if (target.isDeadOrDying() || spellData.getSpell().shouldAIStopCasting(spellData.getLevel(), mob, target)) {
+                    spellCastingMob.cancelCast();
+                }
+            }
+        }
+
+        public boolean isActing() {
+            return spellCastingMob.isCasting() || spellCastingMob.isDrinkingPotion();
+        }
+
+        protected void resetSpellAttackTimer(double distanceSquared) {
+            float f = (float) Math.sqrt(distanceSquared) / this.spellcastingRange;
+            this.spellAttackDelay = Math.max(1, Mth.floor(f * (float) (this.spellAttackIntervalMax - this.spellAttackIntervalMin) + (float) this.spellAttackIntervalMin));
+        }
+
+        protected void doMovement(double distanceSquared) {
+            double speed = (spellCastingMob.isCasting() ? .75f : 1f) * movementSpeed();
+
+            if (target != null) {
+                mob.lookAt(target, 30, 30);
+                if (isFlying && spellCastingMob.isCasting()) {
+                    forceLookAtTarget(target);
+                }
+            }
+
+            if (isFlying) {
+                doFlyingMovement(distanceSquared, speed);
+            } else {
+                doGroundMovement(distanceSquared, speed);
+            }
+        }
+
+        protected void doFlyingMovement(double distanceSquared, double speed) {
+            float fleeDist = .275f;
+
+            // Fleeing movement
+            if (allowFleeing && (!spellCastingMob.isCasting() && spellAttackDelay > 10) && --fleeCooldown <= 0 && distanceSquared < spellcastingRangeSqr * (fleeDist * fleeDist)) {
+                Vec3 flee = DefaultRandomPos.getPosAway(this.mob, 16, 7, target.position());
+                if (flee != null) {
+                    flyingTarget = new Vec3(flee.x, flee.y + 3, flee.z);
+                    flyingMovementTimer = 60;
+                }
+            }
+            // In range movement
+            else if (distanceSquared < spellcastingRangeSqr && seeTime >= 5) {
+                boolean shouldGenerateNewTarget = !spellCastingMob.isCasting() &&
+                        (flyingTarget == null || flyingMovementTimer <= 0 || mob.position().distanceTo(flyingTarget) < 2);
+
+                if (spellCastingMob.isCasting() && mob.getRandom().nextInt(20) == 0) {
+                    shouldGenerateNewTarget = true;
+                }
+
+                if (shouldGenerateNewTarget) {
+                    double angle = mob.getRandom().nextDouble() * 2 * Math.PI;
+                    double radius = 5 + mob.getRandom().nextDouble() * 10;
+                    double x = target.getX() + Math.cos(angle) * radius;
+                    double z = target.getZ() + Math.sin(angle) * radius;
+
+                    double baseHeight = target.getY();
+                    double heightVariation = (mob.getRandom().nextDouble() - 0.5) * 8;
+                    double y = Math.max(baseHeight + 2, baseHeight + heightVariation + 3);
+
+                    flyingTarget = new Vec3(x, y, z);
+                    flyingMovementTimer = spellCastingMob.isCasting() ? 60 : 30 + mob.getRandom().nextInt(30);
+                }
+
+                if (flyingTarget != null) {
+                    double flyingSpeed = spellCastingMob.isCasting() ? speed * 0.4 : speed;
+
+                    if (mob.getMoveControl() instanceof AbstractFlyingSpellCastingPet.ImprovedFlyingMoveControl) {
+                        mob.getMoveControl().setWantedPosition(flyingTarget.x, flyingTarget.y, flyingTarget.z, flyingSpeed);
+                    } else {
+                        Vec3 direction = flyingTarget.subtract(mob.position()).normalize();
+                        Vec3 movement = direction.scale(flyingSpeed * 0.1);
+                        mob.setDeltaMovement(movement);
+                    }
+                }
+            }
+            // Out of range movement
+            else {
+                if (mob.tickCount % 5 == 0 || flyingTarget == null) {
+                    double targetY = target.getY() + 2 + mob.getRandom().nextDouble() * 3;
+                    flyingTarget = new Vec3(target.getX(), targetY, target.getZ());
+                    flyingMovementTimer = 20;
+                }
+
+                if (mob.getMoveControl() instanceof AbstractFlyingSpellCastingPet.ImprovedFlyingMoveControl) {
+                    mob.getMoveControl().setWantedPosition(flyingTarget.x, flyingTarget.y, flyingTarget.z, speed);
+                } else {
+                    Vec3 direction = flyingTarget.subtract(mob.position()).normalize();
+                    Vec3 movement = direction.scale(speed * 0.1);
+                    mob.setDeltaMovement(movement);
+                }
+            }
+        }
+
+        protected void doGroundMovement(double distanceSquared, double speed) {
+            // Default movement
+            float fleeDist = .275f;
+            float ss = getStrafeMultiplier();
+            if (allowFleeing && (!spellCastingMob.isCasting() && spellAttackDelay > 10) && --fleeCooldown <= 0 && distanceSquared < spellcastingRangeSqr * (fleeDist * fleeDist)) {
+                Vec3 flee = DefaultRandomPos.getPosAway(this.mob, 16, 7, target.position());
+                if (flee != null) {
+                    this.mob.getNavigation().moveTo(flee.x, flee.y, flee.z, speed * 1.5);
+                } else {
+                    mob.getMoveControl().strafe(-(float) speed * ss, (float) speed * ss);
+                }
+            } else if (distanceSquared < spellcastingRangeSqr && seeTime >= 5) {
+                this.mob.getNavigation().stop();
+                if (++strafeTime > 25) {
+                    if (mob.getRandom().nextDouble() < .1) {
+                        strafingClockwise = !strafingClockwise;
+                        strafeTime = 0;
+                    }
+                }
+                float strafeForward = (distanceSquared * 6 < spellcastingRangeSqr ? -1 : .5f) * .2f * (float) speedModifier;
+                int strafeDir = strafingClockwise ? 1 : -1;
+                mob.getMoveControl().strafe(strafeForward * ss, (float) speed * strafeDir * ss);
+                if (mob.horizontalCollision && mob.getRandom().nextFloat() < .1f) {
+                    tryJump();
+                }
+            } else {
+                if (mob.tickCount % 5 == 0) {
+                    this.mob.getNavigation().moveTo(this.target, speedModifier);
+                }
+            }
+        }
+
+        protected double movementSpeed() {
+            return speedModifier * mob.getAttributeValue(Attributes.MOVEMENT_SPEED) * 2;
+        }
+
+        protected void tryJump() {
+            Vec3 nextBlock = new Vec3(mob.xxa, 0, mob.zza).normalize();
+            BlockPos blockpos = BlockPos.containing(mob.position().add(nextBlock));
+            BlockState blockstate = this.mob.level().getBlockState(blockpos);
+            VoxelShape voxelshape = blockstate.getCollisionShape(this.mob.level(), blockpos);
+            if (!voxelshape.isEmpty() && !blockstate.is(BlockTags.DOORS) && !blockstate.is(BlockTags.FENCES)) {
+                BlockPos blockposAbove = blockpos.above();
+                BlockState blockstateAbove = this.mob.level().getBlockState(blockposAbove);
+                VoxelShape voxelshapeAbove = blockstateAbove.getCollisionShape(this.mob.level(), blockposAbove);
+                if (voxelshapeAbove.isEmpty()) {
+                    this.mob.getJumpControl().jump();
+                    mob.setXxa(mob.xxa * 5);
+                    mob.setZza(mob.zza * 5);
+                }
+            }
+        }
+
+        protected void doSpellAction() {
+            if (!spellCastingMob.getHasUsedSingleAttack() && singleUseSpell != SpellRegistry.none() && singleUseDelay <= 0) {
+                spellCastingMob.setHasUsedSingleAttack(true);
+                spellCastingMob.initiateCastSpell(singleUseSpell, singleUseLevel);
+                fleeCooldown = 7 + singleUseSpell.getCastTime(singleUseLevel);
+            } else {
+                var spell = getNextSpellType();
+                int spellLevel = (int) (spell.getMaxLevel() * Mth.lerp(mob.getRandom().nextFloat(), minSpellQuality, maxSpellQuality));
+                spellLevel = Math.max(spellLevel, 1);
+
+                if (!spell.shouldAIStopCasting(spellLevel, mob, target)) {
+                    spellCastingMob.initiateCastSpell(spell, spellLevel);
+                    fleeCooldown = 7 + spell.getCastTime(spellLevel);
+                } else {
+                    spellAttackDelay = 5;
+                }
+            }
+        }
+
+        protected AbstractSpell getNextSpellType() {
+            NavigableMap<Integer, ArrayList<AbstractSpell>> weightedSpells = new TreeMap<>();
+            int attackWeight = getAttackWeight();
+            int defenseWeight = getDefenseWeight() - (lastSpellCategory == defenseSpells ? 100 : 0);
+            int movementWeight = getMovementWeight() - (lastSpellCategory == movementSpells ? 50 : 0);
+            int supportWeight = getSupportWeight() - (lastSpellCategory == supportSpells ? 100 : 0);
+            int total = 0;
+
+            if (!attackSpells.isEmpty() && attackWeight > 0) {
+                total += attackWeight;
+                weightedSpells.put(total, getFilteredAttackSpells());
+            }
+            if (!defenseSpells.isEmpty() && defenseWeight > 0) {
+                total += defenseWeight;
+                weightedSpells.put(total, getFilteredDefenseSpells());
+            }
+            if (!movementSpells.isEmpty() && movementWeight > 0) {
+                total += movementWeight;
+                weightedSpells.put(total, getFilteredMovementSpells());
+            }
+            if ((!supportSpells.isEmpty() || drinksPotions) && supportWeight > 0) {
+                total += supportWeight;
+                weightedSpells.put(total, getFilteredSupportSpells());
+            }
+
+            if (total > 0) {
+                int seed = mob.getRandom().nextInt(total);
+                var spellList = weightedSpells.higherEntry(seed).getValue();
+                lastSpellCategory = spellList;
+
+                if (drinksPotions && spellList == supportSpells) {
+                    if (supportSpells.isEmpty() || mob.getRandom().nextFloat() < .5f) {
+                        spellCastingMob.startDrinkingPotion();
+                        return SpellRegistry.none();
+                    }
+                }
+                return spellList.get(mob.getRandom().nextInt(spellList.size()));
+            } else {
+                return SpellRegistry.none();
+            }
+        }
+
+        protected ArrayList<AbstractSpell> getFilteredAttackSpells() {
+            if (target == null) return new ArrayList<>(attackSpells);
+
+            double distance = Math.sqrt(mob.distanceToSqr(target));
+
+            // Choose priority
+            List<AbstractSpell> rangeSpells = new ArrayList<>();
+            if (distance <= 3) {
+                rangeSpells = filterSpellsByTags(attackSpells, ModTags.CLOSE_RANGE_ATTACKS);
+                if (rangeSpells.isEmpty()) {
+                    rangeSpells = filterSpellsByTags(attackSpells, ModTags.MID_RANGE_ATTACKS);
+                    if (rangeSpells.isEmpty()) {
+                        rangeSpells = filterSpellsByTags(attackSpells, ModTags.LONG_RANGE_ATTACKS);
+                    }
+                }
+            } else if (distance <= 6) {
+                rangeSpells = filterSpellsByTags(attackSpells, ModTags.MID_RANGE_ATTACKS);
+                if (rangeSpells.isEmpty()) {
+                    rangeSpells = filterSpellsByTags(attackSpells, ModTags.LONG_RANGE_ATTACKS);
+                    if (rangeSpells.isEmpty()) {
+                        rangeSpells = filterSpellsByTags(attackSpells, ModTags.CLOSE_RANGE_ATTACKS);
+                    }
+                }
+            } else {
+                rangeSpells = filterSpellsByTags(attackSpells, ModTags.LONG_RANGE_ATTACKS);
+                if (rangeSpells.isEmpty()) {
+                    rangeSpells = filterSpellsByTags(attackSpells, ModTags.MID_RANGE_ATTACKS);
+                    if (rangeSpells.isEmpty()) {
+                        rangeSpells = filterSpellsByTags(attackSpells, ModTags.CLOSE_RANGE_ATTACKS);
+                    }
+                }
+            }
+
+            if (rangeSpells.isEmpty()) {
+                rangeSpells = new ArrayList<>(attackSpells);
+            }
+
+            int entitiesNearTarget = getEntitiesNearTarget();
+            List<AbstractSpell> finalSpells = new ArrayList<>();
+
+            if (entitiesNearTarget >= 2) {
+                // Priority AOE
+                finalSpells = filterSpellsByTags(rangeSpells, ModTags.AOE_ATTACKS);
+                if (finalSpells.isEmpty()) {
+                    finalSpells = filterSpellsByTags(rangeSpells, ModTags.SINGLE_TARGET_ATTACKS);
+                }
+            } else {
+                // Priority Single Target
+                finalSpells = filterSpellsByTags(rangeSpells, ModTags.SINGLE_TARGET_ATTACKS);
+                if (finalSpells.isEmpty()) {
+                    finalSpells = filterSpellsByTags(rangeSpells, ModTags.AOE_ATTACKS);
+                }
+            }
+
+            return finalSpells.isEmpty() ? new ArrayList<>(rangeSpells) : new ArrayList<>(finalSpells);
+        }
+
+        protected ArrayList<AbstractSpell> getFilteredDefenseSpells() {
+            List<AbstractSpell> filteredSpells = new ArrayList<>();
+
+            int timeSinceHurt = mob.tickCount - lastHurtTime;
+            if (lastHurtTime == -1 || timeSinceHurt > 100) {
+                return new ArrayList<>();
+            }
+
+            if (timeSinceHurt < 20) {
+                return new ArrayList<>();
+            }
+
+            boolean hasCloseEnemies = hasEntitiesInRange(3);
+
+            if (hasCloseEnemies) {
+                filteredSpells = filterSpellsByTags(defenseSpells, ModTags.ATTACK_BACK_DEFENSE);
+                if (filteredSpells.isEmpty()) {
+                    filteredSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
+                }
+            } else {
+                filteredSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
+                if (filteredSpells.isEmpty()) {
+                    filteredSpells = filterSpellsByTags(defenseSpells, ModTags.ATTACK_BACK_DEFENSE);
+                }
+            }
+
+            return filteredSpells.isEmpty() ? new ArrayList<>() : new ArrayList<>(filteredSpells);
+        }
+
+        protected ArrayList<AbstractSpell> getFilteredMovementSpells() {
+            if (target == null) return new ArrayList<>(movementSpells);
+
+            double targetDistance = Math.sqrt(mob.distanceToSqr(target));
+            boolean hasCloseHostiles = hasHostileEntitiesInRange(3);
+
+            List<AbstractSpell> filteredSpells = new ArrayList<>();
+
+            if (hasCloseHostiles) {
+                filteredSpells = filterSpellsByTags(movementSpells, ModTags.ESCAPE_MOVEMENT);
+                if (filteredSpells.isEmpty()) {
+                    filteredSpells = filterSpellsByTags(movementSpells, ModTags.CLOSE_DISTANCE_MOVEMENT);
+                }
+            } else if (targetDistance > 5) {
+                filteredSpells = filterSpellsByTags(movementSpells, ModTags.CLOSE_DISTANCE_MOVEMENT);
+                if (filteredSpells.isEmpty()) {
+                    filteredSpells = filterSpellsByTags(movementSpells, ModTags.ESCAPE_MOVEMENT);
+                }
+            } else {
+                filteredSpells = filterSpellsByTags(movementSpells, ModTags.CLOSE_DISTANCE_MOVEMENT);
+                if (filteredSpells.isEmpty()) {
+                    filteredSpells = filterSpellsByTags(movementSpells, ModTags.ESCAPE_MOVEMENT);
+                }
+            }
+
+            return filteredSpells.isEmpty() ? new ArrayList<>(movementSpells) : new ArrayList<>(filteredSpells);
+        }
+
+        protected ArrayList<AbstractSpell> getFilteredSupportSpells() {
+            float healthPercentage = mob.getHealth() / mob.getMaxHealth();
+            List<AbstractSpell> filteredSpells = new ArrayList<>();
+
+            if (healthPercentage > 0.5f) {
+                // More than 50% health
+                List<AbstractSpell> safeBuffs = filterSpellsByTags(supportSpells, ModTags.SAFE_BUFF_BUFFING);
+                List<AbstractSpell> debuffs = filterSpellsByTags(supportSpells, ModTags.DEBUFF_BUFFING);
+                filteredSpells.addAll(safeBuffs);
+                filteredSpells.addAll(debuffs);
+            } else {
+                // Less than 50% health
+                List<AbstractSpell> unsafeBuffs = filterSpellsByTags(supportSpells, ModTags.UNSAFE_BUFF_BUFFING);
+                List<AbstractSpell> debuffs = filterSpellsByTags(supportSpells, ModTags.DEBUFF_BUFFING);
+
+                // Unsafe buffs have more chance
+                for (int i = 0; i < 3; i++) {
+                    filteredSpells.addAll(unsafeBuffs);
+                }
+                filteredSpells.addAll(debuffs);
+            }
+
+            return filteredSpells.isEmpty() ? new ArrayList<>(supportSpells) : new ArrayList<>(filteredSpells);
+        }
+
+        protected List<AbstractSpell> filterSpellsByTags(List<AbstractSpell> spells, TagKey<AbstractSpell> tag) {
+            var list = new ArrayList<AbstractSpell>();
+
+            for (var spell : spells) {
+                SpellRegistry.REGISTRY.getHolder(spell.getSpellResource()).ifPresent(a -> {
+                    if (a.is(tag)) {
+                        list.add(spell);
+                    }
+                });
+            }
+
+            return list;
+        }
+
+        protected int getEntitiesNearTarget() {
+            if (target == null) return 0;
+
+            AABB area = target.getBoundingBox().inflate(3.0);
+            return mob.level().getEntitiesOfClass(LivingEntity.class, area,
+                    entity -> entity != target && entity != mob && entity.isAlive()).size();
+        }
+
+        protected boolean hasEntitiesInRange(double range) {
+            AABB area = mob.getBoundingBox().inflate(range);
+            return !mob.level().getEntitiesOfClass(LivingEntity.class, area,
+                    entity -> entity != mob && entity.isAlive()).isEmpty();
+        }
+
+        protected boolean hasHostileEntitiesInRange(double range) {
+            AABB area = mob.getBoundingBox().inflate(range);
+            return !mob.level().getEntitiesOfClass(Mob.class, area,
+                    entity -> entity != mob && entity.isAlive() &&
+                            (entity instanceof Enemy || entity.getTarget() == mob)).isEmpty();
+        }
+
+        @Override
+        public void start() {
+            super.start();
+            this.mob.setAggressive(true);
+        }
+
+        protected int getAttackWeight() {
+            int baseWeight = 80;
+            if (!hasLineOfSight || target == null) {
+                return 0;
+            }
+
+            float targetHealth = target.getHealth() / target.getMaxHealth();
+            int targetHealthWeight = (int) ((1 - targetHealth) * baseWeight * .75f);
+
+            double distanceSquared = this.mob.distanceToSqr(this.target.getX(), this.target.getY(), this.target.getZ());
+            int distanceWeight = (int) (1 - (distanceSquared / spellcastingRangeSqr) * -60);
+
+            return baseWeight + targetHealthWeight + distanceWeight;
+        }
+
+        protected int getDefenseWeight() {
+            int baseWeight = -20;
+
+            if (target == null) {
+                return baseWeight;
+            }
+
+            int timeSinceHurt = mob.tickCount - lastHurtTime;
+            if (lastHurtTime == -1 || timeSinceHurt > 100 || timeSinceHurt < 20) {
+                return 0;
+            }
+
+            float x = mob.getHealth();
+            float m = mob.getMaxHealth();
+            int healthWeight = (int) (50 * (-(x * x * x) / (m * m * m) + 1));
+
+            float targetHealth = target.getHealth() / target.getMaxHealth();
+            int targetHealthWeight = (int) (1 - targetHealth) * -35;
+
+            int threatWeight = projectileCount * 95;
+
+            int recentAttackBonus = 150;
+
+            return baseWeight + healthWeight + targetHealthWeight + threatWeight + recentAttackBonus;
+        }
+
+        protected int getMovementWeight() {
+            if (target == null) {
+                return 0;
+            }
+
+            double distanceSquared = this.mob.distanceToSqr(this.target.getX(), this.target.getY(), this.target.getZ());
+            double distancePercent = Mth.clamp(distanceSquared / spellcastingRangeSqr, 0, 1);
+
+            int distanceWeight = (int) ((distancePercent) * 50);
+            int losWeight = hasLineOfSight ? 0 : 80;
+
+            float healthInverted = 1 - mob.getHealth() / mob.getMaxHealth();
+            float distanceInverted = (float) (1 - distancePercent);
+            int runWeight = (int) (400 * healthInverted * healthInverted * distanceInverted * distanceInverted);
+
+            return distanceWeight + losWeight + runWeight;
+        }
+
+        protected int getSupportWeight() {
+            int baseWeight = -15;
+
+            if (target == null) {
+                return baseWeight;
+            }
+
+            float health = 1 - mob.getHealth() / mob.getMaxHealth();
+            int healthWeight = (int) (200 * health);
+
+            double distanceSquared = this.mob.distanceToSqr(this.target.getX(), this.target.getY(), this.target.getZ());
+            double distancePercent = Mth.clamp(distanceSquared / spellcastingRangeSqr, 0, 1);
+            int distanceWeight = (int) ((1 - distancePercent) * -75);
+
+            return baseWeight + healthWeight + distanceWeight;
+        }
+
+        @Override
+        public boolean isInterruptable() {
+            return !isActing();
+        }
+
+        public float getStrafeMultiplier(){
+            return 1f;
+        }
+
+        protected void forceLookAtTarget(LivingEntity target) {
+            if (target != null) {
+                double d0 = target.getX() - this.mob.getX();
+                double d2 = target.getZ() - this.mob.getZ();
+                double d1 = target.getEyeY() - this.mob.getEyeY();
+
+                double d3 = Math.sqrt(d0 * d0 + d2 * d2);
+                float f = (float) (Mth.atan2(d2, d0) * (double) (180F / (float) Math.PI)) - 90.0F;
+                float f1 = (float) (-(Mth.atan2(d1, d3) * (double) (180F / (float) Math.PI)));
+                this.mob.setXRot(f1 % 360);
+                this.mob.setYRot(f % 360);
+            }
+        }
+
+        protected LivingEntity findNearbyTarget() {
+            if (mob == null) return null;
+
+            AABB searchArea = mob.getBoundingBox().inflate(10.0);
+            List<LivingEntity> nearbyHostiles = mob.level().getEntitiesOfClass(
+                    LivingEntity.class,
+                    searchArea,
+                    entity -> isValidTargetForContinuation(entity)
+            );
+
+            if (nearbyHostiles.isEmpty()) {
+                return null;
+            }
+
+            return findPriorityTarget(nearbyHostiles);
+        }
+
+        protected boolean isValidTargetForContinuation(LivingEntity entity) {
+            if (entity == null || entity == mob || entity.isDeadOrDying()) {
+                return false;
+            }
+
+            if (mob instanceof AbstractSpellCastingPet pet && pet.isAlliedTo(entity)) {
+                return false;
+            }
+
+            if (entity instanceof Mob hostileMob) {
+                LivingEntity hostileTarget = hostileMob.getTarget();
+                if (hostileTarget == mob) {
+                    return true;
+                }
+                if (mob instanceof AbstractSpellCastingPet pet && hostileTarget == pet.getSummoner()) {
+                    return true;
+                }
+                return false;
+            }
+
+            return false;
+        }
+
+        protected LivingEntity findPriorityTarget(List<LivingEntity> potentialTargets) {
+            if (mob instanceof AbstractSpellCastingPet pet) {
+                LivingEntity owner = pet.getSummoner();
+
+                for (LivingEntity entity : potentialTargets) {
+                    if (entity instanceof Mob hostileMob) {
+                        LivingEntity hostileTarget = hostileMob.getTarget();
+
+                        if (hostileTarget == mob) {
+                            return entity;
+                        }
+
+                        if (owner != null && hostileTarget == owner) {
+                            return entity;
+                        }
+                    }
+                }
+            }
+            return null;
         }
     }
 }

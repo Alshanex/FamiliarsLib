@@ -124,7 +124,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected static final float DEFAULT_TRINKET_MAX_QUALITY = 0.9f;
 
     private boolean lastTrinketState = false;
-    private WizardAttackGoal currentAttackGoal;
+    private FamiliarGoals.FamiliarWizardAttackGoal currentAttackGoal;
     private boolean pendingGoalUpdate = false;
     private boolean pendingTrinketState = false;
 
@@ -189,7 +189,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     //This section handles the trinket power boost
-    protected abstract WizardAttackGoal createAttackGoal(float min, float max);
+    protected abstract FamiliarGoals.FamiliarWizardAttackGoal createAttackGoal(float min, float max);
 
     protected float[] getOriginalQualityValues() {
         return new float[]{DEFAULT_ORIGINAL_MIN_QUALITY, DEFAULT_ORIGINAL_MAX_QUALITY};

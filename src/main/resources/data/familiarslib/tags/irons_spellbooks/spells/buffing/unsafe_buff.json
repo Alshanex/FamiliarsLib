@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "irons_spellbooks:evasion",
+    "irons_spellbooks:heartstop",
+    "irons_spellbooks:invisibility",
+    "irons_spellbooks:oakskin"
+  ]
+}

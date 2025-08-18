@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "irons_spellbooks:blight",
+    "irons_spellbooks:slow",
+    "irons_spellbooks:frostbite"
+  ]
+}

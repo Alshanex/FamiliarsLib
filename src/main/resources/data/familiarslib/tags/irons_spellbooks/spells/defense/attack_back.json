@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "irons_spellbooks:gust",
+    "irons_spellbooks:chain_creeper",
+    "irons_spellbooks:frostwave",
+    "irons_spellbooks:fang_ward",
+    "irons_spellbooks:shockwave",
+    "irons_spellbooks:heat_surge"
+  ]
+}
