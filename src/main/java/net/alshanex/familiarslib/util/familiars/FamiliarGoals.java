@@ -2088,12 +2088,18 @@ public class FamiliarGoals {
 
             if (hasCloseEnemies) {
                 filteredSpells = filterSpellsByTags(defenseSpells, ModTags.ATTACK_BACK_DEFENSE);
-                if (filteredSpells.isEmpty()) {
-                    List<AbstractSpell> selfBuffSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
-                    List<AbstractSpell> availableSelfBuffs = filterSpellsWithoutExistingBuffs(selfBuffSpells, mob);
 
-                    if (!availableSelfBuffs.isEmpty()) {
-                        filteredSpells = availableSelfBuffs;
+                if (filteredSpells.isEmpty()) {
+                    List<AbstractSpell> escapeSpells = filterSpellsByTags(movementSpells, ModTags.ESCAPE_MOVEMENT);
+                    if (!escapeSpells.isEmpty()) {
+                        filteredSpells = escapeSpells;
+                    } else {
+                        List<AbstractSpell> selfBuffSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
+                        List<AbstractSpell> availableSelfBuffs = filterSpellsWithoutExistingBuffs(selfBuffSpells, mob);
+
+                        if (!availableSelfBuffs.isEmpty()) {
+                            filteredSpells = availableSelfBuffs;
+                        }
                     }
                 }
             } else {
@@ -2368,12 +2374,18 @@ public class FamiliarGoals {
 
             if (entity instanceof Mob hostileMob) {
                 LivingEntity hostileTarget = hostileMob.getTarget();
+                if (hostileTarget == null) {
+                    return false;
+                }
+
                 if (hostileTarget == mob) {
                     return true;
                 }
-                if (mob instanceof AbstractSpellCastingPet pet && hostileTarget == pet.getSummoner()) {
+
+                if (mob instanceof AbstractSpellCastingPet pet && pet.isAlliedTo(hostileTarget)) {
                     return true;
                 }
+
                 return false;
             }
 
@@ -2382,17 +2394,18 @@ public class FamiliarGoals {
 
         protected LivingEntity findPriorityTarget(List<LivingEntity> potentialTargets) {
             if (mob instanceof AbstractSpellCastingPet pet) {
-                LivingEntity owner = pet.getSummoner();
-
                 for (LivingEntity entity : potentialTargets) {
                     if (entity instanceof Mob hostileMob) {
                         LivingEntity hostileTarget = hostileMob.getTarget();
+                        if (hostileTarget == null) {
+                            continue;
+                        }
 
                         if (hostileTarget == mob) {
                             return entity;
                         }
 
-                        if (owner != null && hostileTarget == owner) {
+                        if (pet.isAlliedTo(hostileTarget)) {
                             return entity;
                         }
                     }
