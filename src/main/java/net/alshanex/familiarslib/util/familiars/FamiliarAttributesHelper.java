@@ -6,6 +6,7 @@ import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -20,7 +21,8 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import java.util.*;
 
 /**
- * Helper class for the Familiar Spellbook attribute sharing and consumables attribute boosts
+ * Helper class for the Familiar Spellbook attribute sharing
+ * Legacy consumable attribute methods have been removed and migrated to FamiliarConsumableSystem
  */
 public class FamiliarAttributesHelper {
     private static final ResourceLocation SHARED_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_spell_power");
@@ -232,68 +234,59 @@ public class FamiliarAttributesHelper {
         }
     }
 
-    public static void applyHealthAttribute(AbstractSpellCastingPet pet) {
-        int level = pet.getHealthStacks();
+    /**
+     * Removes legacy attribute modifiers from the old consumable system
+     * This should be called during migration to clean up old modifiers
+     */
+    public static void removeLegacyConsumableModifiers(AbstractSpellCastingPet familiar) {
+        ResourceLocation legacyHealthModifierId = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_health_modifier");
+        ResourceLocation legacyArmorModifierId = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_armor_modifier");
 
-        ResourceLocation healthModifierId = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_health_modifier");
-
-        AttributeInstance health = pet.getAttribute(Attributes.MAX_HEALTH);
+        // Remove legacy health modifier
+        AttributeInstance health = familiar.getAttribute(Attributes.MAX_HEALTH);
         if (health != null) {
-            health.removeModifier(healthModifierId);
-
-            if (level > 0) {
-                double totalHealthBonus = level * 0.1;
-
-                AttributeModifier healthModifier = new AttributeModifier(
-                        healthModifierId,
-                        totalHealthBonus,
-                        AttributeModifier.Operation.ADD_MULTIPLIED_BASE
-                );
-
-                health.addPermanentModifier(healthModifier);
-
-                FamiliarsLib.LOGGER.debug("Applied health attribute to pet {}: {} stacks, modifier: {}%, new max health: {}",
-                        pet.getUUID(), level, totalHealthBonus * 100, health.getValue());
-            }
-
-            if (pet.getHealth() > health.getValue()) {
-                pet.setHealth((float) health.getValue());
+            AttributeModifier legacyHealthModifier = health.getModifier(legacyHealthModifierId);
+            if (legacyHealthModifier != null) {
+                health.removeModifier(legacyHealthModifier);
+                FamiliarsLib.LOGGER.debug("Removed legacy health modifier from familiar {}", familiar.getUUID());
             }
         }
-    }
 
-    public static void applyArmorAttribute(AbstractSpellCastingPet pet) {
-        int level = pet.getArmorStacks();
-
-        ResourceLocation armorModifierId = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_armor_modifier");
-
-        AttributeInstance armor = pet.getAttribute(Attributes.ARMOR);
+        // Remove legacy armor modifier
+        AttributeInstance armor = familiar.getAttribute(Attributes.ARMOR);
         if (armor != null) {
-            armor.removeModifier(armorModifierId);
-
-            if (level > 0) {
-                double totalArmorBonus = level * 1.0;
-
-                AttributeModifier armorModifier = new AttributeModifier(
-                        armorModifierId,
-                        totalArmorBonus,
-                        AttributeModifier.Operation.ADD_VALUE
-                );
-
-                armor.addPermanentModifier(armorModifier);
-
-                FamiliarsLib.LOGGER.debug("Applied armor attribute to pet {}: {} stacks, new armor: {}",
-                        pet.getUUID(), level, armor.getValue());
+            AttributeModifier legacyArmorModifier = armor.getModifier(legacyArmorModifierId);
+            if (legacyArmorModifier != null) {
+                armor.removeModifier(legacyArmorModifier);
+                FamiliarsLib.LOGGER.debug("Removed legacy armor modifier from familiar {}", familiar.getUUID());
             }
         }
     }
 
+    // DEPRECATED: These methods have been moved to FamiliarConsumableSystem
+    // They are kept here temporarily for compatibility but should not be used
 
+    @Deprecated(forRemoval = true)
+    public static void applyHealthAttribute(AbstractSpellCastingPet pet) {
+        FamiliarsLib.LOGGER.warn("applyHealthAttribute is deprecated. Use FamiliarConsumableSystem instead.");
+        // Migration: Apply through consumable system
+        FamiliarConsumableSystem.ConsumableData data = net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration.getConsumableData(pet);
+        FamiliarConsumableSystem.applyAttributeModifiers(pet, data);
+    }
+
+    @Deprecated(forRemoval = true)
+    public static void applyArmorAttribute(AbstractSpellCastingPet pet) {
+        FamiliarsLib.LOGGER.warn("applyArmorAttribute is deprecated. Use FamiliarConsumableSystem instead.");
+        // Migration: Apply through consumable system
+        FamiliarConsumableSystem.ConsumableData data = net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration.getConsumableData(pet);
+        FamiliarConsumableSystem.applyAttributeModifiers(pet, data);
+    }
+
+    @Deprecated(forRemoval = true)
     public static void applyAllConsumableAttributes(AbstractSpellCastingPet pet) {
-        applyHealthAttribute(pet);
-        applyArmorAttribute(pet);
-
-        FamiliarsLib.LOGGER.debug("Applied all consumable attributes to pet {}: {} health stacks, {} armor stacks",
-                pet.getUUID(), pet.getHealthStacks(), pet.getArmorStacks());
+        FamiliarsLib.LOGGER.warn("applyAllConsumableAttributes is deprecated. Use FamiliarConsumableSystem instead.");
+        // Migration: Apply through consumable system
+        FamiliarConsumableSystem.ConsumableData data = net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration.getConsumableData(pet);
+        FamiliarConsumableSystem.applyAttributeModifiers(pet, data);
     }
 }

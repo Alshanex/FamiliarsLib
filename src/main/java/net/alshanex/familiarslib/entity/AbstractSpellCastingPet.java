@@ -27,6 +27,8 @@ import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
 import net.alshanex.familiarslib.util.CylinderParticleManager;
 import net.alshanex.familiarslib.util.ModTags;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.alshanex.familiarslib.util.familiars.*;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -91,10 +93,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     static {
         DATA_ID_OWNER_UUID = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.OPTIONAL_UUID);
-        DATA_BLOCKING = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
-        DATA_ENRAGED = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
-        DATA_ARMOR = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
-        DATA_HEALTH = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
         DATA_IS_SITTING = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
         DATA_IS_HOUSE = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
         DATA_IMPOSTOR = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
@@ -102,10 +100,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     private static final EntityDataAccessor<Optional<UUID>> DATA_ID_OWNER_UUID;
-    private static final EntityDataAccessor<Boolean> DATA_BLOCKING;
-    private static final EntityDataAccessor<Integer> DATA_ENRAGED;
-    private static final EntityDataAccessor<Integer> DATA_ARMOR;
-    private static final EntityDataAccessor<Integer> DATA_HEALTH;
     private static final EntityDataAccessor<Boolean> DATA_IMPOSTOR;
     private static final EntityDataAccessor<Boolean> DATA_TOTEM;
 
@@ -129,6 +123,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     private boolean pendingTrinketState = false;
 
     private boolean hasAttemptedMigration = false;
+    private boolean hasAttemptedConsumableMigration = false;
 
     public BlockPos housePosition = null;
 
@@ -283,40 +278,50 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     //Getters and setters for the familiars data, like consumables, impostor mark, house mark, etc.
-    public void setEnragedStacks(Integer level){
-        this.entityData.set(DATA_ENRAGED, level);
+    public void setEnragedStacks(Integer level) {
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(this);
+        data.setValue(FamiliarConsumableSystem.ConsumableType.ENRAGED, level);
+        updateConsumableData(data);
     }
 
     public Integer getEnragedStacks() {
-        return this.entityData
-                .get(DATA_ENRAGED);
+        return FamiliarConsumableIntegration.getCurrentBonus(this, FamiliarConsumableSystem.ConsumableType.ENRAGED);
     }
 
-    public void setArmorStacks(Integer level){
-        this.entityData.set(DATA_ARMOR, level);
+    public void setArmorStacks(Integer level) {
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(this);
+        data.setValue(FamiliarConsumableSystem.ConsumableType.ARMOR, level);
+        updateConsumableData(data);
     }
 
     public Integer getArmorStacks() {
-        return this.entityData
-                .get(DATA_ARMOR);
+        return FamiliarConsumableIntegration.getCurrentBonus(this, FamiliarConsumableSystem.ConsumableType.ARMOR);
     }
 
-    public void setHealthStacks(Integer level){
-        this.entityData.set(DATA_HEALTH, level);
+    public void setHealthStacks(Integer level) {
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(this);
+        data.setValue(FamiliarConsumableSystem.ConsumableType.HEALTH, level);
+        updateConsumableData(data);
     }
 
     public Integer getHealthStacks() {
-        return this.entityData
-                .get(DATA_HEALTH);
+        return FamiliarConsumableIntegration.getCurrentBonus(this, FamiliarConsumableSystem.ConsumableType.HEALTH);
     }
 
-    public void setIsBlocking(Boolean level){
-        this.entityData.set(DATA_BLOCKING, level);
+    public void setIsBlocking(Boolean level) {
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(this);
+        data.setValue(FamiliarConsumableSystem.ConsumableType.BLOCKING, level ? 1 : 0);
+        updateConsumableData(data);
+    }
+
+    private void updateConsumableData(FamiliarConsumableSystem.ConsumableData data) {
+        if (!level().isClientSide) {
+            FamiliarConsumableSystem.applyAttributeModifiers(this, data);
+        }
     }
 
     public Boolean getIsBlocking() {
-        return this.entityData
-                .get(DATA_BLOCKING);
+        return FamiliarConsumableIntegration.canFamiliarBlock(this);
     }
 
     public void setTotem(Boolean level){
@@ -437,10 +442,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
         super.defineSynchedData(pBuilder);
         pBuilder.define(DATA_ID_OWNER_UUID, Optional.empty());
-        pBuilder.define(DATA_BLOCKING, false);
-        pBuilder.define(DATA_ENRAGED, 0);
-        pBuilder.define(DATA_ARMOR, 0);
-        pBuilder.define(DATA_HEALTH, 0);
         pBuilder.define(DATA_CANCEL_CAST, false);
         pBuilder.define(DATA_IS_SITTING, false);
         pBuilder.define(DATA_IS_HOUSE, false);
@@ -474,11 +475,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             pCompound.putString("ownerUUID", "null");
         }
 
-        pCompound.putInt("enragedStacks", getEnragedStacks());
-        pCompound.putBoolean("isBlocking", getIsBlocking());
-        pCompound.putInt("armorStacks", getArmorStacks());
-        pCompound.putInt("healthStacks", getHealthStacks());
-
         pCompound.putBoolean("Sitting", getIsSitting());
 
         pCompound.putBoolean("isImpostor", getIsImpostor());
@@ -489,11 +485,14 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         pCompound.putBoolean("pendingGoalUpdate", pendingGoalUpdate);
         pCompound.putBoolean("pendingTrinketState", pendingTrinketState);
         pCompound.putBoolean("hasAttemptedMigration", hasAttemptedMigration);
+        pCompound.putBoolean("hasAttemptedConsumableMigration", hasAttemptedConsumableMigration);
 
         pCompound.putBoolean("isInHouse", getIsInHouse());
         if (housePosition != null) {
             pCompound.putLong("housePosition", housePosition.asLong());
         }
+
+        FamiliarConsumableIntegration.saveConsumableData(this, pCompound);
     }
 
     @Override
@@ -516,34 +515,38 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             }
         }
 
-        if(pCompound.contains("enragedStacks")){
-            setEnragedStacks(pCompound.getInt("enragedStacks"));
+        int legacyEnragedStacks = 0;
+        int legacyArmorStacks = 0;
+        int legacyHealthStacks = 0;
+        boolean legacyCanBlock = false;
+
+        if (pCompound.contains("enragedStacks")) {
+            legacyEnragedStacks = pCompound.getInt("enragedStacks");
+        }
+        if (pCompound.contains("isBlocking")) {
+            legacyCanBlock = pCompound.getBoolean("isBlocking");
+        }
+        if (pCompound.contains("armorStacks")) {
+            legacyArmorStacks = pCompound.getInt("armorStacks");
+        }
+        if (pCompound.contains("healthStacks")) {
+            legacyHealthStacks = pCompound.getInt("healthStacks");
         }
 
-        if(pCompound.contains("isBlocking")){
-            setIsBlocking(pCompound.getBoolean("isBlocking"));
+        if (pCompound.contains("hasAttemptedConsumableMigration")) {
+            hasAttemptedConsumableMigration = pCompound.getBoolean("hasAttemptedConsumableMigration");
         }
 
-        if(pCompound.contains("armorStacks")){
-            setArmorStacks(pCompound.getInt("armorStacks"));
-        }
+        FamiliarConsumableIntegration.loadConsumableData(this, pCompound);
 
-        if(pCompound.contains("healthStacks")){
-            setHealthStacks(pCompound.getInt("healthStacks"));
-        }
+        if (!level().isClientSide && !hasAttemptedConsumableMigration &&
+                (legacyHealthStacks > 0 || legacyArmorStacks > 0 || legacyEnragedStacks > 0 || legacyCanBlock)) {
 
-        if (!level().isClientSide) {
-            FamiliarAttributesHelper.applyAllConsumableAttributes(this);
+            FamiliarsLib.LOGGER.debug("Migrating legacy consumable data for familiar {}: health={}, armor={}, enraged={}, blocking={}",
+                    getUUID(), legacyHealthStacks, legacyArmorStacks, legacyEnragedStacks, legacyCanBlock);
 
-            if (pCompound.contains("currentHealth")) {
-                float savedHealth = pCompound.getFloat("currentHealth");
-                float maxHealth = getMaxHealth();
-
-                setHealth(Math.min(savedHealth, maxHealth));
-
-                FamiliarsLib.LOGGER.debug("Loaded familiar {}: health stacks={}, max health={}, current health={}",
-                        getUUID(), getHealthStacks(), maxHealth, getHealth());
-            }
+            FamiliarConsumableIntegration.migrateLegacyData(this, legacyHealthStacks, legacyArmorStacks, legacyEnragedStacks, legacyCanBlock);
+            hasAttemptedConsumableMigration = true;
         }
 
         if(pCompound.contains("Sitting")){
@@ -791,6 +794,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
             // Owner can still feed the familiar
             if (!level().isClientSide) {
+                InteractionResult consumableResult = FamiliarConsumableIntegration.handleConsumableInteraction(this, player, itemstack);
+                if (consumableResult != InteractionResult.PASS) {
+                    return consumableResult;
+                }
+
                 if (isFood(itemstack) && this.getHealth() < this.getMaxHealth()) {
                     this.heal(2.0F * 2.0f);
                     itemstack.consume(1, player);
@@ -817,6 +825,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                     }
 
                     triggerAnim("interact_controller", "interact");
+
+                    InteractionResult consumableResult = FamiliarConsumableIntegration.handleConsumableInteraction(this, player, itemstack);
+                    if (consumableResult != InteractionResult.PASS) {
+                        return consumableResult;
+                    }
 
                     if(itemstack.is(ModTags.BERRY)){
                         itemstack.shrink(1);
@@ -941,10 +954,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         super.onAddedToLevel();
         triggerAnim("spawn_controller", "spawn");
 
-        if (!level().isClientSide && (getHealthStacks() > 0 || getArmorStacks() > 0)) {
-            FamiliarAttributesHelper.applyAllConsumableAttributes(this);
-            FamiliarsLib.LOGGER.debug("Applied attributes on level join for familiar {}: {} health stacks, {} armor stacks",
-                    getUUID(), getHealthStacks(), getArmorStacks());
+        if (!level().isClientSide) {
+            FamiliarConsumableIntegration.applyConsumableModifiers(this);
+
+            FamiliarsLib.LOGGER.debug("Applied consumable modifiers on level join for familiar {}: {} health, {} armor, {} enraged, blocking: {}",
+                    getUUID(), getHealthStacks(), getArmorStacks(), getEnragedStacks(), getIsBlocking());
         }
     }
 
@@ -956,9 +970,25 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             FamiliarAttributesHelper.handleFamiliarDismissed(serverPlayer, this);
         }
 
+        if (!level.isClientSide) {
+            FamiliarConsumableIntegration.removeConsumableModifiers(this);
+        }
+
         if(!level.isClientSide){
             MagicManager.spawnParticles(level(), ParticleTypes.POOF, getX(), getY(), getZ(), 25, .4, .8, .4, .03, false);
         }
+    }
+
+    public float getEffectiveSpellLevel(float baseSpellLevel) {
+        return FamiliarConsumableIntegration.getEffectiveSpellLevel(this, baseSpellLevel);
+    }
+
+    public int getConsumableBonus(FamiliarConsumableSystem.ConsumableType type) {
+        return FamiliarConsumableIntegration.getCurrentBonus(this, type);
+    }
+
+    public int getMaxUsableConsumableTier(FamiliarConsumableSystem.ConsumableType type) {
+        return FamiliarConsumableIntegration.getMaxUsableTier(this, type);
     }
 
     //Helper method to check if familiars can execute goals in wander mode of storage blocks

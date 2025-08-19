@@ -272,16 +272,12 @@ public class FamiliarManager {
         String entityTypeId = EntityType.getKey(familiar.getType()).toString();
         nbt.putString("id", entityTypeId);
 
-        nbt.putInt("armorStacks", familiar.getArmorStacks());
-        nbt.putInt("enragedStacks", familiar.getEnragedStacks());
-        nbt.putBoolean("canBlock", familiar.getIsBlocking());
-
         if (familiar.hasCustomName()) {
             nbt.putString("customName", familiar.getCustomName().getString());
         }
 
-        FamiliarsLib.LOGGER.debug("Saving familiar {}: health stacks={}, current health={}/{}, armor stacks={}",
-                familiar.getUUID(), familiar.getHealthStacks(), currentHealth, maxHealth, familiar.getArmorStacks());
+        FamiliarsLib.LOGGER.debug("Saving familiar {}: current health={}/{}, consumable data handled by consumable system",
+                familiar.getUUID(), currentHealth, maxHealth);
 
         return nbt;
     }
