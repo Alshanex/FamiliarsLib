@@ -8,6 +8,7 @@ import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
 import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
+import io.redspace.ironsspellbooks.registries.MobEffectRegistry;
 import io.redspace.ironsspellbooks.registries.ParticleRegistry;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
@@ -20,6 +21,7 @@ import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CylinderParticleManager;
 import net.alshanex.familiarslib.util.ModTags;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -27,6 +29,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -1639,6 +1642,20 @@ public class FamiliarGoals {
         protected final PathfinderMob mob;
         protected final IMagicEntity spellCastingMob;
 
+        private Map<AbstractSpell, Holder<MobEffect>> buffs = Map.of(
+                SpellRegistry.EVASION_SPELL.get(), MobEffectRegistry.EVASION,
+                SpellRegistry.HEARTSTOP_SPELL.get(), MobEffectRegistry.HEARTSTOP,
+                SpellRegistry.CHARGE_SPELL.get(), MobEffectRegistry.CHARGED,
+                SpellRegistry.INVISIBILITY_SPELL.get(), MobEffectRegistry.TRUE_INVISIBILITY,
+                SpellRegistry.OAKSKIN_SPELL.get(), MobEffectRegistry.OAKSKIN,
+                SpellRegistry.HASTE_SPELL.get(), MobEffectRegistry.HASTENED,
+                SpellRegistry.FROSTBITE_SPELL.get(), MobEffectRegistry.FROSTBITTEN_STRIKES
+        );
+        private Map<AbstractSpell, Holder<MobEffect>> debuffs = Map.of(
+                SpellRegistry.BLIGHT_SPELL.get(), MobEffectRegistry.BLIGHT,
+                SpellRegistry.SLOW_SPELL.get(), MobEffectRegistry.SLOWED
+        );
+
         public FamiliarWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double pSpeedModifier, int pAttackInterval) {
             this(abstractSpellCastingMob, pSpeedModifier, pAttackInterval, pAttackInterval);
         }
@@ -2072,11 +2089,20 @@ public class FamiliarGoals {
             if (hasCloseEnemies) {
                 filteredSpells = filterSpellsByTags(defenseSpells, ModTags.ATTACK_BACK_DEFENSE);
                 if (filteredSpells.isEmpty()) {
-                    filteredSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
+                    List<AbstractSpell> selfBuffSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
+                    List<AbstractSpell> availableSelfBuffs = filterSpellsWithoutExistingBuffs(selfBuffSpells, mob);
+
+                    if (!availableSelfBuffs.isEmpty()) {
+                        filteredSpells = availableSelfBuffs;
+                    }
                 }
             } else {
-                filteredSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
-                if (filteredSpells.isEmpty()) {
+                List<AbstractSpell> selfBuffSpells = filterSpellsByTags(defenseSpells, ModTags.SELF_BUFF_DEFENSE);
+                List<AbstractSpell> availableSelfBuffs = filterSpellsWithoutExistingBuffs(selfBuffSpells, mob);
+
+                if (!availableSelfBuffs.isEmpty()) {
+                    filteredSpells = availableSelfBuffs;
+                } else {
                     filteredSpells = filterSpellsByTags(defenseSpells, ModTags.ATTACK_BACK_DEFENSE);
                 }
             }
@@ -2119,19 +2145,26 @@ public class FamiliarGoals {
             if (healthPercentage > 0.5f) {
                 // More than 50% health
                 List<AbstractSpell> safeBuffs = filterSpellsByTags(supportSpells, ModTags.SAFE_BUFF_BUFFING);
+                List<AbstractSpell> availableSafeBuffs = filterSpellsWithoutExistingBuffs(safeBuffs, mob);
+
                 List<AbstractSpell> debuffs = filterSpellsByTags(supportSpells, ModTags.DEBUFF_BUFFING);
-                filteredSpells.addAll(safeBuffs);
-                filteredSpells.addAll(debuffs);
+                List<AbstractSpell> availableDebuffs = filterSpellsWithoutExistingDebuffs(debuffs, target);
+
+                filteredSpells.addAll(availableSafeBuffs);
+                filteredSpells.addAll(availableDebuffs);
             } else {
                 // Less than 50% health
                 List<AbstractSpell> unsafeBuffs = filterSpellsByTags(supportSpells, ModTags.UNSAFE_BUFF_BUFFING);
-                List<AbstractSpell> debuffs = filterSpellsByTags(supportSpells, ModTags.DEBUFF_BUFFING);
+                List<AbstractSpell> availableUnsafeBuffs = filterSpellsWithoutExistingBuffs(unsafeBuffs, mob);
 
-                // Unsafe buffs have more chance
+                List<AbstractSpell> debuffs = filterSpellsByTags(supportSpells, ModTags.DEBUFF_BUFFING);
+                List<AbstractSpell> availableDebuffs = filterSpellsWithoutExistingDebuffs(debuffs, target);
+
+                // Unsafe buffs have more chance (only if available)
                 for (int i = 0; i < 3; i++) {
-                    filteredSpells.addAll(unsafeBuffs);
+                    filteredSpells.addAll(availableUnsafeBuffs);
                 }
-                filteredSpells.addAll(debuffs);
+                filteredSpells.addAll(availableDebuffs);
             }
 
             return filteredSpells.isEmpty() ? new ArrayList<>(supportSpells) : new ArrayList<>(filteredSpells);
@@ -2149,6 +2182,36 @@ public class FamiliarGoals {
             }
 
             return list;
+        }
+
+        protected List<AbstractSpell> filterSpellsWithoutExistingBuffs(List<AbstractSpell> spells, LivingEntity entity) {
+            if (entity == null) return new ArrayList<>(spells);
+
+            List<AbstractSpell> availableSpells = new ArrayList<>();
+
+            for (AbstractSpell spell : spells) {
+                Holder<MobEffect> effect = buffs.get(spell);
+                if (effect == null || !entity.hasEffect(effect)) {
+                    availableSpells.add(spell);
+                }
+            }
+
+            return availableSpells;
+        }
+
+        protected List<AbstractSpell> filterSpellsWithoutExistingDebuffs(List<AbstractSpell> spells, LivingEntity targetEntity) {
+            if (targetEntity == null) return new ArrayList<>(spells);
+
+            List<AbstractSpell> availableSpells = new ArrayList<>();
+
+            for (AbstractSpell spell : spells) {
+                Holder<MobEffect> effect = debuffs.get(spell);
+                if (effect == null || !targetEntity.hasEffect(effect)) {
+                    availableSpells.add(spell);
+                }
+            }
+
+            return availableSpells;
         }
 
         protected int getEntitiesNearTarget() {

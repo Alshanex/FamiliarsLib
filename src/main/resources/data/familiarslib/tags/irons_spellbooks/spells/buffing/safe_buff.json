@@ -8,6 +8,7 @@
     "irons_spellbooks:oakskin",
     "irons_spellbooks:cleanse",
     "irons_spellbooks:haste",
+    "irons_spellbooks:frostbite",
     {
       "id": "alshanex_familiars:birds_spell",
       "required": false

@@ -62,7 +62,7 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
                 if (countStorageBlocksInRadius(level, pos, 16) > getAmountPerChunk()) {
                     serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                            Component.translatable("message.familiarslib.storage_block_radius_limit")
+                            Component.translatable("message.familiarslib.storage_block_chunk_limit")
                                     .withStyle(ChatFormatting.RED)));
                     return InteractionResult.FAIL;
                 }
