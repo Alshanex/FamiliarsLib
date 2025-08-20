@@ -2114,6 +2114,10 @@ public class FamiliarGoals {
                 }
             }
 
+            if(mob.getHealth() >= mob.getMaxHealth()){
+                filteredSpells.remove(SpellRegistry.HEAL_SPELL.get());
+            }
+
             return filteredSpells.isEmpty() ? new ArrayList<>() : new ArrayList<>(filteredSpells);
         }
 
@@ -2172,6 +2176,10 @@ public class FamiliarGoals {
                     filteredSpells.addAll(availableUnsafeBuffs);
                 }
                 filteredSpells.addAll(availableDebuffs);
+            }
+
+            if(mob.getHealth() >= mob.getMaxHealth()){
+                filteredSpells.remove(SpellRegistry.HEAL_SPELL.get());
             }
 
             return filteredSpells.isEmpty() ? new ArrayList<>(supportSpells) : new ArrayList<>(filteredSpells);
