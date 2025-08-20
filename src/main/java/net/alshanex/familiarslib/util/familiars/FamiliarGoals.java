@@ -7,6 +7,7 @@ import io.redspace.ironsspellbooks.api.registry.SpellRegistry;
 import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
 import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
+import io.redspace.ironsspellbooks.entity.mobs.SummonedSkeleton;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
 import io.redspace.ironsspellbooks.registries.MobEffectRegistry;
 import io.redspace.ironsspellbooks.registries.ParticleRegistry;
@@ -1219,7 +1220,7 @@ public class FamiliarGoals {
             this.skeleton = pet.level().getEntitiesOfClass(
                     Skeleton.class,
                     pet.getBoundingBox().inflate(15)
-            ).stream().min(Comparator.comparingDouble(pet::distanceTo)).orElse(null);
+            ).stream().filter(entity -> !(entity instanceof SummonedSkeleton)).min(Comparator.comparingDouble(pet::distanceTo)).orElse(null);
 
             return this.skeleton != null;
         }
