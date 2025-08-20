@@ -178,10 +178,17 @@ public class FamiliarConsumableIntegration {
             // Show success message with current progress
             String unit = getUnitSuffix(component.type());
             if(player instanceof ServerPlayer serverPlayer){
-                serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                        Component.translatable("message.familiarslib.consumable.success",
-                                Component.translatable(getTypeTranslationKey(component.type())),
-                                newValue + unit).withStyle(ChatFormatting.GREEN)));
+                if(component.type() == ConsumableType.SPELL_LEVEL){
+                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                            Component.translatable("message.familiarslib.consumable.success",
+                                    Component.translatable(getTypeTranslationKey(component.type())),
+                                    (newValue + 1) + unit).withStyle(ChatFormatting.GREEN)));
+                } else {
+                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                            Component.translatable("message.familiarslib.consumable.success",
+                                    Component.translatable(getTypeTranslationKey(component.type())),
+                                    newValue + unit).withStyle(ChatFormatting.GREEN)));
+                }
             }
 
             // Trigger eating particles and sound

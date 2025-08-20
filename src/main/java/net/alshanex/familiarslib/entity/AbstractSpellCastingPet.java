@@ -113,10 +113,8 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected boolean movementDisabled = false;
 
     //Percentage power boost for spells when correspondant trinket equipped
-    protected static final float DEFAULT_ORIGINAL_MIN_QUALITY = 0.5f;
-    protected static final float DEFAULT_ORIGINAL_MAX_QUALITY = 0.7f;
-    protected static final float DEFAULT_TRINKET_MIN_QUALITY = 0.7f;
-    protected static final float DEFAULT_TRINKET_MAX_QUALITY = 0.9f;
+    protected static final float DEFAULT_TRINKET_MIN_QUALITY = 0.8f;
+    protected static final float DEFAULT_TRINKET_MAX_QUALITY = 1.0f;
 
     private boolean lastTrinketState = false;
     private FamiliarGoals.FamiliarWizardAttackGoal currentAttackGoal;
@@ -199,7 +197,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected abstract FamiliarGoals.FamiliarWizardAttackGoal createAttackGoal(float min, float max);
 
     protected float[] getOriginalQualityValues() {
-        return new float[]{DEFAULT_ORIGINAL_MIN_QUALITY, DEFAULT_ORIGINAL_MAX_QUALITY};
+        return new float[]{getConsumableSpellLevel(), getConsumableSpellLevel()};
     }
 
     protected float[] getTrinketQualityValues() {
@@ -334,6 +332,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     public Boolean getIsBlocking() {
         return FamiliarConsumableIntegration.canFamiliarBlock(this);
+    }
+
+    public float getConsumableSpellLevel() {
+        float currentValue = FamiliarConsumableIntegration.getCurrentBonus(this, FamiliarConsumableSystem.ConsumableType.SPELL_LEVEL) / 10.0f;
+        return currentValue + 0.1f;
     }
 
     public void setTotem(Boolean level){

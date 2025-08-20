@@ -28,6 +28,9 @@ public class ConsumableTooltipHelper {
         String typeKey = getTypeTranslationKey(component.type());
         int bonus = component.getBonus();
         int limit = component.getLimit();
+        if(component.type() == ConsumableType.SPELL_LEVEL){
+            limit+=1;
+        }
         String unit = getUnitSuffix(component.type());
 
         tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.type",
