@@ -1,6 +1,7 @@
 package net.alshanex.familiarslib.util.consumables;
 
-import net.alshanex.familiarslib.item.FamiliarConsumableItem;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableComponent;
+import net.alshanex.familiarslib.registry.ComponentRegistry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
 
 /**
- * Integration helper for the consumable system with AbstractSpellCastingPet
+ * Data component-based consumable system integration
  */
 public class FamiliarConsumableIntegration {
 
@@ -88,19 +89,34 @@ public class FamiliarConsumableIntegration {
     }
 
     /**
-     * Removes cached data when familiar is removed (but NBT data persists)
+     * Gets consumable information from an item stack using data components
      */
-    public static void clearCachedData(AbstractSpellCastingPet familiar) {
-        // Only clear cache, NOT the entity's persistent data
-        consumableDataCache.remove(familiar.getUUID());
+    public static FamiliarConsumableComponent getConsumableComponent(ItemStack itemStack) {
+        return itemStack.get(ComponentRegistry.FAMILIAR_CONSUMABLE.get());
+    }
+
+    /**
+     * Checks if an item stack has the familiar consumable component
+     */
+    public static boolean isConsumableItem(ItemStack itemStack) {
+        return itemStack.has(ComponentRegistry.FAMILIAR_CONSUMABLE.get());
+    }
+
+    /**
+     * Creates a consumable item by adding the component to any item stack
+     */
+    public static ItemStack makeConsumableItem(ItemStack itemStack, ConsumableType type, int tier) {
+        FamiliarConsumableComponent component = new FamiliarConsumableComponent(type, tier);
+        itemStack.set(ComponentRegistry.FAMILIAR_CONSUMABLE.get(), component);
+        return itemStack;
     }
 
     /**
      * Handles the interaction when a player tries to feed a consumable to a familiar
      */
     public static InteractionResult handleConsumableInteraction(AbstractSpellCastingPet familiar, Player player, ItemStack itemStack) {
-        ConsumableItemInfo info = getConsumableInfo(itemStack);
-        if (info == null) {
+        FamiliarConsumableComponent component = getConsumableComponent(itemStack);
+        if (component == null) {
             return InteractionResult.PASS; // Not a consumable item
         }
 
@@ -108,40 +124,42 @@ public class FamiliarConsumableIntegration {
             FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
 
             // Check if the familiar can use this consumable
-            int currentValue = data.getValue(info.type);
-            int maxAllowed = info.type.getTierLimit(info.tier);
+            int currentValue = data.getValue(component.type());
+            int maxAllowed = component.getLimit();
 
             if (currentValue >= maxAllowed) {
                 // Already at maximum for this tier
                 if(player instanceof ServerPlayer serverPlayer){
                     serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                            Component.translatable("message.familiarslib.consumable.max_reached", Component.translatable(getTypeTranslationKey(info.type))).withStyle(ChatFormatting.RED)));
+                            Component.translatable("message.familiarslib.consumable.max_reached",
+                                    Component.translatable(getTypeTranslationKey(component.type()))).withStyle(ChatFormatting.RED)));
                 }
                 return InteractionResult.FAIL;
             }
 
             // Check if this tier is appropriate for current progress
-            int maxUsableTier = getMaxUsableTier(data, info.type);
-            if (info.tier > maxUsableTier) {
+            int maxUsableTier = getMaxUsableTier(data, component.type());
+            if (component.tier() > maxUsableTier) {
                 // This tier is too high for current progress
                 if(player instanceof ServerPlayer serverPlayer){
                     serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                            Component.translatable("message.familiarslib.consumable.tier_too_high", info.tier, maxUsableTier).withStyle(ChatFormatting.RED)));
+                            Component.translatable("message.familiarslib.consumable.tier_too_high",
+                                    component.tier(), maxUsableTier).withStyle(ChatFormatting.RED)));
                 }
                 return InteractionResult.FAIL;
             }
 
             // Store current health before applying consumable
             float currentHealth = familiar.getHealth();
-            boolean isHealthConsumable = info.type == ConsumableType.HEALTH;
+            boolean isHealthConsumable = component.type() == ConsumableType.HEALTH;
 
             // Apply the consumable
-            int bonus = info.type.getTierBonus(info.tier);
+            int bonus = component.getBonus();
             int newValue = Math.min(currentValue + bonus, maxAllowed);
-            data.setValue(info.type, newValue);
+            data.setValue(component.type(), newValue);
 
             FamiliarsLib.LOGGER.debug("Applying consumable {} to familiar {}: {} -> {}",
-                    info.type, familiar.getUUID(), currentValue, newValue);
+                    component.type(), familiar.getUUID(), currentValue, newValue);
 
             // Update both cache and entity NBT
             updateConsumableData(familiar, data);
@@ -158,10 +176,12 @@ public class FamiliarConsumableIntegration {
             itemStack.shrink(1);
 
             // Show success message with current progress
-            String unit = getUnitSuffix(info.type);
+            String unit = getUnitSuffix(component.type());
             if(player instanceof ServerPlayer serverPlayer){
                 serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                        Component.translatable("message.familiarslib.consumable.success", Component.translatable(getTypeTranslationKey(info.type)), newValue + unit).withStyle(ChatFormatting.GREEN)));
+                        Component.translatable("message.familiarslib.consumable.success",
+                                Component.translatable(getTypeTranslationKey(component.type())),
+                                newValue + unit).withStyle(ChatFormatting.GREEN)));
             }
 
             // Trigger eating particles and sound
@@ -186,16 +206,6 @@ public class FamiliarConsumableIntegration {
             }
         }
         return 0; // No tier can be used (at max)
-    }
-
-    /**
-     * Gets consumable information from an item stack
-     */
-    private static ConsumableItemInfo getConsumableInfo(ItemStack itemStack) {
-        if (itemStack.getItem() instanceof FamiliarConsumableItem consumableItem) {
-            return new ConsumableItemInfo(consumableItem.getConsumableType(), consumableItem.getTier());
-        }
-        return null; // Not a consumable
     }
 
     private static String getTypeTranslationKey(ConsumableType type) {
@@ -229,17 +239,11 @@ public class FamiliarConsumableIntegration {
 
     /**
      * Save consumable data to NBT - called during entity save
-     * This copies data from entity's persistent NBT to the save NBT
      */
     public static void saveConsumableData(AbstractSpellCastingPet familiar, CompoundTag compound) {
         UUID familiarId = familiar.getUUID();
-
-        // Get the current data (which ensures it's loaded into cache if not already)
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
-
-        // Save it to the compound tag for persistence
         FamiliarConsumableSystem.saveConsumableDataToNBT(data, compound);
-
         FamiliarsLib.LOGGER.debug("Saving consumable data to NBT for familiar {}: {}",
                 familiarId, data.toString());
     }
@@ -250,10 +254,7 @@ public class FamiliarConsumableIntegration {
     public static void loadConsumableData(AbstractSpellCastingPet familiar, CompoundTag compound) {
         UUID familiarId = familiar.getUUID();
         FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableSystem.loadConsumableDataFromNBT(compound);
-
-        // Store in both cache and entity persistent NBT
         saveToEntityNBT(familiar, data);
-
         FamiliarsLib.LOGGER.debug("Loading consumable data from NBT for familiar {}: {}",
                 familiarId, data.toString());
     }
@@ -263,8 +264,8 @@ public class FamiliarConsumableIntegration {
      */
     public static float getEffectiveSpellLevel(AbstractSpellCastingPet familiar, float baseSpellLevel) {
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
-        float bonus = data.getValue(ConsumableType.SPELL_LEVEL) / 10.0f; // Convert back from integer storage
-        return Math.min(baseSpellLevel + bonus, 0.8f); // Cap at 0.8
+        float bonus = data.getValue(ConsumableType.SPELL_LEVEL) / 10.0f;
+        return Math.min(baseSpellLevel + bonus, 0.8f);
     }
 
     /**
@@ -281,7 +282,6 @@ public class FamiliarConsumableIntegration {
     public static void applyConsumableModifiers(AbstractSpellCastingPet familiar) {
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
         FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
-
         FamiliarsLib.LOGGER.debug("Applied consumable modifiers for familiar {}: {}",
                 familiar.getUUID(), data.toString());
     }
@@ -300,6 +300,29 @@ public class FamiliarConsumableIntegration {
     public static int getMaxUsableTier(AbstractSpellCastingPet familiar, ConsumableType type) {
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
         return getMaxUsableTier(data, type);
+    }
+
+    /**
+     * Removes cached data when familiar is removed (but NBT data persists)
+     */
+    public static void clearCachedData(AbstractSpellCastingPet familiar) {
+        consumableDataCache.remove(familiar.getUUID());
+    }
+
+    /**
+     * Checks if the familiar can block (for game logic)
+     */
+    public static boolean canFamiliarBlock(AbstractSpellCastingPet familiar) {
+        FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
+        return data.getValue(ConsumableType.BLOCKING) > 0;
+    }
+
+    /**
+     * Gets the current enraged stacks for attack damage calculation
+     */
+    public static int getEnragedStacks(AbstractSpellCastingPet familiar) {
+        FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
+        return data.getValue(ConsumableType.ENRAGED);
     }
 
     /**
@@ -350,31 +373,5 @@ public class FamiliarConsumableIntegration {
 
         FamiliarsLib.LOGGER.debug("Completed legacy data migration for familiar {}: {} (health: {}/{})",
                 familiar.getUUID(), data.toString(), familiar.getHealth(), familiar.getMaxHealth());
-    }
-
-    /**
-     * Checks if the familiar can block (for game logic)
-     */
-    public static boolean canFamiliarBlock(AbstractSpellCastingPet familiar) {
-        FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
-        return data.getValue(ConsumableType.BLOCKING) > 0;
-    }
-
-    /**
-     * Gets the current enraged stacks for attack damage calculation
-     */
-    public static int getEnragedStacks(AbstractSpellCastingPet familiar) {
-        FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
-        return data.getValue(ConsumableType.ENRAGED);
-    }
-
-    private static class ConsumableItemInfo {
-        final ConsumableType type;
-        final int tier;
-
-        ConsumableItemInfo(ConsumableType type, int tier) {
-            this.type = type;
-            this.tier = tier;
-        }
     }
 }

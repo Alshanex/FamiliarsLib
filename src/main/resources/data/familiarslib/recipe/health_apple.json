@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "minecraft:apple"
+    },
+    {
+      "item": "minecraft:emerald"
+    }
+  ],
+  "result": {
+    "id": "minecraft:apple",
+    "components": {
+      "familiarslib:familiar_consumable": {
+        "type": "health",
+        "tier": 2
+      }
+    }
+  }
+}

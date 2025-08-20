@@ -1,6 +1,11 @@
 package net.alshanex.familiarslib.util.consumables;
 
+import com.mojang.serialization.Codec;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -22,30 +27,49 @@ public class FamiliarConsumableSystem {
     private static final ResourceLocation CONSUMABLE_ENRAGED_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_enraged");
     private static final ResourceLocation CONSUMABLE_BLOCKING_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_blocking");
 
-    public enum ConsumableType {
-        ARMOR(0, new int[]{1, 2, 3}, new int[]{10, 15, 20}),
-        HEALTH(1, new int[]{5, 10, 15}, new int[]{50, 100, 150}),
-        SPELL_POWER(2, new int[]{1, 3, 5}, new int[]{15, 30, 45}),
-        SPELL_RESIST(3, new int[]{1, 3, 5}, new int[]{15, 30, 45}),
-        SPELL_LEVEL(4, new int[]{1, 1, 2}, new int[]{4, 6, 8}), // Values * 10 for integer storage
-        ENRAGED(5, new int[]{1}, new int[]{10}), // Only tier 1, +1 per use, max 10
-        BLOCKING(6, new int[]{1}, new int[]{1}); // Only tier 1, boolean toggle
+    public enum ConsumableType implements StringRepresentable {
+        ARMOR(0, new int[]{1, 2, 3}, new int[]{10, 15, 20}, "armor"),
+        HEALTH(1, new int[]{5, 10, 15}, new int[]{50, 100, 150}, "health"),
+        SPELL_POWER(2, new int[]{1, 3, 5}, new int[]{15, 30, 45}, "spell_power"),
+        SPELL_RESIST(3, new int[]{1, 3, 5}, new int[]{15, 30, 45}, "spell_resist"),
+        SPELL_LEVEL(4, new int[]{1, 1, 2}, new int[]{4, 6, 8}, "spell_level"), // Values * 10 for integer storage
+        ENRAGED(5, new int[]{1}, new int[]{10}, "enraged"), // Only tier 1, +1 per use, max 10
+        BLOCKING(6, new int[]{1}, new int[]{1}, "blocking"); // Only tier 1, boolean toggle
+
+        public static final Codec<ConsumableType> CODEC = StringRepresentable.fromEnum(ConsumableType::values);
+        public static final StreamCodec<RegistryFriendlyByteBuf, ConsumableType> STREAM_CODEC =
+                ByteBufCodecs.idMapper(
+                        id -> {
+                            for (ConsumableType type : values()) {
+                                if (type.getId() == id) return type;
+                            }
+                            return ARMOR; // fallback
+                        },
+                        ConsumableType::getId
+                ).cast();
 
         private final int id;
         private final int[] tierBonuses;
         private final int[] tierLimits;
+        private final String serializedName;
 
-        ConsumableType(int id, int[] tierBonuses, int[] tierLimits) {
+        ConsumableType(int id, int[] tierBonuses, int[] tierLimits, String serializedName) {
             this.id = id;
             this.tierBonuses = tierBonuses;
             this.tierLimits = tierLimits;
+            this.serializedName = serializedName;
         }
 
         public int getId() { return id; }
         public int getTierBonus(int tier) { return tierBonuses[tier - 1]; }
         public int getTierLimit(int tier) { return tierLimits[tier - 1]; }
-        public int getMaxLimit() { return tierLimits[tierLimits.length - 1]; } // Last tier limit
+        public int getMaxLimit() { return tierLimits[tierLimits.length - 1]; }
         public int getMaxTier() { return tierBonuses.length; }
+
+        @Override
+        public String getSerializedName() {
+            return serializedName;
+        }
     }
 
     /**
