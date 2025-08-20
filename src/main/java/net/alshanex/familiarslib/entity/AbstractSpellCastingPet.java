@@ -52,6 +52,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.LookControl;
@@ -124,6 +125,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     private boolean hasAttemptedMigration = false;
     private boolean hasAttemptedConsumableMigration = false;
+    private boolean hasInitializedHealth = false;
 
     public BlockPos housePosition = null;
 
@@ -181,6 +183,14 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         this.targetSelector.addGoal(3, new GenericCopyOwnerTargetGoal(this, this::getSummoner));
         this.targetSelector.addGoal(4, (new GenericHurtByTargetGoal(this, (entity) -> entity == getSummoner())).setAlertOthers());
         this.targetSelector.addGoal(5, new HurtByTargetGoal(this));
+    }
+
+    public float getBaseMaxHealth() {
+        AttributeInstance healthAttribute = getAttribute(Attributes.MAX_HEALTH);
+        if (healthAttribute != null) {
+            return (float) healthAttribute.getBaseValue();
+        }
+        return 50.0f; // Fallback value
     }
 
     //This section handles the trinket power boost
@@ -467,7 +477,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         super.addAdditionalSaveData(pCompound);
         playerMagicData.getSyncedData().saveNBTData(pCompound, level().registryAccess());
         pCompound.putBoolean("usedSpecial", hasUsedSingleAttack);
-        //pCompound.putUUID("ownerUUID", this.getOwnerUUID());
 
         if (getOwnerUUID() != null) {
             pCompound.putUUID("ownerUUID", getOwnerUUID());
@@ -475,17 +484,22 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             pCompound.putString("ownerUUID", "null");
         }
 
+        float currentHealth = getHealth();
+        pCompound.putFloat("currentHealth", currentHealth);
+        pCompound.putFloat("baseMaxHealth", getBaseMaxHealth()); // Keep for reference
+
+        FamiliarsLib.LOGGER.debug("Saving health for familiar {}: current={}, max={}, base={}",
+                getUUID(), currentHealth, getMaxHealth(), getBaseMaxHealth());
+
         pCompound.putBoolean("Sitting", getIsSitting());
-
         pCompound.putBoolean("isImpostor", getIsImpostor());
-
         pCompound.putBoolean("hasTotem", getTotem());
-
         pCompound.putBoolean("lastTrinketState", lastTrinketState);
         pCompound.putBoolean("pendingGoalUpdate", pendingGoalUpdate);
         pCompound.putBoolean("pendingTrinketState", pendingTrinketState);
         pCompound.putBoolean("hasAttemptedMigration", hasAttemptedMigration);
         pCompound.putBoolean("hasAttemptedConsumableMigration", hasAttemptedConsumableMigration);
+        pCompound.putBoolean("hasInitializedHealth", hasInitializedHealth);
 
         pCompound.putBoolean("isInHouse", getIsInHouse());
         if (housePosition != null) {
@@ -515,6 +529,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             }
         }
 
+        hasInitializedHealth = pCompound.getBoolean("hasInitializedHealth");
+
+        // Legacy migration variables
         int legacyEnragedStacks = 0;
         int legacyArmorStacks = 0;
         int legacyHealthStacks = 0;
@@ -537,8 +554,15 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             hasAttemptedConsumableMigration = pCompound.getBoolean("hasAttemptedConsumableMigration");
         }
 
+        // Store the saved health for later restoration
+        float savedHealth = pCompound.getFloat("currentHealth");
+
+        FamiliarsLib.LOGGER.debug("Loading health for familiar {}: saved health = {}", getUUID(), savedHealth);
+
+        // Load consumable data
         FamiliarConsumableIntegration.loadConsumableData(this, pCompound);
 
+        // Legacy migration (only if needed and not already attempted)
         if (!level().isClientSide && !hasAttemptedConsumableMigration &&
                 (legacyHealthStacks > 0 || legacyArmorStacks > 0 || legacyEnragedStacks > 0 || legacyCanBlock)) {
 
@@ -547,6 +571,28 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
             FamiliarConsumableIntegration.migrateLegacyData(this, legacyHealthStacks, legacyArmorStacks, legacyEnragedStacks, legacyCanBlock);
             hasAttemptedConsumableMigration = true;
+        }
+
+        // Apply modifiers and restore health if we're on the server
+        if (!level().isClientSide) {
+            // Apply consumable modifiers to get the correct max health
+            FamiliarConsumableIntegration.applyConsumableModifiers(this);
+
+            // Restore the saved health
+            float newMaxHealth = getMaxHealth();
+            float restoredHealth = Math.min(savedHealth, newMaxHealth);
+
+            FamiliarsLib.LOGGER.debug("Immediately restoring health for familiar {}: saved={}, newMax={}, restored={}",
+                    getUUID(), savedHealth, newMaxHealth, restoredHealth);
+
+            setHealth(restoredHealth);
+            hasInitializedHealth = true;
+
+            FamiliarsLib.LOGGER.debug("Health restoration complete for familiar {}: {}/{} ({}%)",
+                    getUUID(), getHealth(), getMaxHealth(), (getHealth()/getMaxHealth()*100));
+        } else {
+            // On client side, just store the health for later
+            getPersistentData().putFloat("pendingHealth", savedHealth);
         }
 
         if(pCompound.contains("Sitting")){
@@ -953,13 +999,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     public void onAddedToLevel() {
         super.onAddedToLevel();
         triggerAnim("spawn_controller", "spawn");
-
-        if (!level().isClientSide) {
-            FamiliarConsumableIntegration.applyConsumableModifiers(this);
-
-            FamiliarsLib.LOGGER.debug("Applied consumable modifiers on level join for familiar {}: {} health, {} armor, {} enraged, blocking: {}",
-                    getUUID(), getHealthStacks(), getArmorStacks(), getEnragedStacks(), getIsBlocking());
-        }
     }
 
     //Despawning logic and effects

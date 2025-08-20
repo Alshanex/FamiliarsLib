@@ -13,41 +13,90 @@ import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem.ConsumableType;
 import net.alshanex.familiarslib.FamiliarsLib;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
+
 /**
  * Integration helper for the consumable system with AbstractSpellCastingPet
- * This class handles the interaction logic and NBT integration
  */
 public class FamiliarConsumableIntegration {
 
-    // Cache for consumable data to avoid NBT operations during gameplay
-    private static final java.util.Map<java.util.UUID, FamiliarConsumableSystem.ConsumableData> consumableDataCache =
-            new java.util.concurrent.ConcurrentHashMap<>();
+    // Cache for performance, but NOT the source of truth
+    private static final Map<UUID, FamiliarConsumableSystem.ConsumableData> consumableDataCache = new ConcurrentHashMap<>();
+
+    // NBT key for storing consumable data directly in entity
+    private static final String CONSUMABLE_NBT_KEY = "FamiliarConsumableData";
 
     /**
-     * Gets the consumable data for a familiar, using cache for performance
+     * Gets the consumable data for a familiar, trying cache first, then entity NBT
      */
     public static FamiliarConsumableSystem.ConsumableData getConsumableData(AbstractSpellCastingPet familiar) {
-        return consumableDataCache.computeIfAbsent(familiar.getUUID(),
-                uuid -> new FamiliarConsumableSystem.ConsumableData());
+        UUID familiarId = familiar.getUUID();
+
+        // Try cache first
+        FamiliarConsumableSystem.ConsumableData cachedData = consumableDataCache.get(familiarId);
+        if (cachedData != null) {
+            return cachedData;
+        }
+
+        // If not in cache, try to load from entity's persistent data
+        FamiliarConsumableSystem.ConsumableData data = loadFromEntityNBT(familiar);
+
+        // Cache it for performance
+        consumableDataCache.put(familiarId, data);
+        return data;
     }
 
     /**
-     * Updates the cached consumable data
+     * Load consumable data directly from the entity's persistent NBT data
+     */
+    private static FamiliarConsumableSystem.ConsumableData loadFromEntityNBT(AbstractSpellCastingPet familiar) {
+        // Check if the entity has stored consumable data
+        if (familiar.getPersistentData().contains(CONSUMABLE_NBT_KEY)) {
+            CompoundTag consumableNBT = familiar.getPersistentData().getCompound(CONSUMABLE_NBT_KEY);
+            return FamiliarConsumableSystem.loadConsumableDataFromNBT(consumableNBT);
+        }
+
+        // Return empty data if none found
+        return new FamiliarConsumableSystem.ConsumableData();
+    }
+
+    /**
+     * Save consumable data to both cache and entity's persistent NBT
+     */
+    private static void saveToEntityNBT(AbstractSpellCastingPet familiar, FamiliarConsumableSystem.ConsumableData data) {
+        UUID familiarId = familiar.getUUID();
+
+        // Save to cache for performance
+        consumableDataCache.put(familiarId, data);
+
+        // Save to entity's persistent NBT for durability
+        CompoundTag consumableNBT = new CompoundTag();
+        FamiliarConsumableSystem.saveConsumableDataToNBT(data, consumableNBT);
+        familiar.getPersistentData().put(CONSUMABLE_NBT_KEY, consumableNBT);
+
+        FamiliarsLib.LOGGER.debug("Saved consumable data to entity NBT for familiar {}: {}",
+                familiarId, data.toString());
+    }
+
+    /**
+     * Updates the consumable data in both cache and entity NBT
      */
     private static void updateConsumableData(AbstractSpellCastingPet familiar, FamiliarConsumableSystem.ConsumableData data) {
-        consumableDataCache.put(familiar.getUUID(), data);
+        saveToEntityNBT(familiar, data);
     }
 
     /**
-     * Removes cached data when familiar is removed
+     * Removes cached data when familiar is removed (but NBT data persists)
      */
     public static void clearCachedData(AbstractSpellCastingPet familiar) {
+        // Only clear cache, NOT the entity's persistent data
         consumableDataCache.remove(familiar.getUUID());
     }
 
     /**
      * Handles the interaction when a player tries to feed a consumable to a familiar
-     * Call this from your mobInteract method in AbstractSpellCastingPet
      */
     public static InteractionResult handleConsumableInteraction(AbstractSpellCastingPet familiar, Player player, ItemStack itemStack) {
         ConsumableItemInfo info = getConsumableInfo(itemStack);
@@ -82,14 +131,28 @@ public class FamiliarConsumableIntegration {
                 return InteractionResult.FAIL;
             }
 
+            // Store current health before applying consumable
+            float currentHealth = familiar.getHealth();
+            boolean isHealthConsumable = info.type == ConsumableType.HEALTH;
+
             // Apply the consumable
             int bonus = info.type.getTierBonus(info.tier);
             int newValue = Math.min(currentValue + bonus, maxAllowed);
             data.setValue(info.type, newValue);
 
-            // Update cache and apply modifiers
+            FamiliarsLib.LOGGER.debug("Applying consumable {} to familiar {}: {} -> {}",
+                    info.type, familiar.getUUID(), currentValue, newValue);
+
+            // Update both cache and entity NBT
             updateConsumableData(familiar, data);
             FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
+
+            // Heal the familiar if it was a health consumable
+            if (isHealthConsumable) {
+                familiar.setHealth(familiar.getMaxHealth());
+                FamiliarsLib.LOGGER.debug("Applied health consumable to familiar {}: healed to full health {}",
+                        familiar.getUUID(), familiar.getMaxHealth());
+            }
 
             // Consume the item
             itemStack.shrink(1);
@@ -127,10 +190,8 @@ public class FamiliarConsumableIntegration {
 
     /**
      * Gets consumable information from an item stack
-     * Uses the FamiliarConsumableItem class to detect consumables
      */
     private static ConsumableItemInfo getConsumableInfo(ItemStack itemStack) {
-        // Check if it's a FamiliarConsumableItem first
         if (itemStack.getItem() instanceof FamiliarConsumableItem consumableItem) {
             return new ConsumableItemInfo(consumableItem.getConsumableType(), consumableItem.getTier());
         }
@@ -167,29 +228,38 @@ public class FamiliarConsumableIntegration {
     }
 
     /**
-     * Save consumable data to NBT - call this from addAdditionalSaveData
+     * Save consumable data to NBT - called during entity save
+     * This copies data from entity's persistent NBT to the save NBT
      */
     public static void saveConsumableData(AbstractSpellCastingPet familiar, CompoundTag compound) {
+        UUID familiarId = familiar.getUUID();
+
+        // Get the current data (which ensures it's loaded into cache if not already)
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
+
+        // Save it to the compound tag for persistence
         FamiliarConsumableSystem.saveConsumableDataToNBT(data, compound);
+
+        FamiliarsLib.LOGGER.debug("Saving consumable data to NBT for familiar {}: {}",
+                familiarId, data.toString());
     }
 
     /**
-     * Load consumable data from NBT - call this from readAdditionalSaveData
+     * Load consumable data from NBT and ensure it's stored in entity persistent data
      */
     public static void loadConsumableData(AbstractSpellCastingPet familiar, CompoundTag compound) {
+        UUID familiarId = familiar.getUUID();
         FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableSystem.loadConsumableDataFromNBT(compound);
-        updateConsumableData(familiar, data);
 
-        // Apply the attribute modifiers
-        if (!familiar.level().isClientSide) {
-            FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
-        }
+        // Store in both cache and entity persistent NBT
+        saveToEntityNBT(familiar, data);
+
+        FamiliarsLib.LOGGER.debug("Loading consumable data from NBT for familiar {}: {}",
+                familiarId, data.toString());
     }
 
     /**
      * Gets the effective spell level for spell casting, including consumable bonuses
-     * Call this when determining spell levels for familiar casting
      */
     public static float getEffectiveSpellLevel(AbstractSpellCastingPet familiar, float baseSpellLevel) {
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
@@ -198,7 +268,7 @@ public class FamiliarConsumableIntegration {
     }
 
     /**
-     * Remove all consumable modifiers - call this when familiar is dismissed/dies
+     * Remove all consumable modifiers and clear cache (but leave entity NBT)
      */
     public static void removeConsumableModifiers(AbstractSpellCastingPet familiar) {
         FamiliarConsumableSystem.removeAllConsumableModifiers(familiar);
@@ -206,11 +276,14 @@ public class FamiliarConsumableIntegration {
     }
 
     /**
-     * Apply consumable modifiers - call this when familiar is summoned
+     * Apply consumable modifiers from current data
      */
     public static void applyConsumableModifiers(AbstractSpellCastingPet familiar) {
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
         FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
+
+        FamiliarsLib.LOGGER.debug("Applied consumable modifiers for familiar {}: {}",
+                familiar.getUUID(), data.toString());
     }
 
     /**
@@ -238,44 +311,45 @@ public class FamiliarConsumableIntegration {
         // Remove legacy modifiers first
         FamiliarConsumableSystem.removeLegacyModifiers(familiar);
 
-        // Convert legacy health stacks to health percentage
-        // Old system: 10% per stack, new system: percentage values
+        // Store current health before migration
+        float currentHealth = familiar.getHealth();
+
+        // Convert legacy data
         if (legacyHealthStacks > 0) {
             int healthPercentage = legacyHealthStacks * 10; // 10% per stack
-            // Clamp to max tier 3 limit (150%)
             healthPercentage = Math.min(healthPercentage, ConsumableType.HEALTH.getMaxLimit());
             data.setValue(ConsumableType.HEALTH, healthPercentage);
             FamiliarsLib.LOGGER.debug("Migrated {} legacy health stacks to {}% health bonus", legacyHealthStacks, healthPercentage);
         }
 
-        // Convert legacy armor stacks to armor points
-        // Old system: 1 armor per stack, new system: direct armor values
         if (legacyArmorStacks > 0) {
-            int armorPoints = legacyArmorStacks;
-            // Clamp to max tier 3 limit (20)
-            armorPoints = Math.min(armorPoints, ConsumableType.ARMOR.getMaxLimit());
+            int armorPoints = Math.min(legacyArmorStacks, ConsumableType.ARMOR.getMaxLimit());
             data.setValue(ConsumableType.ARMOR, armorPoints);
             FamiliarsLib.LOGGER.debug("Migrated {} legacy armor stacks to {} armor points", legacyArmorStacks, armorPoints);
         }
 
-        // Migrate enraged stacks directly
         if (legacyEnragedStacks > 0) {
             int enragedStacks = Math.min(legacyEnragedStacks, ConsumableType.ENRAGED.getMaxLimit());
             data.setValue(ConsumableType.ENRAGED, enragedStacks);
             FamiliarsLib.LOGGER.debug("Migrated {} legacy enraged stacks", enragedStacks);
         }
 
-        // Migrate blocking ability
         if (legacyCanBlock) {
             data.setValue(ConsumableType.BLOCKING, 1);
             FamiliarsLib.LOGGER.debug("Migrated legacy blocking ability");
         }
 
-        // Update cache and apply new modifiers
+        // Update both cache and entity NBT
         updateConsumableData(familiar, data);
         FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
 
-        FamiliarsLib.LOGGER.debug("Completed legacy data migration for familiar {}", familiar.getUUID());
+        // Restore the health after migration (clamp to new max health if needed)
+        float newMaxHealth = familiar.getMaxHealth();
+        float restoredHealth = Math.min(currentHealth, newMaxHealth);
+        familiar.setHealth(restoredHealth);
+
+        FamiliarsLib.LOGGER.debug("Completed legacy data migration for familiar {}: {} (health: {}/{})",
+                familiar.getUUID(), data.toString(), familiar.getHealth(), familiar.getMaxHealth());
     }
 
     /**

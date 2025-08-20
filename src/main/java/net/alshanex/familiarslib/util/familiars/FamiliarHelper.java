@@ -6,6 +6,8 @@ import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -72,18 +74,26 @@ public class FamiliarHelper {
     private static CompoundTag createFamiliarNBT(AbstractSpellCastingPet familiar) {
         CompoundTag nbt = new CompoundTag();
         familiar.saveWithoutId(nbt);
-        nbt.putFloat("currentHealth", familiar.getHealth());
+
+        float currentHealth = familiar.getHealth();
+        nbt.putFloat("currentHealth", currentHealth);
+        nbt.putFloat("baseMaxHealth", familiar.getBaseMaxHealth());
+
+        FamiliarsLib.LOGGER.debug("Creating NBT for familiar {}: current health = {}, max = {}, base = {}",
+                familiar.getUUID(), currentHealth, familiar.getMaxHealth(), familiar.getBaseMaxHealth());
 
         String entityTypeId = EntityType.getKey(familiar.getType()).toString();
         nbt.putString("id", entityTypeId);
 
-        nbt.putInt("armorStacks", familiar.getArmorStacks());
-        nbt.putInt("enragedStacks", familiar.getEnragedStacks());
-        nbt.putBoolean("canBlock", familiar.getIsBlocking());
-
         if (familiar.hasCustomName()) {
             nbt.putString("customName", familiar.getCustomName().getString());
         }
+
+        FamiliarConsumableIntegration.saveConsumableData(familiar, nbt);
+
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(familiar);
+        FamiliarsLib.LOGGER.debug("Saving familiar {}: current health={}, base max health={}, consumable data = {}",
+                familiar.getUUID(), currentHealth, familiar.getBaseMaxHealth(), data.toString());
 
         return nbt;
     }

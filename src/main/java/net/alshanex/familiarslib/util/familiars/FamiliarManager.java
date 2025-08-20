@@ -10,6 +10,8 @@ import net.alshanex.familiarslib.network.*;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.screen.FamiliarStorageScreen;
 import net.alshanex.familiarslib.screen.FamiliarWanderScreen;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -23,6 +25,8 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
@@ -159,9 +163,8 @@ public class FamiliarManager {
         familiar.load(familiarNBT);
         familiar.setUUID(familiarId);
 
-        float savedHealth = familiarNBT.getFloat("currentHealth");
-        float actualMaxHealth = familiar.getMaxHealth();
-        familiar.setHealth(Math.min(savedHealth, actualMaxHealth));
+        // Apply health correctly using the helper method
+        applyHealthFromNBT(familiar, familiarNBT);
 
         Vec3 spawnPos = findSafeSpawnPosition(player, level);
         familiar.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
@@ -173,8 +176,6 @@ public class FamiliarManager {
         level.playSound(null, familiar.getX(), familiar.getY(), familiar.getZ(),
                 SoundEvents.BEACON_POWER_SELECT, SoundSource.BLOCKS, 1.0F, 1.0F);
 
-        FamiliarsLib.LOGGER.debug("Familiar summoned: {} with health {}/{}",
-                familiarId, familiar.getHealth(), familiar.getMaxHealth());
 
         familiarData.setCurrentSummonedFamiliarId(familiarId);
         familiarData.addSummonedFamiliar(familiarId);
@@ -263,11 +264,10 @@ public class FamiliarManager {
         CompoundTag nbt = new CompoundTag();
         familiar.saveWithoutId(nbt);
 
+        // Simply save the current health
         float currentHealth = familiar.getHealth();
-        float maxHealth = familiar.getMaxHealth();
-
         nbt.putFloat("currentHealth", currentHealth);
-        nbt.putFloat("maxHealthDebug", maxHealth);
+        nbt.putFloat("baseMaxHealth", familiar.getBaseMaxHealth());
 
         String entityTypeId = EntityType.getKey(familiar.getType()).toString();
         nbt.putString("id", entityTypeId);
@@ -276,10 +276,41 @@ public class FamiliarManager {
             nbt.putString("customName", familiar.getCustomName().getString());
         }
 
-        FamiliarsLib.LOGGER.debug("Saving familiar {}: current health={}/{}, consumable data handled by consumable system",
-                familiar.getUUID(), currentHealth, maxHealth);
+        FamiliarConsumableIntegration.saveConsumableData(familiar, nbt);
+
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(familiar);
+        FamiliarsLib.LOGGER.debug("Saving familiar {}: current health={}, max health={}, base max health={}, consumable data = {}",
+                familiar.getUUID(), currentHealth, familiar.getMaxHealth(), familiar.getBaseMaxHealth(), data.toString());
 
         return nbt;
+    }
+
+    private static void applyHealthFromNBT(AbstractSpellCastingPet familiar, CompoundTag familiarNBT) {
+        float savedHealth = familiarNBT.getFloat("currentHealth");
+
+        FamiliarsLib.LOGGER.debug("Loading health for familiar {}: saved health = {}",
+                familiar.getUUID(), savedHealth);
+
+        // Load consumable data (this stores the data but doesn't apply modifiers yet)
+        FamiliarConsumableIntegration.loadConsumableData(familiar, familiarNBT);
+
+        if (!familiar.level().isClientSide) {
+            // Apply modifiers immediately for summoning
+            FamiliarConsumableIntegration.applyConsumableModifiers(familiar);
+
+            // Get the new max health and clamp the saved health to it
+            float newMaxHealth = familiar.getMaxHealth();
+            float restoredHealth = Math.min(savedHealth, newMaxHealth);
+
+            FamiliarsLib.LOGGER.debug("Applying health for summoned familiar {}: saved={}, newMax={}, restored={}",
+                    familiar.getUUID(), savedHealth, newMaxHealth, restoredHealth);
+
+            familiar.setHealth(restoredHealth);
+        }
+
+        FamiliarsLib.LOGGER.debug("Applied health to familiar {}: {}/{} ({}%)",
+                familiar.getUUID(), familiar.getHealth(), familiar.getMaxHealth(),
+                (familiar.getHealth()/familiar.getMaxHealth()*100));
     }
 
     private static Vec3 findSafeSpawnPosition(ServerPlayer player, ServerLevel level) {
@@ -400,9 +431,7 @@ public class FamiliarManager {
         familiar.load(familiarNBT);
         familiar.setUUID(familiarId);
 
-        float savedHealth = familiarNBT.getFloat("currentHealth");
-        float actualMaxHealth = familiar.getMaxHealth();
-        familiar.setHealth(Math.min(savedHealth, actualMaxHealth));
+        applyHealthFromNBT(familiar, familiarNBT);
 
         Vec3 spawnPos = findSafeSpawnPositionWithIndex(player, level, positionIndex);
         familiar.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
@@ -417,9 +446,6 @@ public class FamiliarManager {
 
         familiarData.addSummonedFamiliar(familiarId);
         syncFamiliarData(player, familiarData);
-
-        FamiliarsLib.LOGGER.debug("Specific familiar summoned: {} at position {} with health {}/{}",
-                familiarId, spawnPos, familiar.getHealth(), familiar.getMaxHealth());
     }
 
     private static Vec3 findSafeSpawnPositionWithIndex(ServerPlayer player, ServerLevel level, int positionIndex) {

@@ -49,9 +49,7 @@ public class FamiliarConsumableSystem {
     }
 
     /**
-     * Compact storage class using bit manipulation for efficient NBT storage
-     * Each stat uses 8 bits, allowing values 0-255
-     * Total storage: 8 bytes for all consumable data
+     * Compact storage class
      */
     public static class ConsumableData {
         private byte armor;      // 0-20 armor points
@@ -69,27 +67,25 @@ public class FamiliarConsumableSystem {
         }
 
         public void saveToNBT(CompoundTag tag) {
-            // Pack all data into a single long for ultra-compact storage
-            long packed = ((long)armor & 0xFF) |
-                    (((long)health & 0xFF) << 8) |
-                    (((long)spellPower & 0xFF) << 16) |
-                    (((long)spellResist & 0xFF) << 24) |
-                    (((long)spellLevel & 0xFF) << 32) |
-                    (((long)enraged & 0xFF) << 40) |
-                    (((long)blocking & 0xFF) << 48);
-            tag.putLong("consumableData", packed);
+            // Use individual keys for better debugging and compatibility
+            tag.putByte("consumableArmor", armor);
+            tag.putByte("consumableHealth", health);
+            tag.putByte("consumableSpellPower", spellPower);
+            tag.putByte("consumableSpellResist", spellResist);
+            tag.putByte("consumableSpellLevel", spellLevel);
+            tag.putByte("consumableEnraged", enraged);
+            tag.putByte("consumableBlocking", blocking);
         }
 
         public void loadFromNBT(CompoundTag tag) {
-            if (tag.contains("consumableData")) {
-                long packed = tag.getLong("consumableData");
-                armor = (byte)(packed & 0xFF);
-                health = (byte)((packed >> 8) & 0xFF);
-                spellPower = (byte)((packed >> 16) & 0xFF);
-                spellResist = (byte)((packed >> 24) & 0xFF);
-                spellLevel = (byte)((packed >> 32) & 0xFF);
-                enraged = (byte)((packed >> 40) & 0xFF);
-                blocking = (byte)((packed >> 48) & 0xFF);
+            if (tag.contains("consumableArmor")) {
+                armor = tag.getByte("consumableArmor");
+                health = tag.getByte("consumableHealth");
+                spellPower = tag.getByte("consumableSpellPower");
+                spellResist = tag.getByte("consumableSpellResist");
+                spellLevel = tag.getByte("consumableSpellLevel");
+                enraged = tag.getByte("consumableEnraged");
+                blocking = tag.getByte("consumableBlocking");
             }
         }
 
@@ -116,6 +112,18 @@ public class FamiliarConsumableSystem {
                 case ENRAGED -> enraged = (byte)value;
                 case BLOCKING -> blocking = (byte)value;
             }
+        }
+
+        // Add debugging method
+        public boolean hasAnyData() {
+            return armor != 0 || health != 0 || spellPower != 0 || spellResist != 0 ||
+                    spellLevel != 0 || enraged != 0 || blocking != 0;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("ConsumableData{armor=%d, health=%d, spellPower=%d, spellResist=%d, spellLevel=%d, enraged=%d, blocking=%d}",
+                    armor & 0xFF, health & 0xFF, spellPower & 0xFF, spellResist & 0xFF, spellLevel & 0xFF, enraged & 0xFF, blocking & 0xFF);
         }
     }
 
