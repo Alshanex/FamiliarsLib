@@ -152,6 +152,11 @@ public abstract class AbstractFlyingSpellCastingPet extends AbstractSpellCasting
 
         @Override
         public void tick() {
+            if (entity.getIsSitting()) {
+                entity.setDeltaMovement(Vec3.ZERO);
+                return;
+            }
+
             if (entity.isInKnockback()) {
                 entity.setDeltaMovement(entity.getDeltaMovement().scale(0.85));
                 return;
@@ -215,7 +220,8 @@ public abstract class AbstractFlyingSpellCastingPet extends AbstractSpellCasting
 
         @Override
         public boolean canUse() {
-            if (mob.movementDisabled || mob.hasControllingPassenger()) {
+            // Don't move if sitting (sleeping)
+            if (mob.getIsSitting() || mob.movementDisabled || mob.hasControllingPassenger()) {
                 return false;
             }
 
@@ -234,7 +240,8 @@ public abstract class AbstractFlyingSpellCastingPet extends AbstractSpellCasting
 
         @Override
         public boolean canContinueToUse() {
-            if (mob.movementDisabled || mob.hasControllingPassenger()) {
+            // Stop if now sitting or movement disabled
+            if (mob.getIsSitting() || mob.movementDisabled || mob.hasControllingPassenger()) {
                 return false;
             }
 
@@ -248,7 +255,7 @@ public abstract class AbstractFlyingSpellCastingPet extends AbstractSpellCasting
 
         @Override
         public void start() {
-            if (this.targetPos != null) {
+            if (this.targetPos != null && !mob.getIsSitting()) {
                 mob.getMoveControl().setWantedPosition(this.targetPos.x, this.targetPos.y, this.targetPos.z, this.speedModifier);
             }
         }

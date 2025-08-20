@@ -35,6 +35,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.TargetGoal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -115,12 +116,21 @@ public class FamiliarGoals {
                 targetBedPos = foundBed;
                 BlockEntity be = pet.level().getBlockEntity(targetBedPos);
                 if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
-                    exactSleepPosition = petBed.getSleepPosition();
-                    hasSnappedToBed = false;
-                    hasClaimedBed = false;
-                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " found available bed at " + targetBedPos +
-                            ", exact sleep position: " + exactSleepPosition);
-                    return true;
+                    // Claim the bed immediately
+                    if (!petBed.isBedTaken()) {
+                        petBed.setBedTaken(true);
+                        hasClaimedBed = true;
+                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " immediately claimed bed at " + targetBedPos);
+
+                        exactSleepPosition = petBed.getSleepPosition();
+                        hasSnappedToBed = false;
+                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " found available bed at " + targetBedPos +
+                                ", exact sleep position: " + exactSleepPosition);
+                        return true;
+                    } else {
+                        // Bed was taken between finding it and trying to claim it
+                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " failed to claim bed at " + targetBedPos + " - already taken");
+                    }
                 }
             }
 
@@ -149,7 +159,6 @@ public class FamiliarGoals {
                 pet.getNavigation().moveTo(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z, 1.0);
             }
             hasSnappedToBed = false;
-            hasClaimedBed = false;
             bedRegenTimer = 0;
             wasPlayingSleepAnimation = false;
         }
@@ -163,18 +172,22 @@ public class FamiliarGoals {
             Vec3 petPos = pet.position();
             double distanceToSleepPos = petPos.distanceTo(exactSleepPosition);
 
-            // Claim the bed when close enough
-            if (distanceToSleepPos <= 2.0 && !hasClaimedBed) {
-                claimBed();
-            }
-
             // Snap to bed position when very close
             if (distanceToSleepPos <= 1.5 && !hasSnappedToBed && hasClaimedBed) {
                 if (!pet.level().isClientSide) {
                     FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " within snap range, teleporting to exact position");
 
                     pet.getNavigation().stop();
-                    pet.setDeltaMovement(Vec3.ZERO);
+
+                    // Special handling for flying pets
+                    if (pet instanceof AbstractFlyingSpellCastingPet) {
+                        // Stop all movement and hover controls for flying pets
+                        pet.setDeltaMovement(Vec3.ZERO);
+                        pet.getMoveControl().setWantedPosition(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z, 0.0);
+                    } else {
+                        pet.setDeltaMovement(Vec3.ZERO);
+                    }
+
                     pet.setPos(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z);
                     hasSnappedToBed = true;
 
@@ -189,6 +202,15 @@ public class FamiliarGoals {
 
             // Handle sleep animation and regeneration when snapped and sitting
             if (hasSnappedToBed && pet.getIsSitting()) {
+                // Ensure flying pets stay in position while sleeping
+                if (pet instanceof AbstractFlyingSpellCastingPet) {
+                    double currentDistance = pet.position().distanceTo(exactSleepPosition);
+                    if (currentDistance > 0.5) {
+                        pet.setPos(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z);
+                        pet.setDeltaMovement(Vec3.ZERO);
+                    }
+                }
+
                 handleSleepAndRegeneration();
                 return;
             }
@@ -273,19 +295,6 @@ public class FamiliarGoals {
             }
         }
 
-        private void claimBed() {
-            if (targetBedPos == null) return;
-
-            BlockEntity be = pet.level().getBlockEntity(targetBedPos);
-            if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
-                if (!petBed.isBedTaken()) {
-                    petBed.setBedTaken(true);
-                    hasClaimedBed = true;
-                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " claimed bed at " + targetBedPos);
-                }
-            }
-        }
-
         private void releaseBed() {
             if (targetBedPos == null) return;
 
@@ -316,7 +325,7 @@ public class FamiliarGoals {
                             pet.heal(1.0F);
                             FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " healed to " + pet.getHealth() + "/" + pet.getMaxHealth());
 
-                            // Spawn healing particles
+                            // Spawn sleeping particles
                             try {
                                 CylinderParticleManager.spawnParticlesAtBlockPos(
                                         pet.level(),
@@ -2436,6 +2445,220 @@ public class FamiliarGoals {
                 }
             }
             return null;
+        }
+    }
+
+    public static class AlliedFamiliarDefenseGoal extends TargetGoal {
+        private final AbstractSpellCastingPet familiar;
+        private LivingEntity targetMob;
+        private int timestamp;
+        private static final double HELP_RANGE = 16.0D;
+
+        public AlliedFamiliarDefenseGoal(AbstractSpellCastingPet familiar) {
+            super(familiar, false);
+            this.familiar = familiar;
+            this.setFlags(EnumSet.of(Flag.TARGET));
+        }
+
+        @Override
+        public boolean canUse() {
+            // Don't help if we already have a target or are in house mode
+            if (familiar.getTarget() != null || familiar.getIsInHouse()) {
+                return false;
+            }
+
+            // Don't help if we're sitting
+            if (familiar.getIsSitting()) {
+                return false;
+            }
+
+            // Don't help if movement is disabled
+            if (familiar.getMovementDisabled()) {
+                return false;
+            }
+
+            // Don't help if we can't execute goals in house (for storage blocks)
+            if (!familiar.canExecuteGoalsInHouse()) {
+                return false;
+            }
+
+            // Look for allied familiars in combat within range
+            AABB searchArea = familiar.getBoundingBox().inflate(HELP_RANGE);
+            List<AbstractSpellCastingPet> nearbyFamiliars = familiar.level().getEntitiesOfClass(
+                    AbstractSpellCastingPet.class,
+                    searchArea,
+                    alliedFamiliar -> alliedFamiliar != familiar && // Not ourselves
+                            familiar.isAlliedTo(alliedFamiliar) && // Allied to us
+                            alliedFamiliar.getTarget() != null && // Has a target
+                            alliedFamiliar.getTarget().isAlive() && // Target is alive
+                            !alliedFamiliar.getIsInHouse() && // Not in house mode
+                            !alliedFamiliar.getIsSitting() && // Not sitting
+                            canHelpAgainst(alliedFamiliar.getTarget()) // We can help against this target
+            );
+
+            // Find the closest allied familiar that needs help
+            AbstractSpellCastingPet closestAlliedFamiliar = null;
+            double closestDistance = Double.MAX_VALUE;
+
+            for (AbstractSpellCastingPet alliedFamiliar : nearbyFamiliars) {
+                double distance = familiar.distanceToSqr(alliedFamiliar);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestAlliedFamiliar = alliedFamiliar;
+                }
+            }
+
+            if (closestAlliedFamiliar != null && closestAlliedFamiliar.getTarget() != null) {
+                this.targetMob = closestAlliedFamiliar.getTarget();
+                return true;
+            }
+
+            return false;
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            // Stop if we're now sitting or in house mode
+            if (familiar.getIsSitting() || familiar.getIsInHouse()) {
+                return false;
+            }
+
+            // Stop if movement is disabled
+            if (familiar.getMovementDisabled()) {
+                return false;
+            }
+
+            // Stop if we can't execute goals in house
+            if (!familiar.canExecuteGoalsInHouse()) {
+                return false;
+            }
+
+            // Stop if target is no longer valid
+            if (targetMob == null || !targetMob.isAlive()) {
+                return false;
+            }
+
+            // Stop if we can no longer help against this target
+            if (!canHelpAgainst(targetMob)) {
+                return false;
+            }
+
+            // Stop if target is too far away
+            if (familiar.distanceToSqr(targetMob) > HELP_RANGE * HELP_RANGE * 2) {
+                return false;
+            }
+
+            // Stop if no allied familiar is still fighting this target
+            AABB searchArea = familiar.getBoundingBox().inflate(HELP_RANGE * 1.5);
+            List<AbstractSpellCastingPet> alliedFamiliars = familiar.level().getEntitiesOfClass(
+                    AbstractSpellCastingPet.class,
+                    searchArea,
+                    alliedFamiliar -> alliedFamiliar != familiar &&
+                            familiar.isAlliedTo(alliedFamiliar) &&
+                            alliedFamiliar.getTarget() == targetMob
+            );
+
+            return !alliedFamiliars.isEmpty();
+        }
+
+        @Override
+        public void start() {
+            familiar.setTarget(this.targetMob);
+            this.timestamp = familiar.tickCount;
+            super.start();
+        }
+
+        @Override
+        public void stop() {
+            familiar.setTarget(null);
+            this.targetMob = null;
+            super.stop();
+        }
+
+        /**
+         * Check if this familiar can help against the given target
+         */
+        private boolean canHelpAgainst(LivingEntity target) {
+            // Don't attack allied entities
+            if (familiar.isAlliedTo(target)) {
+                return false;
+            }
+
+            // Don't attack entities we can't see
+            if (!familiar.hasLineOfSight(target)) {
+                return false;
+            }
+
+            // Use the same targeting conditions as other combat goals
+            TargetingConditions conditions = TargetingConditions.forCombat()
+                    .range(HELP_RANGE)
+                    .selector(entity -> entity instanceof LivingEntity &&
+                            !familiar.isAlliedTo(entity) &&
+                            entity.isAlive());
+
+            return conditions.test(familiar, target);
+        }
+    }
+
+    public static class FamiliarHurtByTargetGoal extends HurtByTargetGoal {
+        private final AbstractSpellCastingPet familiar;
+        private static final double ALERT_RANGE = 20.0D;
+
+        public FamiliarHurtByTargetGoal(AbstractSpellCastingPet familiar) {
+            super(familiar);
+            this.familiar = familiar;
+        }
+
+        @Override
+        public void start() {
+            super.start();
+
+            // Alert nearby allied familiars when we get hurt
+            if (familiar.getLastHurtByMob() != null) {
+                alertAlliedFamiliars(familiar.getLastHurtByMob());
+            }
+        }
+
+        /**
+         * Alert all allied familiars in the area about the attacker
+         */
+        private void alertAlliedFamiliars(LivingEntity attacker) {
+            if (attacker == null || !attacker.isAlive()) {
+                return;
+            }
+
+            // Don't alert if we're in house mode
+            if (familiar.getIsInHouse()) {
+                return;
+            }
+
+            AABB searchArea = familiar.getBoundingBox().inflate(ALERT_RANGE);
+            List<AbstractSpellCastingPet> nearbyFamiliars = familiar.level().getEntitiesOfClass(
+                    AbstractSpellCastingPet.class,
+                    searchArea,
+                    alliedFamiliar -> alliedFamiliar != familiar && // Not ourselves
+                            familiar.isAlliedTo(alliedFamiliar) && // Allied to us
+                            !alliedFamiliar.getIsInHouse() && // Not in house mode
+                            !alliedFamiliar.getIsSitting() && // Not sitting
+                            alliedFamiliar.canExecuteGoalsInHouse() && // Can act
+                            (alliedFamiliar.getTarget() == null || // No current target
+                                    alliedFamiliar.getTarget() == attacker) // Or already targeting this attacker
+            );
+
+            for (AbstractSpellCastingPet alliedFamiliar : nearbyFamiliars) {
+                // Only set target if they can attack this entity
+                if (!alliedFamiliar.isAlliedTo(attacker) &&
+                        alliedFamiliar.hasLineOfSight(attacker) &&
+                        alliedFamiliar.getTarget() == null) {
+
+                    alliedFamiliar.setTarget(attacker);
+
+                    // Also set their last hurt by mob so they know who to be angry at
+                    if (alliedFamiliar.getLastHurtByMob() == null) {
+                        alliedFamiliar.setLastHurtByMob(attacker);
+                    }
+                }
+            }
         }
     }
 }

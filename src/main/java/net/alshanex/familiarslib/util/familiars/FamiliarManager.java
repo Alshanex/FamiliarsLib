@@ -200,6 +200,8 @@ public class FamiliarManager {
 
                 familiar.setTarget(null);
 
+                familiar.setSitting(false);
+
                 familiar.setHasUsedSingleAttack(false);
 
                 CompoundTag updatedNBT = createFamiliarNBT(familiar);
@@ -517,6 +519,8 @@ public class FamiliarManager {
                 }
 
                 familiar.setTarget(null);
+
+                familiar.setSitting(false);
 
                 familiar.setHasUsedSingleAttack(false);
 

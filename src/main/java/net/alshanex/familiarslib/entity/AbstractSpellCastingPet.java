@@ -183,6 +183,8 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         this.targetSelector.addGoal(3, new GenericCopyOwnerTargetGoal(this, this::getSummoner));
         this.targetSelector.addGoal(4, (new GenericHurtByTargetGoal(this, (entity) -> entity == getSummoner())).setAlertOthers());
         this.targetSelector.addGoal(5, new HurtByTargetGoal(this));
+        this.targetSelector.addGoal(5, new FamiliarGoals.FamiliarHurtByTargetGoal(this));
+        this.targetSelector.addGoal(6, new FamiliarGoals.AlliedFamiliarDefenseGoal(this));
     }
 
     public float getBaseMaxHealth() {
@@ -359,6 +361,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 clearMovementGoals();
                 this.navigation.stop();
                 this.setTarget(null);
+
+                // Special handling for flying pets
+                if (this instanceof AbstractFlyingSpellCastingPet) {
+                    this.setDeltaMovement(Vec3.ZERO);
+                    this.getMoveControl().setWantedPosition(this.getX(), this.getY(), this.getZ(), 0.0);
+                }
             } else {
                 restoreMovementGoals();
                 this.navigation.recomputePath();
@@ -421,11 +429,22 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected void clearMovementGoals(){
         movementDisabled = true;
         this.navigation.stop();
+
+        // Additional handling for flying pets
+        if (this instanceof AbstractFlyingSpellCastingPet) {
+            this.setDeltaMovement(Vec3.ZERO);
+            this.getMoveControl().setWantedPosition(this.getX(), this.getY(), this.getZ(), 0.0);
+        }
     }
 
     protected void restoreMovementGoals(){
         movementDisabled = false;
         this.navigation.recomputePath();
+
+        // Clear any forced position for flying pets
+        if (this instanceof AbstractFlyingSpellCastingPet) {
+            this.getMoveControl().setWantedPosition(this.getX(), this.getY(), this.getZ(), 0.0);
+        }
     }
 
     @Override
