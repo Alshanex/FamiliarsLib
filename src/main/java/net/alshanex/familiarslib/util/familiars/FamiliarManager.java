@@ -672,7 +672,7 @@ public class FamiliarManager {
             if (success) {
                 if(FamiliarsLib.isModLoaded("alshanex_familiars")){
                     try {
-                        Class<?> clazz = Class.forName("net.alshanex.alshanex_familiars.util.familiars.AlshanexFamiliarsManager");
+                        Class<?> clazz = Class.forName("net.alshanex.alshanex_familiars.util.familiars.AlshanexFamiliarManager");
                         Method method = clazz.getMethod("cleanFamiliarFromPandoraBox", ServerPlayer.class, UUID.class);
                         method.invoke(null, player, familiarId);
                     } catch (Exception e) {
