@@ -2182,7 +2182,22 @@ public class FamiliarGoals {
                 filteredSpells.remove(SpellRegistry.HEAL_SPELL.get());
             }
 
+            if(!hasHarmfulEffects(mob)){
+                filteredSpells.remove(SpellRegistry.CLEANSE_SPELL.get());
+            }
+
             return filteredSpells.isEmpty() ? new ArrayList<>(supportSpells) : new ArrayList<>(filteredSpells);
+        }
+
+        public static boolean hasHarmfulEffects(LivingEntity entity) {
+            for (MobEffectInstance effect : entity.getActiveEffects()) {
+                Holder<MobEffect> mobEffect = effect.getEffect();
+
+                if (!mobEffect.value().isBeneficial()) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         protected List<AbstractSpell> filterSpellsByTags(List<AbstractSpell> spells, TagKey<AbstractSpell> tag) {
