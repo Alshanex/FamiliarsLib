@@ -114,10 +114,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     protected boolean movementDisabled = false;
 
-    //Percentage power boost for spells when correspondant trinket equipped
-    protected static final float DEFAULT_TRINKET_MIN_QUALITY = 0.8f;
-    protected static final float DEFAULT_TRINKET_MAX_QUALITY = 1.0f;
-
     private boolean lastTrinketState = false;
     private FamiliarGoals.FamiliarWizardAttackGoal currentAttackGoal;
     private boolean pendingGoalUpdate = false;
@@ -203,7 +199,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     protected float[] getTrinketQualityValues() {
-        return new float[]{DEFAULT_TRINKET_MIN_QUALITY, DEFAULT_TRINKET_MAX_QUALITY};
+        return new float[]{getConsumableSpellLevel() + 0.1f, getConsumableSpellLevel() + 0.2f};
     }
 
     protected void initializeAttackGoal(int goalPriority) {
