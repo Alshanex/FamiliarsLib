@@ -46,6 +46,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
@@ -67,6 +68,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
@@ -549,6 +551,12 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             } else {
                 setOwnerUUID(null);
             }
+        }
+
+        if (pCompound.isEmpty() || (!pCompound.contains("currentHealth") && !pCompound.contains("ownerUUID"))) {
+            FamiliarsLib.LOGGER.debug("Command-spawned familiar {} detected, skipping health restoration", getUUID());
+            hasInitializedHealth = false; // Will be handled in finalizeSpawn
+            return;
         }
 
         hasInitializedHealth = pCompound.getBoolean("hasInitializedHealth");
@@ -1038,6 +1046,35 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         if(!level.isClientSide){
             MagicManager.spawnParticles(level(), ParticleTypes.POOF, getX(), getY(), getZ(), 25, .4, .8, .4, .03, false);
         }
+    }
+
+    @Override
+    public SpawnGroupData finalizeSpawn(ServerLevelAccessor level, DifficultyInstance difficulty, MobSpawnType reason, @Nullable SpawnGroupData spawnData) {
+        SpawnGroupData result = super.finalizeSpawn(level, difficulty, reason, spawnData);
+
+        // Handle command-spawned entities
+        if (reason == MobSpawnType.COMMAND) {
+            FamiliarsLib.LOGGER.debug("Finalizing spawn for command-summoned familiar {}", getUUID());
+
+            // Initialize consumable system for command-spawned entities
+            if (!level.isClientSide()) {
+                FamiliarConsumableIntegration.applyConsumableModifiers(this);
+
+                // Ensure health is properly set
+                if (getHealth() <= 0) {
+                    setHealth(getMaxHealth());
+                    FamiliarsLib.LOGGER.debug("Set health for command-spawned familiar {}: {}/{}",
+                            getUUID(), getHealth(), getMaxHealth());
+                }
+
+                hasInitializedHealth = true;
+
+                // Mark as persistent so it doesn't despawn
+                setPersistenceRequired();
+            }
+        }
+
+        return result;
     }
 
     public float getEffectiveSpellLevel(float baseSpellLevel) {
