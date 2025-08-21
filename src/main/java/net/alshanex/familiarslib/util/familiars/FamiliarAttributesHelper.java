@@ -148,11 +148,13 @@ public class FamiliarAttributesHelper {
             double playerValue = playerAttribute.getValue();
             double baseValue = playerAttribute.getBaseValue();
 
-            double additionalValue = playerValue - baseValue;
+            double additionalValue = (playerValue - baseValue) / 2;
+            additionalValue = Math.round(additionalValue * 100.0) / 100.0;
 
             if (additionalValue <= 0) continue;
 
             double familiarShare = additionalValue / totalFamiliars;
+            familiarShare   = Math.round(familiarShare * 100.0) / 100.0;
 
             AttributeInstance familiarAttribute = familiar.getAttribute(attributeHolder);
             if (familiarAttribute != null) {
