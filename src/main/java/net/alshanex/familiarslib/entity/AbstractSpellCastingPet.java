@@ -285,6 +285,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 .orElseGet(() -> this.entityData.get(DATA_ID_OWNER_UUID).orElse(null));
     }
 
+    @Override
+    public boolean canUsePortal(boolean allowPassengers) {
+        return false;
+    }
+
     //Getters and setters for the familiars data, like consumables, impostor mark, house mark, etc.
     public void setEnragedStacks(Integer level) {
         FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(this);
