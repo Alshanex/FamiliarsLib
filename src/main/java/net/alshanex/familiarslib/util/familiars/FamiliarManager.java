@@ -22,6 +22,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -316,10 +317,218 @@ public class FamiliarManager {
     }
 
     private static Vec3 findSafeSpawnPosition(ServerPlayer player, ServerLevel level) {
-        float yrot = 6.281f + player.getYRot() * Mth.DEG_TO_RAD;
-        Vec3 spawn = Utils.moveToRelativeGroundLevel(level,
-                player.getEyePosition().add(new Vec3(3 * Mth.cos(yrot), 0, 3 * Mth.sin(yrot))), 10);
-        return spawn;
+        Vec3 playerPos = player.getEyePosition();
+
+        // Try multiple positions around the player
+        double[][] offsets = {
+                {3.0, 0.0}, {-3.0, 0.0}, {0.0, 3.0}, {0.0, -3.0},
+                {2.1, 2.1}, {-2.1, 2.1}, {2.1, -2.1}, {-2.1, -2.1},
+                {4.0, 0.0}, {-4.0, 0.0}, {0.0, 4.0}, {0.0, -4.0},
+                {1.5, 1.5}, {-1.5, 1.5}, {1.5, -1.5}, {-1.5, -1.5}
+        };
+
+        float yrot = player.getYRot() * Mth.DEG_TO_RAD;
+
+        // Try each offset position
+        for (double[] offset : offsets) {
+            double cos = Math.cos(yrot);
+            double sin = Math.sin(yrot);
+
+            double worldX = offset[0] * cos - offset[1] * sin;
+            double worldZ = offset[0] * sin + offset[1] * cos;
+
+            Vec3 targetPos = playerPos.add(worldX, 0, worldZ);
+            Vec3 safePos = findSafePositionNear(level, targetPos);
+
+            if (safePos != null) {
+                return safePos;
+            }
+        }
+
+        // Final fallback - try positions directly around player
+        for (int attempts = 0; attempts < 20; attempts++) {
+            double randomAngle = level.random.nextDouble() * 2 * Math.PI;
+            double distance = 2.0 + level.random.nextDouble() * 3.0; // 2-5 blocks away
+
+            double x = playerPos.x + Math.cos(randomAngle) * distance;
+            double z = playerPos.z + Math.sin(randomAngle) * distance;
+
+            Vec3 randomPos = new Vec3(x, playerPos.y, z);
+            Vec3 safePos = findSafePositionNear(level, randomPos);
+
+            if (safePos != null) {
+                return safePos;
+            }
+        }
+
+        // Ultimate fallback - spawn at player position but slightly offset and centered
+        BlockPos playerBlock = BlockPos.containing(playerPos.add(1, 0, 0));
+        return new Vec3(playerBlock.getX() + 0.5, playerPos.y, playerBlock.getZ() + 0.5);
+    }
+
+    private static Vec3 findSafePositionNear(ServerLevel level, Vec3 targetPos) {
+        // Try different Y levels around the target position
+        int baseY = (int) targetPos.y;
+
+        // Check from ground level up to avoid spawning underground
+        int minY = Math.max(level.getMinBuildHeight(), baseY - 5);
+        int maxY = Math.min(level.getMaxBuildHeight() - 2, baseY + 10);
+
+        for (int y = baseY; y <= maxY; y++) {
+            Vec3 testPos = new Vec3(targetPos.x, y, targetPos.z);
+            if (isPositionSafeForSpawning(level, testPos)) {
+                // Center the position on the block to prevent suffocation
+                return centerOnBlock(testPos);
+            }
+        }
+
+        // Try below if above didn't work
+        for (int y = baseY - 1; y >= minY; y--) {
+            Vec3 testPos = new Vec3(targetPos.x, y, targetPos.z);
+            if (isPositionSafeForSpawning(level, testPos)) {
+                // Center the position on the block to prevent suffocation
+                return centerOnBlock(testPos);
+            }
+        }
+
+        return null; // No safe position found
+    }
+
+    private static Vec3 centerOnBlock(Vec3 pos) {
+        // Center the entity on the block by using .5 offset for X and Z
+        BlockPos blockPos = BlockPos.containing(pos);
+        return new Vec3(
+                blockPos.getX() + 0.5, // Center X
+                pos.y,                 // Keep original Y
+                blockPos.getZ() + 0.5  // Center Z
+        );
+    }
+
+    private static boolean isPositionSafeForSpawning(ServerLevel level, Vec3 pos) {
+        BlockPos blockPos = BlockPos.containing(pos);
+        BlockPos belowPos = blockPos.below();
+        BlockPos abovePos = blockPos.above();
+
+        // Check if we're within world bounds
+        if (!level.isInWorldBounds(blockPos) || !level.isInWorldBounds(abovePos)) {
+            return false;
+        }
+
+        var groundState = level.getBlockState(belowPos);
+        var spawnState = level.getBlockState(blockPos);
+        var headState = level.getBlockState(abovePos);
+
+        // Ground must be solid and not dangerous
+        if (!groundState.isSolid() || isDangerousBlock(level, belowPos, groundState)) {
+            return false;
+        }
+
+        // Spawn position must be safe to occupy
+        if (!isSafeToOccupy(level, blockPos, spawnState)) {
+            return false;
+        }
+
+        // Head space must be safe
+        if (!isSafeToOccupy(level, abovePos, headState)) {
+            return false;
+        }
+
+        // Additional safety checks
+        if (isInLava(level, blockPos) || isInLava(level, abovePos)) {
+            return false;
+        }
+
+        if (isNearDangerousBlocks(level, blockPos)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static boolean isSafeToOccupy(ServerLevel level, BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
+        // Air and passable blocks are safe
+        if (state.isAir() || state.canBeReplaced()) {
+            return true;
+        }
+
+        // Check if it's a non-solid block that entities can pass through
+        if (!state.isSolid() && !state.blocksMotion()) {
+            return !isDangerousBlock(level, pos, state);
+        }
+
+        return false;
+    }
+
+    private static boolean isDangerousBlock(ServerLevel level, BlockPos pos, net.minecraft.world.level.block.state.BlockState state) {
+        // Check for lava fluid
+        if (state.getFluidState().is(net.minecraft.tags.FluidTags.LAVA)) {
+            return true;
+        }
+
+        // Use vanilla tags for common dangerous blocks
+        if (state.is(net.minecraft.tags.BlockTags.FIRE)) {
+            return true;
+        }
+
+        if (state.is(net.minecraft.tags.BlockTags.CAMPFIRES)) {
+            return true;
+        }
+
+        // Check for blocks that hurt entities
+        var block = state.getBlock();
+
+        // Magma block
+        if (block == net.minecraft.world.level.block.Blocks.MAGMA_BLOCK) {
+            return true;
+        }
+
+        // Cactus
+        if (block == net.minecraft.world.level.block.Blocks.CACTUS) {
+            return true;
+        }
+
+        // Sweet berry bushes
+        if (block == net.minecraft.world.level.block.Blocks.SWEET_BERRY_BUSH) {
+            return true;
+        }
+
+        // Powder snow
+        if (block == net.minecraft.world.level.block.Blocks.POWDER_SNOW) {
+            return true;
+        }
+
+        // Wither rose
+        if (block == net.minecraft.world.level.block.Blocks.WITHER_ROSE) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static boolean isInLava(ServerLevel level, BlockPos pos) {
+        return level.getFluidState(pos).is(net.minecraft.tags.FluidTags.LAVA);
+    }
+
+    private static boolean isNearDangerousBlocks(ServerLevel level, BlockPos centerPos) {
+        // Check surrounding blocks for dangers
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dy == 0 && dz == 0) continue; // Skip center
+
+                    BlockPos checkPos = centerPos.offset(dx, dy, dz);
+                    var state = level.getBlockState(checkPos);
+
+                    // If there's lava or fire nearby, it's dangerous
+                    if (isInLava(level, checkPos) ||
+                            state.getBlock() == net.minecraft.world.level.block.Blocks.FIRE ||
+                            state.getBlock() == net.minecraft.world.level.block.Blocks.SOUL_FIRE) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     public static void syncFamiliarData(ServerPlayer player, PlayerFamiliarData familiarData) {
@@ -452,16 +661,9 @@ public class FamiliarManager {
 
     private static Vec3 findSafeSpawnPositionWithIndex(ServerPlayer player, ServerLevel level, int positionIndex) {
         double[][] spawnOffsets = {
-                {3.0, 0.0},
-                {-3.0, 0.0},
-                {0.0, 3.0},
-                {0.0, -3.0},
-                {2.1, 2.1},
-                {-2.1, 2.1},
-                {2.1, -2.1},
-                {-2.1, -2.1},
-                {4.0, 0.0},
-                {0.0, 4.0}
+                {3.0, 0.0}, {-3.0, 0.0}, {0.0, 3.0}, {0.0, -3.0},
+                {2.1, 2.1}, {-2.1, 2.1}, {2.1, -2.1}, {-2.1, -2.1},
+                {4.0, 0.0}, {0.0, 4.0}, {1.5, 1.5}, {-1.5, -1.5}
         };
 
         int offsetIndex = positionIndex % spawnOffsets.length;
@@ -477,19 +679,25 @@ public class FamiliarManager {
         Vec3 playerPos = player.getEyePosition();
         Vec3 targetPos = playerPos.add(worldX, 0, worldZ);
 
-        Vec3 spawnPos = Utils.moveToRelativeGroundLevel(level, targetPos, 10);
-
-        for (int attempt = 0; attempt < 3; attempt++) {
-            if (isPositionSafe(level, spawnPos)) {
-                return spawnPos;
-            }
-
-            double randomX = (level.random.nextDouble() - 0.5) * 2;
-            double randomZ = (level.random.nextDouble() - 0.5) * 2;
-            Vec3 alternativePos = targetPos.add(randomX, 0, randomZ);
-            spawnPos = Utils.moveToRelativeGroundLevel(level, alternativePos, 10);
+        // Try the intended position first
+        Vec3 safePos = findSafePositionNear(level, targetPos);
+        if (safePos != null) {
+            return safePos;
         }
 
+        // Try nearby positions with small random offsets
+        for (int attempt = 0; attempt < 8; attempt++) {
+            double randomX = (level.random.nextDouble() - 0.5) * 4; // ±2 blocks
+            double randomZ = (level.random.nextDouble() - 0.5) * 4;
+            Vec3 alternativePos = targetPos.add(randomX, 0, randomZ);
+
+            safePos = findSafePositionNear(level, alternativePos);
+            if (safePos != null) {
+                return safePos;
+            }
+        }
+
+        // Fallback to general safe position finding
         return findSafeSpawnPosition(player, level);
     }
 
