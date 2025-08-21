@@ -52,6 +52,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private boolean canFamiliarsUseGoals = true; // New setting
     private int maxDistance = DEFAULT_MAX_DISTANCE; // Configurable max distance
 
+    private static final int RELEASE_COOLDOWN_TICKS = 100; // 5 seconds cooldown between releases
+    private int lastReleaseTick = 0;
+    private final Map<UUID, Integer> familiarReleaseCooldowns = new HashMap<>(); // Per-familiar cooldown
+
     public AbstractFamiliarStorageBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
         super(type, pos, blockState);
     }
@@ -70,10 +74,21 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             dayNightTransitionCooldown--;
         }
 
-        // Only process night transition if not in cooldown and there's an actual change
+        // Reduce individual familiar release cooldowns
+        familiarReleaseCooldowns.entrySet().removeIf(entry -> {
+            entry.setValue(entry.getValue() - 1);
+            return entry.getValue() <= 0;
+        });
+
+        // Handle night transition (recall familiars)
         if (isNight && !wasNightTime && !storeMode && dayNightTransitionCooldown == 0) {
             recallAllOutsideFamiliars();
             dayNightTransitionCooldown = TRANSITION_COOLDOWN_TICKS;
+        }
+
+        // Handle day transition (add cooldown to prevent immediate release)
+        if (!isNight && wasNightTime && !storeMode && dayNightTransitionCooldown == 0) {
+            dayNightTransitionCooldown = TRANSITION_COOLDOWN_TICKS / 2; // Shorter cooldown for day
         }
 
         // Update the night state only when cooldown is over or when it's clearly day
@@ -92,32 +107,41 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             return;
         }
 
-        //Tries to release familiars from the house
-        if (!storedFamiliars.isEmpty()) {
+        // Release familiars logic (only during day and not in cooldown)
+        if (!storedFamiliars.isEmpty() && dayNightTransitionCooldown == 0) {
             ticksSinceLastRelease++;
 
+            // Add cooldown check to prevent rapid releases
+            boolean canReleaseNow = (level.getGameTime() - lastReleaseTick) >= RELEASE_COOLDOWN_TICKS;
+
             //Random chance release
-            if (level.random.nextInt(RELEASE_CHANCE_PER_TICK) == 0) {
+            if (canReleaseNow && level.random.nextInt(RELEASE_CHANCE_PER_TICK) == 0) {
                 if (releaseRandomFamiliar()) {
                     ticksSinceLastRelease = 0;
+                    lastReleaseTick = (int) level.getGameTime();
                 }
             }
 
             //Forces release of a familiar with a timer
-            if (ticksSinceLastRelease >= MAX_TICKS_WITHOUT_RELEASE) {
+            if (canReleaseNow && ticksSinceLastRelease >= MAX_TICKS_WITHOUT_RELEASE) {
                 if (releaseRandomFamiliar()) {
                     ticksSinceLastRelease = 0;
+                    lastReleaseTick = (int) level.getGameTime();
                 }
             }
 
             //Increased chance to release when many familiars inside
-            if (storedFamiliars.size() >= 3 && level.random.nextInt(80) == 0) {
-                releaseRandomFamiliar();
+            if (canReleaseNow && storedFamiliars.size() >= 3 && level.random.nextInt(80) == 0) {
+                if (releaseRandomFamiliar()) {
+                    lastReleaseTick = (int) level.getGameTime();
+                }
             }
 
             //Additional release chance
-            if (level.random.nextInt(60) == 0) {
-                releaseRandomFamiliar();
+            if (canReleaseNow && level.random.nextInt(60) == 0) {
+                if (releaseRandomFamiliar()) {
+                    lastReleaseTick = (int) level.getGameTime();
+                }
             }
         } else {
             ticksSinceLastRelease = 0;
@@ -212,23 +236,43 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         if (storeMode || storedFamiliars.isEmpty()) return false;
 
+        // Find familiars that can be released (not in individual cooldown)
         List<UUID> availableFamiliars = new ArrayList<>();
         for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
+            UUID familiarId = entry.getKey();
+
+            // Check if this familiar is in cooldown
+            if (familiarReleaseCooldowns.containsKey(familiarId)) {
+                continue;
+            }
+
             if (entry.getValue().canBeReleased()) {
-                availableFamiliars.add(entry.getKey());
+                availableFamiliars.add(familiarId);
             }
         }
 
+        // If no familiars can be released due to cooldowns, try older ones
         if (availableFamiliars.isEmpty()) {
             for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
+                UUID familiarId = entry.getKey();
+
+                if (familiarReleaseCooldowns.containsKey(familiarId)) {
+                    continue;
+                }
+
                 if (entry.getValue().occupationTime >= 100) {
-                    availableFamiliars.add(entry.getKey());
+                    availableFamiliars.add(familiarId);
                 }
             }
         }
 
+        // Last resort - any familiar not in cooldown
         if (availableFamiliars.isEmpty() && !storedFamiliars.isEmpty()) {
-            availableFamiliars.addAll(storedFamiliars.keySet());
+            for (UUID familiarId : storedFamiliars.keySet()) {
+                if (!familiarReleaseCooldowns.containsKey(familiarId)) {
+                    availableFamiliars.add(familiarId);
+                }
+            }
         }
 
         if (!availableFamiliars.isEmpty()) {
@@ -248,6 +292,11 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         // Don't release during transition cooldown
         if (dayNightTransitionCooldown > 0) {
+            return;
+        }
+
+        // Check individual familiar cooldown
+        if (familiarReleaseCooldowns.containsKey(familiarId)) {
             return;
         }
 
@@ -277,11 +326,19 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         float savedHealth = familiarData.nbtData.getFloat("currentHealth");
         familiar.setHealth(Math.min(savedHealth, familiar.getMaxHealth()));
 
-        // Set position near the storage block
+        // Set position near the storage block - make sure it's not too far
         Vec3 spawnPos = findSafeReleasePosition();
         if (spawnPos == null) {
             return;
         }
+
+        // Verify the spawn position is within acceptable range
+        double distanceFromHouse = spawnPos.distanceTo(Vec3.atCenterOf(getBlockPos()));
+        if (distanceFromHouse > maxDistance * 0.8) { // Keep them closer to prevent immediate recall
+            FamiliarsLib.LOGGER.debug("Spawn position too far from house, not releasing familiar {}", familiarId);
+            return;
+        }
+
         familiar.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
         familiar.setYRot(level.random.nextFloat() * 360F);
         familiar.setOldPosAndRot();
@@ -298,6 +355,9 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         // Move from stored to outside
         storedFamiliars.remove(familiarId);
         outsideFamiliars.add(familiarId);
+
+        // Add cooldown to prevent this familiar from being immediately recalled and re-released
+        familiarReleaseCooldowns.put(familiarId, RELEASE_COOLDOWN_TICKS * 2);
 
         setChanged();
         syncToClient();
@@ -423,6 +483,9 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             FamiliarData familiarData = new FamiliarData(nbtData, 0);
             storedFamiliars.put(familiarId, familiarData);
             outsideFamiliars.remove(familiarId);
+
+            // Add cooldown to prevent immediate re-release
+            familiarReleaseCooldowns.put(familiarId, RELEASE_COOLDOWN_TICKS);
 
             // Remove from world
             familiar.remove(Entity.RemovalReason.DISCARDED);
@@ -664,6 +727,20 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             outsideList.add(outsideEntry);
         }
         tag.put("outsideFamiliars", outsideList);
+
+        tag.putInt("lastReleaseTick", lastReleaseTick);
+
+        // Save familiar cooldowns
+        if (!familiarReleaseCooldowns.isEmpty()) {
+            ListTag cooldownList = new ListTag();
+            for (Map.Entry<UUID, Integer> entry : familiarReleaseCooldowns.entrySet()) {
+                CompoundTag cooldownEntry = new CompoundTag();
+                cooldownEntry.putUUID("familiarId", entry.getKey());
+                cooldownEntry.putInt("cooldown", entry.getValue());
+                cooldownList.add(cooldownEntry);
+            }
+            tag.put("familiarCooldowns", cooldownList);
+        }
     }
 
     @Override
@@ -705,6 +782,24 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                 if (outsideEntry.hasUUID("id")) {
                     UUID id = outsideEntry.getUUID("id");
                     outsideFamiliars.add(id);
+                }
+            }
+        }
+
+        lastReleaseTick = tag.getInt("lastReleaseTick");
+
+        // Load familiar cooldowns
+        familiarReleaseCooldowns.clear();
+        if (tag.contains("familiarCooldowns", Tag.TAG_LIST)) {
+            ListTag cooldownList = tag.getList("familiarCooldowns", Tag.TAG_COMPOUND);
+            for (int i = 0; i < cooldownList.size(); i++) {
+                CompoundTag cooldownEntry = cooldownList.getCompound(i);
+                if (cooldownEntry.hasUUID("familiarId")) {
+                    UUID familiarId = cooldownEntry.getUUID("familiarId");
+                    int cooldown = cooldownEntry.getInt("cooldown");
+                    if (cooldown > 0) {
+                        familiarReleaseCooldowns.put(familiarId, cooldown);
+                    }
                 }
             }
         }
