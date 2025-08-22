@@ -223,26 +223,138 @@ public class FamiliarGoals {
 
         @Override
         public void stop() {
-            if (pet.getIsSitting()) {
-                pet.setSitting(false);
-                FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopped sitting when bed goal ended");
+            try {
+                if (pet.getIsSitting()) {
+                    pet.setSitting(false);
+                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopped sitting when bed goal ended");
+                }
+
+                // Move pet one block above the bed when they finish sleeping
+                if (hasSnappedToBed && targetBedPos != null && exactSleepPosition != null) {
+                    // Calculate exit position (one block above the bed)
+                    Vec3 exitPosition = new Vec3(
+                            exactSleepPosition.x,
+                            exactSleepPosition.y + 1.0, // One block above
+                            exactSleepPosition.z
+                    );
+
+                    // Check if the exit position is safe
+                    BlockPos exitBlockPos = BlockPos.containing(exitPosition);
+                    boolean isSafeToExit = pet.level().getBlockState(exitBlockPos).isAir() ||
+                            pet.level().getBlockState(exitBlockPos).canBeReplaced();
+
+                    if (isSafeToExit) {
+                        pet.setPos(exitPosition.x, exitPosition.y, exitPosition.z);
+                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " moved to exit position: " + exitPosition);
+                    } else {
+                        // If one block above isn't safe, try to find a safe position nearby
+                        Vec3 safeExitPosition = findSafeExitPosition(exactSleepPosition);
+                        if (safeExitPosition != null) {
+                            pet.setPos(safeExitPosition.x, safeExitPosition.y, safeExitPosition.z);
+                            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " moved to safe exit position: " + safeExitPosition);
+                        }
+                    }
+                }
+
+                // Release the bed when stopping
+                if (hasClaimedBed && targetBedPos != null) {
+                    releaseBed();
+                }
+
+                resetBedState();
+                pet.getNavigation().stop();
+                cooldownTicks = SEARCH_COOLDOWN;
+
+                // Reset sleep animation variables
+                bedRegenTimer = 0;
+                wasPlayingSleepAnimation = false;
+
+            } catch (Exception e) {
+                FamiliarsLib.LOGGER.error("Error in FindAndUsePetBedGoal.stop(): ", e);
+                // Force cleanup even if there's an error
+                forceCleanup();
+            }
+        }
+
+        // Add this helper method to the FindAndUsePetBedGoal class
+        private Vec3 findSafeExitPosition(Vec3 bedPosition) {
+            // Try positions around the bed if directly above isn't safe
+            double[][] offsets = {
+                    {0, 1, 0},    // Directly above (already tried, but include for completeness)
+                    {1, 1, 0},    // One block to the side and up
+                    {-1, 1, 0},   // Other side and up
+                    {0, 1, 1},    // Forward and up
+                    {0, 1, -1},   // Backward and up
+                    {1, 0, 0},    // Just to the side (same level)
+                    {-1, 0, 0},   // Other side (same level)
+                    {0, 0, 1},    // Forward (same level)
+                    {0, 0, -1},   // Backward (same level)
+                    {0, 2, 0}     // Two blocks above
+            };
+
+            for (double[] offset : offsets) {
+                Vec3 testPosition = bedPosition.add(offset[0], offset[1], offset[2]);
+                BlockPos testBlockPos = BlockPos.containing(testPosition);
+
+                // Check if position is safe (air and not colliding)
+                boolean isAir = pet.level().getBlockState(testBlockPos).isAir() ||
+                        pet.level().getBlockState(testBlockPos).canBeReplaced();
+                boolean hasGroundNearby = hasGroundNearby(testBlockPos);
+
+                if (isAir && hasGroundNearby) {
+                    return testPosition;
+                }
             }
 
-            // Release the bed when stopping
-            if (hasClaimedBed && targetBedPos != null) {
-                releaseBed();
-            }
+            return null; // No safe position found
+        }
 
+        // Add this helper method to check if there's ground nearby
+        private boolean hasGroundNearby(BlockPos pos) {
+            // Check if there's solid ground within 3 blocks below
+            for (int y = 0; y <= 3; y++) {
+                BlockPos groundCheck = pos.offset(0, -y, 0);
+                if (pet.level().getBlockState(groundCheck).isSolid()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Add helper methods for better state management
+        private void resetBedState() {
             targetBedPos = null;
             exactSleepPosition = null;
             hasSnappedToBed = false;
             hasClaimedBed = false;
-            pet.getNavigation().stop();
-            cooldownTicks = SEARCH_COOLDOWN;
+        }
 
-            // Reset sleep animation variables
-            bedRegenTimer = 0;
-            wasPlayingSleepAnimation = false;
+        private void forceCleanup() {
+            try {
+                if (targetBedPos != null) {
+                    BlockEntity be = pet.level().getBlockEntity(targetBedPos);
+                    if (be instanceof AbstractFamiliarBedBlockEntity petBed && petBed.isBedTaken()) {
+                        petBed.setBedTaken(false);
+                        FamiliarsLib.LOGGER.debug("Force-released bed at {} for pet {}", targetBedPos, pet.getUUID());
+                    }
+                }
+            } catch (Exception e) {
+                FamiliarsLib.LOGGER.error("Error in force cleanup: ", e);
+            } finally {
+                resetBedState();
+            }
+        }
+
+        public BlockPos getTargetBedPos() {
+            return targetBedPos;
+        }
+
+        public boolean hasClaimedBed() {
+            return hasClaimedBed;
+        }
+
+        public boolean isActuallyRunning() {
+            return targetBedPos != null && hasClaimedBed;
         }
 
         private BlockPos findAvailableBed() {

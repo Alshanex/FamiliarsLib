@@ -1,10 +1,12 @@
 package net.alshanex.familiarslib.block.entity;
 
+import net.alshanex.familiarslib.util.familiars.BedCleanupHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -15,10 +17,29 @@ import javax.annotation.Nonnull;
 
 public abstract class AbstractFamiliarBedBlockEntity extends BlockEntity {
     protected boolean isBedTaken;
+    private int safetyCheckTimer = 0;
+    private static final int SAFETY_CHECK_INTERVAL = 100;
 
     public AbstractFamiliarBedBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
         super(type, pos, blockState);
         this.isBedTaken = false;
+    }
+
+    public void tick() {
+        if (level == null || level.isClientSide) {
+            return;
+        }
+
+        safetyCheckTimer++;
+
+        // Perform safety check every 5 seconds
+        if (safetyCheckTimer >= SAFETY_CHECK_INTERVAL) {
+            safetyCheckTimer = 0;
+
+            if (isBedTaken()) {
+                BedCleanupHelper.performSafetyCheck(this, worldPosition, (ServerLevel) level);
+            }
+        }
     }
 
     public boolean isBedTaken() {

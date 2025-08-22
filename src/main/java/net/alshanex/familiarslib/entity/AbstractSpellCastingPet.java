@@ -290,6 +290,10 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return false;
     }
 
+    public net.minecraft.world.entity.ai.goal.GoalSelector getGoalSelector() {
+        return this.goalSelector;
+    }
+
     //Getters and setters for the familiars data, like consumables, impostor mark, house mark, etc.
     public void setEnragedStacks(Integer level) {
         FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(this);
