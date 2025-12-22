@@ -460,7 +460,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
     private boolean isDaytime() {
         long time = level.getDayTime() % 24000;
-        return time >= 1000 && time <= 12000;
+        return (time >= 1000 && time <= 12000) && !level.isRaining();
     }
 
     // Method to manually recall a familiar
