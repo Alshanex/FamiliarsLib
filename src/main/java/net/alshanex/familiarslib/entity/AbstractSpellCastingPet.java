@@ -412,6 +412,14 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
+    public boolean hasAtteptedConsumableMigration(){
+        return this.hasAttemptedConsumableMigration;
+    }
+
+    public void setHasAttemptedConsumableMigration(boolean bool){
+        this.hasAttemptedConsumableMigration = bool;
+    }
+
     //Goals set to familiars inside storage blocks
     private void addHouseGoals() {
         if (housePosition == null) return;
@@ -540,7 +548,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     @Override
     public void readAdditionalSaveData(CompoundTag pCompound) {
-        super.readAdditionalSaveData(pCompound);
+        super.readAdditionalSaveData(pCompound); // 1. Loads vanilla "Health" here
+
+        // Standard Spell Data Loading
         var syncedSpellData = new SyncedSpellData(this);
         syncedSpellData.loadNBTData(pCompound, level().registryAccess());
         if (syncedSpellData.isCasting()) {
@@ -558,102 +568,60 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             }
         }
 
-        if (pCompound.isEmpty() || (!pCompound.contains("currentHealth") && !pCompound.contains("ownerUUID"))) {
-            FamiliarsLib.LOGGER.debug("Command-spawned familiar {} detected, skipping health restoration", getUUID());
-            hasInitializedHealth = false; // Will be handled in finalizeSpawn
-            return;
-        }
-
-        hasInitializedHealth = pCompound.getBoolean("hasInitializedHealth");
-
-        // Legacy migration variables
-        int legacyEnragedStacks = 0;
-        int legacyArmorStacks = 0;
-        int legacyHealthStacks = 0;
-        boolean legacyCanBlock = false;
-
-        if (pCompound.contains("enragedStacks")) {
-            legacyEnragedStacks = pCompound.getInt("enragedStacks");
-        }
-        if (pCompound.contains("isBlocking")) {
-            legacyCanBlock = pCompound.getBoolean("isBlocking");
-        }
-        if (pCompound.contains("armorStacks")) {
-            legacyArmorStacks = pCompound.getInt("armorStacks");
-        }
-        if (pCompound.contains("healthStacks")) {
-            legacyHealthStacks = pCompound.getInt("healthStacks");
-        }
-
-        if (pCompound.contains("hasAttemptedConsumableMigration")) {
-            hasAttemptedConsumableMigration = pCompound.getBoolean("hasAttemptedConsumableMigration");
-        }
-
-        // Store the saved health for later restoration
-        float savedHealth = pCompound.getFloat("currentHealth");
-
-        FamiliarsLib.LOGGER.debug("Loading health for familiar {}: saved health = {}", getUUID(), savedHealth);
-
-        // Load consumable data
+        // Load New System Data
         FamiliarConsumableIntegration.loadConsumableData(this, pCompound);
 
-        // Legacy migration (only if needed and not already attempted)
-        if (!level().isClientSide && !hasAttemptedConsumableMigration &&
-                (legacyHealthStacks > 0 || legacyArmorStacks > 0 || legacyEnragedStacks > 0 || legacyCanBlock)) {
-
-            FamiliarsLib.LOGGER.debug("Migrating legacy consumable data for familiar {}: health={}, armor={}, enraged={}, blocking={}",
-                    getUUID(), legacyHealthStacks, legacyArmorStacks, legacyEnragedStacks, legacyCanBlock);
-
-            FamiliarConsumableIntegration.migrateLegacyData(this, legacyHealthStacks, legacyArmorStacks, legacyEnragedStacks, legacyCanBlock);
-            hasAttemptedConsumableMigration = true;
-        }
-
-        // Apply modifiers and restore health if we're on the server
-        if (!level().isClientSide) {
-            // Apply consumable modifiers to get the correct max health
-            FamiliarConsumableIntegration.applyConsumableModifiers(this);
-
-            // Restore the saved health
-            float newMaxHealth = getMaxHealth();
-            float restoredHealth = Math.min(savedHealth, newMaxHealth);
-
-            FamiliarsLib.LOGGER.debug("Immediately restoring health for familiar {}: saved={}, newMax={}, restored={}",
-                    getUUID(), savedHealth, newMaxHealth, restoredHealth);
-
-            setHealth(restoredHealth);
-            hasInitializedHealth = true;
-
-            FamiliarsLib.LOGGER.debug("Health restoration complete for familiar {}: {}/{} ({}%)",
-                    getUUID(), getHealth(), getMaxHealth(), (getHealth()/getMaxHealth()*100));
+        if (pCompound.isEmpty() || (!pCompound.contains("currentHealth") && !pCompound.contains("ownerUUID") && !pCompound.contains("Health"))) {
+            // This is a fresh command spawn or empty data
+            hasInitializedHealth = false;
         } else {
-            // On client side, just store the health for later
-            getPersistentData().putFloat("pendingHealth", savedHealth);
-        }
+            hasInitializedHealth = pCompound.getBoolean("hasInitializedHealth");
 
-        if(pCompound.contains("Sitting")){
-            setSitting(pCompound.getBoolean("Sitting"));
-            if(pCompound.getBoolean("Sitting")){
-                movementDisabled = true;
+            float savedHealth;
+            // Check if we have the NEW custom tag
+            if (pCompound.contains("currentHealth")) {
+                savedHealth = pCompound.getFloat("currentHealth");
             } else {
-                movementDisabled = false;
+                // MIGRATION FALLBACK: Use the vanilla health loaded by super.readAdditionalSaveData()
+                savedHealth = this.getHealth();
+
+                // Safety net: If they were dead or glitched to 0, revive them to Max during migration
+                if (savedHealth <= 0) {
+                    savedHealth = getMaxHealth();
+                }
+            }
+
+            FamiliarsLib.LOGGER.debug("Loading health for familiar {}: saved health = {}", getUUID(), savedHealth);
+
+            if (!level().isClientSide) {
+                // Recalculate max health based on the migrated stacks
+                FamiliarConsumableIntegration.applyConsumableModifiers(this);
+
+                float newMaxHealth = getMaxHealth();
+                float restoredHealth = Math.min(savedHealth, newMaxHealth);
+
+                setHealth(restoredHealth);
+                hasInitializedHealth = true;
+
+                FamiliarsLib.LOGGER.debug("Restored health: {}/{}", restoredHealth, newMaxHealth);
+            } else {
+                getPersistentData().putFloat("pendingHealth", savedHealth);
             }
         }
 
-        if(pCompound.contains("isImpostor")){
-            setIsImpostor(pCompound.getBoolean("isImpostor"));
+        // Remaining Flags
+        if(pCompound.contains("Sitting")){
+            setSitting(pCompound.getBoolean("Sitting"));
+            movementDisabled = pCompound.getBoolean("Sitting");
         }
 
-        if(pCompound.contains("hasTotem")){
-            setTotem(pCompound.getBoolean("hasTotem"));
-        }
+        if(pCompound.contains("isImpostor")) setIsImpostor(pCompound.getBoolean("isImpostor"));
+        if(pCompound.contains("hasTotem")) setTotem(pCompound.getBoolean("hasTotem"));
 
         lastTrinketState = pCompound.getBoolean("lastTrinketState");
         pendingGoalUpdate = pCompound.getBoolean("pendingGoalUpdate");
         pendingTrinketState = pCompound.getBoolean("pendingTrinketState");
-
-        if (pCompound.contains("hasAttemptedMigration")) {
-            hasAttemptedMigration = pCompound.getBoolean("hasAttemptedMigration");
-        }
+        if (pCompound.contains("hasAttemptedMigration")) hasAttemptedMigration = pCompound.getBoolean("hasAttemptedMigration");
 
         if (pCompound.contains("isInHouse")) {
             boolean inHouse = pCompound.getBoolean("isInHouse");
