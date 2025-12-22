@@ -59,6 +59,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.LookControl;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
@@ -170,9 +171,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         this.goalSelector.addGoal(1, new FloatGoal(this));
         this.goalSelector.addGoal(6, new FamiliarGoals.TeleportToOwnerGoal(this, this::getSummoner, 20F));
         this.goalSelector.addGoal(7, new FamiliarGoals.MovementAwareFollowOwnerGoal(this, this::getSummoner, 1.2f, 10, 3, false, Float.MAX_VALUE));
-        this.goalSelector.addGoal(8, new FamiliarGoals.MovementAwareLookAtPlayerGoal(this, Player.class, 8.0F));
-        this.goalSelector.addGoal(9, new FamiliarGoals.MovementAwareRandomLookAroundGoal(this));
-        this.goalSelector.addGoal(5, new FamiliarGoals.FindAndUsePetBedGoal(this, 10.0));
+        this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8.0F));
+        //this.goalSelector.addGoal(9, new FamiliarGoals.MovementAwareRandomLookAroundGoal(this));
+        this.goalSelector.addGoal(10, new FamiliarGoals.FindAndUsePetBedGoal(this, 10.0));
 
         this.targetSelector.addGoal(1, new GenericOwnerHurtByTargetGoal(this, this::getSummoner));
         this.targetSelector.addGoal(2, new GenericOwnerHurtTargetGoal(this, this::getSummoner));
@@ -967,7 +968,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
         if (this.random.nextInt(10) <= 3) {
             FamiliarHelper.spawnTamingParticles(true, this);
-            this.navigation.stop();
             this.setTarget(null);
             this.setOwnerUUID(player.getUUID());
 

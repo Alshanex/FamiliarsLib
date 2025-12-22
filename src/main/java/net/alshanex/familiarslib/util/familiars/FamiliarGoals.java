@@ -560,6 +560,7 @@ public class FamiliarGoals {
         private LivingEntity owner;
         private Supplier<LivingEntity> ownerGetter;
         private float teleportDistance;
+        private int teleportDelay;
 
         private Vec3 lastOwnerPosition = Vec3.ZERO;
         private int ticksSinceLastCheck = 0;
@@ -573,6 +574,11 @@ public class FamiliarGoals {
             this.ownerGetter = ownerGetter;
             this.teleportDistance = teleportDistance;
             this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+        }
+
+        @Override
+        public void start() {
+            this.teleportDelay = 0;
         }
 
         @Override
@@ -606,6 +612,10 @@ public class FamiliarGoals {
                 return false;
             }
 
+            if (this.teleportDelay > 0) {
+                return false;
+            }
+
             if (hasOwnerTeleportedInstantly(livingentity) || shouldTryTeleportToOwner()) {
                 return true;
             }
@@ -626,6 +636,7 @@ public class FamiliarGoals {
                 this.mob.getLookControl().setLookAt(this.owner, 10.0F, (float) this.mob.getMaxHeadXRot());
             } else {
                 if (!this.tryToTeleportToOwnerSafely()) {
+                    this.teleportDelay = 10;
                     this.mob.getLookControl().setLookAt(this.owner, 10.0F, (float) this.mob.getMaxHeadXRot());
                 }
             }
