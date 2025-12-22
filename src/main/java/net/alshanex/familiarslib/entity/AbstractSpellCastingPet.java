@@ -23,6 +23,7 @@ import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.registry.ComponentRegistry;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
 import net.alshanex.familiarslib.util.CylinderParticleManager;
@@ -850,7 +851,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 }
 
                 if (isFood(itemstack) && this.getHealth() < this.getMaxHealth()) {
-                    this.heal(2.0F * 2.0f);
+                    float healAmount = 4f;
+                    if(itemstack.has(ComponentRegistry.FAMILIAR_FOOD)){
+                        healAmount = itemstack.get(ComponentRegistry.FAMILIAR_FOOD).healing();
+                    }
+                    this.heal(healAmount);
                     itemstack.consume(1, player);
                     FamiliarHelper.spawnEatingParticles(this);
                     this.gameEvent(GameEvent.EAT);
@@ -898,7 +903,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                         return InteractionResult.sidedSuccess(this.level().isClientSide());
                     }
                     if(isFood(itemstack) && this.getHealth() < this.getMaxHealth()){
-                        this.heal(2.0F * 2.0f);
+                        float healAmount = 4f;
+                        if(itemstack.has(ComponentRegistry.FAMILIAR_FOOD)){
+                            healAmount = itemstack.get(ComponentRegistry.FAMILIAR_FOOD).healing();
+                        }
+                        this.heal(healAmount);
                         itemstack.consume(1, player);
                         FamiliarHelper.spawnEatingParticles(this);
                         this.gameEvent(GameEvent.EAT);
@@ -950,7 +959,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     //Placeholder food, can be changed in the familiar's class
     protected boolean isFood(ItemStack item){
-        return item.is(Items.APPLE);
+        return item.has(ComponentRegistry.FAMILIAR_FOOD);
     }
 
     //Taming logic
