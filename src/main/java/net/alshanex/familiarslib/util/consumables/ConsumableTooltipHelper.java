@@ -19,31 +19,38 @@ public class ConsumableTooltipHelper {
      * Adds consumable tooltip information to an item stack if it has the consumable component
      */
     public static void addConsumableTooltip(ItemStack stack, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
-        FamiliarConsumableComponent component = stack.get(ComponentRegistry.FAMILIAR_CONSUMABLE.get());
-        if (component == null) {
-            return;
+        FamiliarConsumableComponent consumableComponent = stack.get(ComponentRegistry.FAMILIAR_CONSUMABLE.get());
+        if (consumableComponent != null) {
+            // Add consumable information to tooltip
+            String typeKey = getTypeTranslationKey(consumableComponent.type());
+            int bonus = consumableComponent.getBonus();
+            int limit = consumableComponent.getLimit();
+            if(consumableComponent.type() == ConsumableType.SPELL_LEVEL){
+                limit+=1;
+            }
+            String unit = getUnitSuffix(consumableComponent.type());
+
+            tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.type",
+                    Component.translatable(typeKey)).withStyle(ChatFormatting.GOLD));
+
+            tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.bonus",
+                    bonus + unit).withStyle(ChatFormatting.GREEN));
+
+            tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.limit",
+                    limit + unit).withStyle(ChatFormatting.BLUE));
+
+            tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.tier",
+                    consumableComponent.tier()).withStyle(ChatFormatting.YELLOW));
         }
 
-        // Add consumable information to tooltip
-        String typeKey = getTypeTranslationKey(component.type());
-        int bonus = component.getBonus();
-        int limit = component.getLimit();
-        if(component.type() == ConsumableType.SPELL_LEVEL){
-            limit+=1;
+        FamiliarFoodComponent foodComponent = stack.get(ComponentRegistry.FAMILIAR_FOOD.get());
+
+        if(foodComponent != null){
+            int healingValue = foodComponent.healing();
+            tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.food",
+                    healingValue + " hearts").withStyle(ChatFormatting.RED));
         }
-        String unit = getUnitSuffix(component.type());
 
-        tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.type",
-                Component.translatable(typeKey)).withStyle(ChatFormatting.GOLD));
-
-        tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.bonus",
-                bonus + unit).withStyle(ChatFormatting.GREEN));
-
-        tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.limit",
-                limit + unit).withStyle(ChatFormatting.BLUE));
-
-        tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.tier",
-                component.tier()).withStyle(ChatFormatting.YELLOW));
     }
 
     private static String getTypeTranslationKey(ConsumableType type) {

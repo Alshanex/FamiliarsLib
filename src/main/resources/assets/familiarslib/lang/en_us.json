@@ -59,6 +59,7 @@
   "item.familiarslib.consumable.tooltip.bonus": "Bonus: %s",
   "item.familiarslib.consumable.tooltip.limit": "Tier Limit: %s",
   "item.familiarslib.consumable.tooltip.tier": "Tier: %d",
+  "item.familiarslib.consumable.tooltip.food": "Food Value: %d",
 
   "consumable.type.armor": "Armor",
   "consumable.type.health": "Health",

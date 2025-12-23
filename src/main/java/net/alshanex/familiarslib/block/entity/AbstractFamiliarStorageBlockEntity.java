@@ -377,15 +377,18 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         for (UUID familiarId : outsideFamiliarsCopy) {
             Entity entity = serverLevel.getEntity(familiarId);
+
             if (entity == null) {
-                familiarsToRemove.add(familiarId);
-                FamiliarsLib.LOGGER.debug("Familiar {} no longer exists in world, removed from tracking", familiarId);
-            } else if (entity instanceof AbstractSpellCastingPet familiar) {
+                continue;
+            }
+
+            if (entity instanceof AbstractSpellCastingPet familiar) {
                 if (!familiar.isAlive() || familiar.isRemoved()) {
                     familiarsToRemove.add(familiarId);
                     FamiliarsLib.LOGGER.debug("Familiar {} is dead or removed, cleaning up", familiarId);
                 }
             } else {
+                // If the UUID points to something that isn't a familiar (e.g. UUID conflict or weird state), remove it.
                 familiarsToRemove.add(familiarId);
                 FamiliarsLib.LOGGER.debug("Entity {} is not a familiar, removing from tracking", familiarId);
             }
