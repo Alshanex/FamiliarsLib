@@ -643,6 +643,7 @@ public class FamiliarGoals {
         }
 
         private boolean hasOwnerTeleportedInstantly(LivingEntity owner) {
+            if(this.mob.getIsInHouse()) return false;
             ticksSinceLastCheck++;
 
             if (ticksSinceLastCheck >= CHECK_INTERVAL) {
@@ -749,6 +750,7 @@ public class FamiliarGoals {
         public boolean shouldTryTeleportToOwner() {
             LivingEntity livingentity = this.ownerGetter.get();
             if (livingentity == null) return false;
+            if(this.mob.getIsInHouse()) return false;
 
             return mob.distanceToSqr(livingentity) >= teleportDistance * teleportDistance;
         }
