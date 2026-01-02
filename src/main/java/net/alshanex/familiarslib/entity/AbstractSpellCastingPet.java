@@ -197,11 +197,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected abstract FamiliarGoals.FamiliarWizardAttackGoal createAttackGoal(float min, float max);
 
     protected float[] getOriginalQualityValues() {
-        return new float[]{getConsumableSpellLevel(), getConsumableSpellLevel()};
+        return new float[]{0.1f, 0.3f};
     }
 
     protected float[] getTrinketQualityValues() {
-        return new float[]{getConsumableSpellLevel() + 0.1f, getConsumableSpellLevel() + 0.2f};
+        return new float[]{0.4f, 0.6f};
     }
 
     protected void initializeAttackGoal(int goalPriority) {
@@ -341,11 +341,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     public Boolean getIsBlocking() {
         return FamiliarConsumableIntegration.canFamiliarBlock(this);
-    }
-
-    public float getConsumableSpellLevel() {
-        float currentValue = FamiliarConsumableIntegration.getCurrentBonus(this, FamiliarConsumableSystem.ConsumableType.SPELL_LEVEL) / 10.0f;
-        return currentValue + 0.1f;
     }
 
     public void setTotem(Boolean level){
@@ -1057,10 +1052,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
 
         return result;
-    }
-
-    public float getEffectiveSpellLevel(float baseSpellLevel) {
-        return FamiliarConsumableIntegration.getEffectiveSpellLevel(this, baseSpellLevel);
     }
 
     public int getConsumableBonus(FamiliarConsumableSystem.ConsumableType type) {

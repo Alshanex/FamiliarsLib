@@ -178,17 +178,10 @@ public class FamiliarConsumableIntegration {
             // Show success message with current progress
             String unit = getUnitSuffix(component.type());
             if(player instanceof ServerPlayer serverPlayer){
-                if(component.type() == ConsumableType.SPELL_LEVEL){
-                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                            Component.translatable("message.familiarslib.consumable.success",
-                                    Component.translatable(getTypeTranslationKey(component.type())),
-                                    (newValue + 1) + unit).withStyle(ChatFormatting.GREEN)));
-                } else {
-                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
-                            Component.translatable("message.familiarslib.consumable.success",
-                                    Component.translatable(getTypeTranslationKey(component.type())),
-                                    newValue + unit).withStyle(ChatFormatting.GREEN)));
-                }
+                serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                        Component.translatable("message.familiarslib.consumable.success",
+                                Component.translatable(getTypeTranslationKey(component.type())),
+                                newValue + unit).withStyle(ChatFormatting.GREEN)));
             }
 
             // Trigger eating particles and sound
@@ -221,7 +214,6 @@ public class FamiliarConsumableIntegration {
             case HEALTH -> "consumable.type.health";
             case SPELL_POWER -> "consumable.type.spell_power";
             case SPELL_RESIST -> "consumable.type.spell_resist";
-            case SPELL_LEVEL -> "consumable.type.spell_level";
             case ENRAGED -> "consumable.type.enraged";
             case BLOCKING -> "consumable.type.blocking";
         };
@@ -233,7 +225,6 @@ public class FamiliarConsumableIntegration {
             case HEALTH -> "%";
             case SPELL_POWER -> "%";
             case SPELL_RESIST -> "%";
-            case SPELL_LEVEL -> "";
             case ENRAGED -> " stacks";
             case BLOCKING -> "";
         };
@@ -264,15 +255,6 @@ public class FamiliarConsumableIntegration {
         saveToEntityNBT(familiar, data);
         FamiliarsLib.LOGGER.debug("Loading consumable data from NBT for familiar {}: {}",
                 familiarId, data.toString());
-    }
-
-    /**
-     * Gets the effective spell level for spell casting, including consumable bonuses
-     */
-    public static float getEffectiveSpellLevel(AbstractSpellCastingPet familiar, float baseSpellLevel) {
-        FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
-        float bonus = data.getValue(ConsumableType.SPELL_LEVEL) / 10.0f;
-        return Math.min(baseSpellLevel + bonus, 0.8f);
     }
 
     /**

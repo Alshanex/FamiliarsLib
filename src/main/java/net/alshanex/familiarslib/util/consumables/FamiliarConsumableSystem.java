@@ -29,10 +29,9 @@ public class FamiliarConsumableSystem {
 
     public enum ConsumableType implements StringRepresentable {
         ARMOR(0, new int[]{1, 2, 3}, new int[]{10, 15, 20}, "armor"),
-        HEALTH(1, new int[]{5, 10, 15}, new int[]{50, 100, 150}, "health"),
+        HEALTH(1, new int[]{5, 10, 25}, new int[]{50, 100, 150}, "health"),
         SPELL_POWER(2, new int[]{1, 3, 5}, new int[]{15, 30, 45}, "spell_power"),
         SPELL_RESIST(3, new int[]{1, 3, 5}, new int[]{15, 30, 45}, "spell_resist"),
-        SPELL_LEVEL(4, new int[]{1, 1, 2}, new int[]{3, 5, 7}, "spell_level"), // Values * 10 for integer storage
         ENRAGED(5, new int[]{1}, new int[]{10}, "enraged"), // Only tier 1, +1 per use, max 10
         BLOCKING(6, new int[]{1}, new int[]{1}, "blocking"); // Only tier 1, boolean toggle
 
@@ -119,7 +118,6 @@ public class FamiliarConsumableSystem {
                 case HEALTH -> health & 0xFF;
                 case SPELL_POWER -> spellPower & 0xFF;
                 case SPELL_RESIST -> spellResist & 0xFF;
-                case SPELL_LEVEL -> spellLevel & 0xFF;
                 case ENRAGED -> enraged & 0xFF;
                 case BLOCKING -> blocking & 0xFF;
             };
@@ -132,7 +130,6 @@ public class FamiliarConsumableSystem {
                 case HEALTH -> health = (byte)value;
                 case SPELL_POWER -> spellPower = (byte)value;
                 case SPELL_RESIST -> spellResist = (byte)value;
-                case SPELL_LEVEL -> spellLevel = (byte)value;
                 case ENRAGED -> enraged = (byte)value;
                 case BLOCKING -> blocking = (byte)value;
             }

@@ -25,9 +25,6 @@ public class ConsumableTooltipHelper {
             String typeKey = getTypeTranslationKey(consumableComponent.type());
             int bonus = consumableComponent.getBonus();
             int limit = consumableComponent.getLimit();
-            if(consumableComponent.type() == ConsumableType.SPELL_LEVEL){
-                limit+=1;
-            }
             String unit = getUnitSuffix(consumableComponent.type());
 
             tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.type",
@@ -59,7 +56,6 @@ public class ConsumableTooltipHelper {
             case HEALTH -> "consumable.type.health";
             case SPELL_POWER -> "consumable.type.spell_power";
             case SPELL_RESIST -> "consumable.type.spell_resist";
-            case SPELL_LEVEL -> "consumable.type.spell_level";
             case ENRAGED -> "consumable.type.enraged";
             case BLOCKING -> "consumable.type.blocking";
         };
@@ -71,7 +67,6 @@ public class ConsumableTooltipHelper {
             case HEALTH -> "%";
             case SPELL_POWER -> "%";
             case SPELL_RESIST -> "%";
-            case SPELL_LEVEL -> "";
             case ENRAGED -> " stacks";
             case BLOCKING -> "";
         };
