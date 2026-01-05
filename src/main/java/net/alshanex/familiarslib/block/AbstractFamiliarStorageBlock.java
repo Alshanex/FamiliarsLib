@@ -5,6 +5,7 @@ import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity
 import net.alshanex.familiarslib.network.OpenFamiliarStoragePacket;
 import net.alshanex.familiarslib.network.UpdateFamiliarStoragePacket;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
+import net.alshanex.familiarslib.util.CurioUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
@@ -30,6 +31,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock implements EntityBlock {
@@ -83,6 +85,9 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
                 PacketDistributor.sendToPlayer(serverPlayer, new OpenFamiliarStoragePacket(pos));
                 return InteractionResult.SUCCESS;
             }
+        }
+        if(player instanceof ServerPlayer serverPlayer && CurioUtils.isWearingMultiSelectionCurio(serverPlayer)){
+            CurioUtils.updateSelectedFamiliarsInEquipped(serverPlayer, Set.of());
         }
         return InteractionResult.sidedSuccess(level.isClientSide);
     }

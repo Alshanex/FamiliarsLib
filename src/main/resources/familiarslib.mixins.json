@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.alshanex.familiarslib.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "familiarslib.refmap.json",
+  "mixins": [
+    "ItemTransformMixin"
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

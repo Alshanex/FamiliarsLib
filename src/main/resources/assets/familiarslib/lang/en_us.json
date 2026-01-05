@@ -20,6 +20,20 @@
   "ui.familiarslib.familiar_wander_screen.max_distance": "Max Distance: %s blocks",
   "ui.familiarslib.familiar_storage_screen.storage_familiars": "Stored Familiars (%d/%d)",
   "ui.familiarslib.familiar_storage_screen.player_familiars": "Player Familiars",
+  "ui.familiarslib.familiar_selection_screen": "Familiar Selection",
+  "ui.familiarslib.release_familiar": "Release",
+  "ui.familiarslib.confirm_release": "Confirm Release",
+  "ui.familiarslib.confirm_release_message": "Are you sure you want to release %s?",
+  "ui.familiarslib.familiar_summoned": "★ SUMMONED ★",
+
+  "screen.familiarslib.multi_selection_curio": "Familiar Selection",
+  "screen.familiarslib.multi_selection_curio.selected_count": "Selected: %d/%d",
+  "screen.familiarslib.multi_selection_curio.instructions": "Click to select/deselect Familiars (Max: 10)",
+
+  "tooltip.familiarslib.multi_selection_item.line1": "Allows you to summon/unsummon multiple Familiars at once",
+  "tooltip.familiarslib.multi_selection_item.selected": "Selected: %d Familiars",
+  "tooltip.familiarslib.multi_selection_item.none_selected": "No Familiars selected",
+  "tooltip.familiarslib.totem": "A small totem which can be used on a familiar to bind them to it",
 
   "message.familiarslib.consumable.success": "Enhanced %s to %s!",
   "message.familiarslib.consumable.max_reached": "This Essence cannot increase %s any further!",
@@ -41,6 +55,12 @@
   "message.familiarslib.familiar_not_in_storage": "Familiar not found in storage",
   "message.familiarslib.retrieval_failed": "Failed to retrieve familiar",
   "message.familiarslib.storage_block_chunk_limit": "These houses are too close together!",
+  "message.familiarslib.no_familiars_selected": "No familiars selected!",
+  "message.familiarslib.familiars_toggled": "Familiars summoned/desummoned!",
+
+  "key.familiarslib.summoning_keys": "FamiliarLib",
+  "key.familiarslib.summoning_key": "Summon/Unsummon Familiar",
+  "key.familiarslib.screen_key": "Open Familiar Selection Screen",
 
   "item.familiarslib.familiar_spellbook.desc": "When equipped, this spellbook connects you with your tamed familiars, allowing you to share your magic attributes with them.",
   "item.familiarslib.consumable.tooltip.type": "Type: %s",
@@ -55,5 +75,8 @@
   "consumable.type.spell_resist": "Spell Resistance",
   "consumable.type.spell_level": "Spell Level",
   "consumable.type.enraged": "Rage",
-  "consumable.type.blocking": "Blocking"
+  "consumable.type.blocking": "Blocking",
+
+  "curios.identifier.familiar_trinket": "Familiar Trinket",
+  "curios.modifiers.familiar_trinket": "When equipped as Familiar Trinket:"
 }

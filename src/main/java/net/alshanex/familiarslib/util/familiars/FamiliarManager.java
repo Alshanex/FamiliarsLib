@@ -1,15 +1,14 @@
 package net.alshanex.familiarslib.util.familiars;
 
-import io.redspace.ironsspellbooks.api.util.Utils;
 import net.alshanex.familiarslib.FamiliarsLib;
-import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
+import net.alshanex.familiarslib.item.AbstractMultiSelectionCurio;
 import net.alshanex.familiarslib.network.*;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
-import net.alshanex.familiarslib.screen.FamiliarStorageScreen;
-import net.alshanex.familiarslib.screen.FamiliarWanderScreen;
+import net.alshanex.familiarslib.screen.*;
+import net.alshanex.familiarslib.util.CurioUtils;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.ChatFormatting;
@@ -22,24 +21,19 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.ai.attributes.AttributeInstance;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-import java.lang.reflect.Method;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Helper class for the entire familiars mod
@@ -878,15 +872,7 @@ public class FamiliarManager {
 
             boolean success = storageEntity.storeFamiliar(familiarId, familiarNBT, player);
             if (success) {
-                if(FamiliarsLib.isModLoaded("alshanex_familiars")){
-                    try {
-                        Class<?> clazz = Class.forName("net.alshanex.alshanex_familiars.util.familiars.AlshanexFamiliarManager");
-                        Method method = clazz.getMethod("cleanFamiliarFromPandoraBox", ServerPlayer.class, UUID.class);
-                        method.invoke(null, player, familiarId);
-                    } catch (Exception e) {
-                        FamiliarsLib.LOGGER.error("Error calling cleanFamiliarFromPandoraBox: ", e);
-                    }
-                }
+                CurioUtils.removeFamiliarFromEquippedMultiSelectionCurio(player, familiarId);
                 String familiarName = getFamiliarName(familiarNBT);
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.familiar_stored", familiarName).withStyle(ChatFormatting.GREEN)));
@@ -1101,5 +1087,376 @@ public class FamiliarManager {
         Map<UUID, CompoundTag> storedData = storageEntity.getStoredFamiliars();
         PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(blockPos, storedData,
                 storageEntity.isStoreMode(), canFamiliarsUseGoals, maxDistance));
+    }
+
+    public static void requestFamiliarSelectionScreen(ServerPlayer serverPlayer){
+        FamiliarManager.updateSummonedFamiliarsData(serverPlayer);
+
+        PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+
+        if (!familiarData.isEmpty()) {
+            FamiliarManager.syncFamiliarDataForPlayer(serverPlayer);
+
+            // Verificar si tiene Multi Selection curio equipada
+            if (CurioUtils.isWearingMultiSelectionCurio(serverPlayer)) {
+                // Abrir pantalla de Multi Selection curio
+                PacketDistributor.sendToPlayer(serverPlayer, new OpenMultiSelectionScreenPacket());
+            } else {
+                // Abrir pantalla normal
+                PacketDistributor.sendToPlayer(serverPlayer, new OpenFamiliarSelectionPacket());
+            }
+        }
+    }
+
+    public static void handleFamiliarDeath(AbstractSpellCastingPet familiar, ServerPlayer player) {
+        UUID familiarId = familiar.getUUID();
+
+        FamiliarsLib.LOGGER.debug("Handling familiar death for familiar {} owned by player {}",
+                familiarId, player.getName().getString());
+
+        try {
+            PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+
+            // Verificar que el familiar pertenece al jugador
+            if (!familiarData.hasFamiliar(familiarId)) {
+                FamiliarsLib.LOGGER.warn("Familiar {} not found in player {} data during death handling",
+                        familiarId, player.getName().getString());
+                return;
+            }
+
+            // Marcar como muerto para evitar actualizaciones posteriores
+            FamiliarManager.markFamiliarAsDead(familiarId);
+
+            // Remover de los datos del jugador
+            familiarData.removeTamedFamiliar(familiarId);
+
+            cleanFamiliarFromMultiSelectionCurio(player, familiarId);
+
+            // Determinar nuevo familiar seleccionado si era el seleccionado
+            UUID newSelectedFamiliarId = null;
+            if (familiarId.equals(familiarData.getSelectedFamiliarId())) {
+                // Seleccionar otro familiar si hay disponibles
+                var availableFamiliars = familiarData.getAllFamiliars();
+                if (!availableFamiliars.isEmpty()) {
+                    newSelectedFamiliarId = availableFamiliars.keySet().iterator().next();
+                    familiarData.setSelectedFamiliarId(newSelectedFamiliarId);
+                    FamiliarsLib.LOGGER.debug("Selected new familiar {} after death of {}",
+                            newSelectedFamiliarId, familiarId);
+                } else {
+                    familiarData.setSelectedFamiliarId(null);
+                    FamiliarsLib.LOGGER.debug("No familiars available, cleared selection after death of {}", familiarId);
+                }
+            }
+
+            // Preparar datos para sincronización
+            Map<UUID, CompoundTag> remainingFamiliars = familiarData.getAllFamiliars();
+            UUID currentSummonedFamiliarId = familiarData.getCurrentSummonedFamiliarId();
+
+            // Crear NBT para sync
+            CompoundTag familiarSyncData = familiarData.serializeNBT(player.registryAccess());
+
+            // Enviar packet de muerte al cliente
+            PacketDistributor.sendToPlayer(player, new FamiliarDeathPacket(
+                    familiarId,
+                    remainingFamiliars,
+                    newSelectedFamiliarId,
+                    currentSummonedFamiliarId,
+                    familiarSyncData
+            ));
+
+            FamiliarsLib.LOGGER.debug("Successfully processed death of familiar {} for player {}. {} familiars remaining.",
+                    familiarId, player.getName().getString(), remainingFamiliars.size());
+
+        } catch (Exception e) {
+            FamiliarsLib.LOGGER.error("Error handling familiar death for familiar {} and player {}: ",
+                    familiarId, player.getName().getString(), e);
+        }
+    }
+
+    public static void cleanFamiliarFromMultiSelectionCurio(ServerPlayer player, UUID deadFamiliarId) {
+        try {
+            // Obtener la Multi Selection curio equipada
+            Optional<ItemStack> equippedMultiSelectionCurio = CurioUtils.getEquippedMultiSelectionCurio(player);
+
+            if (equippedMultiSelectionCurio.isPresent()) {
+                ItemStack curio = equippedMultiSelectionCurio.get();
+                Set<UUID> selectedFamiliars = AbstractMultiSelectionCurio.getSelectedFamiliars(curio);
+
+                if (selectedFamiliars.contains(deadFamiliarId)) {
+                    // Crear nueva lista sin el familiar muerto
+                    Set<UUID> updatedSelection = new HashSet<>(selectedFamiliars);
+                    updatedSelection.remove(deadFamiliarId);
+
+                    // Actualizar la Multi Selection curio
+                    AbstractMultiSelectionCurio.setSelectedFamiliars(curio, updatedSelection);
+
+                    FamiliarsLib.LOGGER.debug("Removed dead familiar {} from equipped Multi Selection curio for player {}. {} familiars remaining in selection.",
+                            deadFamiliarId, player.getName().getString(), updatedSelection.size());
+
+                    return;
+                }
+            }
+
+            ItemStack mainHandItem = player.getItemInHand(InteractionHand.MAIN_HAND);
+            ItemStack offHandItem = player.getItemInHand(InteractionHand.OFF_HAND);
+
+            for (ItemStack handItem : Arrays.asList(mainHandItem, offHandItem)) {
+                if (handItem.getItem() instanceof AbstractMultiSelectionCurio) {
+                    Set<UUID> selectedFamiliars = AbstractMultiSelectionCurio.getSelectedFamiliars(handItem);
+
+                    if (selectedFamiliars.contains(deadFamiliarId)) {
+                        Set<UUID> updatedSelection = new HashSet<>(selectedFamiliars);
+                        updatedSelection.remove(deadFamiliarId);
+
+                        AbstractMultiSelectionCurio.setSelectedFamiliars(handItem, updatedSelection);
+
+                        FamiliarsLib.LOGGER.debug("Removed dead familiar {} from held Multi Selection curio for player {}. {} familiars remaining in selection.",
+                                deadFamiliarId, player.getName().getString(), updatedSelection.size());
+                        break;
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            FamiliarsLib.LOGGER.error("Error cleaning dead familiar {} from Multi Selection curio for player {}: ",
+                    deadFamiliarId, player.getName().getString(), e);
+        }
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public static void handleFamiliarDeathPacket(UUID deadFamiliarId, Map<UUID, CompoundTag> remainingFamiliars, UUID newSelectedFamiliarId,
+                                                 UUID currentSummonedFamiliarId, CompoundTag familiarData){
+        Player player = Minecraft.getInstance().player;
+        if (player != null) {
+            FamiliarsLib.LOGGER.debug("Client received familiar death packet for familiar: {}", deadFamiliarId);
+
+            // Actualizar datos del jugador
+            PlayerFamiliarData playerFamiliarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+
+            // Remover el familiar muerto específicamente
+            boolean wasRemoved = playerFamiliarData.hasFamiliar(deadFamiliarId);
+            if (wasRemoved) {
+                playerFamiliarData.removeTamedFamiliar(deadFamiliarId);
+                FamiliarsLib.LOGGER.debug("Removed dead familiar {} from client data", deadFamiliarId);
+            }
+
+            // Deserializar todos los datos actualizados
+            playerFamiliarData.deserializeNBT(player.registryAccess(), familiarData);
+
+            FamiliarsLib.LOGGER.debug("Updated client data - Remaining familiars: {}, New selected: {}, Current summoned: {}",
+                    remainingFamiliars.size(), newSelectedFamiliarId, currentSummonedFamiliarId);
+
+            // Actualizar pantallas inmediatamente
+            cleanFamiliarFromMultiSelectionCurioClient(player, deadFamiliarId);
+            updateScreensAfterDeath(deadFamiliarId);
+        }
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    private static void updateScreensAfterDeath(UUID deadFamiliarId) {
+        try {
+            // Actualizar pantalla de selección de familiares si está abierta
+            if (Minecraft.getInstance().screen instanceof FamiliarSelectionScreen familiarScreen) {
+                FamiliarsLib.LOGGER.debug("Updating FamiliarSelectionScreen after familiar death: {}", deadFamiliarId);
+                familiarScreen.reloadFamiliarData();
+
+                // Si no quedan familiares, cerrar la pantalla
+                Player player = Minecraft.getInstance().player;
+                if (player != null) {
+                    PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+                    if (familiarData.isEmpty()) {
+                        FamiliarsLib.LOGGER.debug("No familiars remaining, closing FamiliarSelectionScreen");
+                        familiarScreen.onClose();
+                    }
+                }
+            }
+
+            if (Minecraft.getInstance().screen instanceof MultiSelectionCurioScreen) {
+                Minecraft.getInstance().setScreen(null);
+                Minecraft.getInstance().setScreen(new MultiSelectionCurioScreen());
+            }
+        } catch (Exception e) {
+            FamiliarsLib.LOGGER.error("Error updating screens after familiar death: ", e);
+        }
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    private static void cleanFamiliarFromMultiSelectionCurioClient(Player player, UUID deadFamiliarId) {
+        try {
+            Optional<ItemStack> equippedMultiSelectionCurio = CurioUtils.getEquippedMultiSelectionCurio(player);
+            if (equippedMultiSelectionCurio.isPresent()) {
+                ItemStack curio = equippedMultiSelectionCurio.get();
+                Set<UUID> selectedFamiliars = AbstractMultiSelectionCurio.getSelectedFamiliars(curio);
+
+                if (selectedFamiliars.contains(deadFamiliarId)) {
+                    Set<UUID> updatedSelection = new HashSet<>(selectedFamiliars);
+                    updatedSelection.remove(deadFamiliarId);
+                    AbstractMultiSelectionCurio.setSelectedFamiliars(curio, updatedSelection);
+
+                    FamiliarsLib.LOGGER.debug("Client: Removed dead familiar {} from equipped Multi Selection curio", deadFamiliarId);
+                    return;
+                }
+            }
+
+            ItemStack mainHandItem = player.getItemInHand(InteractionHand.MAIN_HAND);
+            ItemStack offHandItem = player.getItemInHand(InteractionHand.OFF_HAND);
+
+            for (ItemStack handItem : Arrays.asList(mainHandItem, offHandItem)) {
+                if (handItem.getItem() instanceof AbstractMultiSelectionCurio) {
+                    Set<UUID> selectedFamiliars = AbstractMultiSelectionCurio.getSelectedFamiliars(handItem);
+
+                    if (selectedFamiliars.contains(deadFamiliarId)) {
+                        Set<UUID> updatedSelection = new HashSet<>(selectedFamiliars);
+                        updatedSelection.remove(deadFamiliarId);
+                        AbstractMultiSelectionCurio.setSelectedFamiliars(handItem, updatedSelection);
+
+                        FamiliarsLib.LOGGER.debug("Client: Removed dead familiar {} from held Multi Selection curio", deadFamiliarId);
+                        break;
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            FamiliarsLib.LOGGER.error("Error cleaning dead familiar {} from Multi Selection curio on client: ", deadFamiliarId, e);
+        }
+    }
+
+    public static void handleReleaseFamiliar(ServerPlayer player, UUID familiarId) {
+        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+
+        FamiliarsLib.LOGGER.debug("Attempting to release familiar {} for player {}",
+                familiarId, player.getName().getString());
+
+        // Verificar que el familiar existe en los datos del jugador
+        if (!familiarData.hasFamiliar(familiarId)) {
+            FamiliarsLib.LOGGER.warn("Player {} tried to release familiar {} but it doesn't exist in their data",
+                    player.getName().getString(), familiarId);
+            return;
+        }
+
+        // Obtener información del familiar antes de eliminarlo para el mensaje
+        CompoundTag familiarNBT = familiarData.getFamiliarData(familiarId);
+        String familiarName = "Unknown";
+        if (familiarNBT != null) {
+            if (familiarNBT.contains("customName")) {
+                familiarName = familiarNBT.getString("customName");
+            } else {
+                String entityTypeString = familiarNBT.getString("id");
+                String[] parts = entityTypeString.split(":");
+                if (parts.length > 1) {
+                    familiarName = parts[1].replace("_", " ");
+                }
+            }
+        }
+
+        // Si el familiar está summoneado, desummonearlo primero
+        if (familiarData.isFamiliarSummoned(familiarId)) {
+            FamiliarsLib.LOGGER.debug("Familiar {} is summoned, desummoning before release", familiarId);
+            FamiliarManager.desummonSpecificFamiliar(player, familiarId);
+        }
+
+        // Eliminar el familiar de los datos del jugador
+        familiarData.removeTamedFamiliar(familiarId);
+
+        cleanFamiliarFromMultiSelectionCurio(player, familiarId);
+
+        // Verificar si quedan familiares después de la liberación
+        Map<UUID, CompoundTag> remainingFamiliars = familiarData.getAllFamiliars();
+        boolean hasRemainingFamiliars = !remainingFamiliars.isEmpty();
+
+        // Si es el familiar seleccionado actualmente y quedan familiares, seleccionar otro
+        if (familiarId.equals(familiarData.getSelectedFamiliarId()) && hasRemainingFamiliars) {
+            // Buscar otro familiar para seleccionar
+            for (UUID otherId : remainingFamiliars.keySet()) {
+                familiarData.setSelectedFamiliarId(otherId);
+                FamiliarsLib.LOGGER.debug("Released familiar was selected, new selected: {}", otherId);
+                break; // Tomar el primero disponible
+            }
+        } else if (familiarId.equals(familiarData.getSelectedFamiliarId())) {
+            // Si no quedan familiares, limpiar la selección
+            familiarData.setSelectedFamiliarId(null);
+            FamiliarsLib.LOGGER.debug("Released familiar was selected and no familiars remain, clearing selection");
+        }
+
+        // Sincronizar datos actualizados con el cliente
+        FamiliarManager.syncFamiliarData(player, familiarData);
+
+        boolean shouldClose = !hasRemainingFamiliars;
+        PacketDistributor.sendToPlayer(player, new ReloadFamiliarScreenPacket(shouldClose));
+
+        FamiliarsLib.LOGGER.debug("Successfully released familiar {} for player {}. Remaining familiars: {}. Screen action: {}",
+                familiarId, player.getName().getString(), remainingFamiliars.size(), shouldClose ? "CLOSE" : "RELOAD");
+    }
+
+    public static void handleFamiliarSummonPackage(ServerPlayer serverPlayer){
+        // Verificar si tiene Multi Selection curio equipada
+        if (CurioUtils.isWearingMultiSelectionCurio(serverPlayer)) {
+            handleMultiSelectionSummoning(serverPlayer);
+        } else {
+            handleFamiliarSummoning(serverPlayer);
+        }
+    }
+
+    private static void handleMultiSelectionSummoning(ServerPlayer player) {
+        Set<UUID> selectedFamiliars = CurioUtils.getSelectedFamiliarsFromEquipped(player);
+
+        if (selectedFamiliars.isEmpty()) {
+            player.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.translatable("message.familiarslib.no_familiars_selected").withStyle(ChatFormatting.YELLOW)));
+            return;
+        }
+
+        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        boolean anyAction = false;
+        int spawnIndex = 0;
+
+        for (UUID familiarId : selectedFamiliars) {
+            if (familiarData.hasFamiliar(familiarId)) {
+                boolean isSummoned = familiarData.isFamiliarSummoned(familiarId);
+
+                if (isSummoned) {
+                    // Dessummonear
+                    FamiliarManager.desummonSpecificFamiliar(player, familiarId);
+                    anyAction = true;
+                } else {
+                    // Summonear con posición específica
+                    FamiliarManager.summonSpecificFamiliarAtPosition(player, familiarId, spawnIndex);
+                    anyAction = true;
+                    spawnIndex++;
+                }
+            }
+        }
+
+        if (anyAction) {
+            player.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.translatable("message.familiarslib.familiars_toggled").withStyle(ChatFormatting.GREEN)));
+        }
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public static void openFamiliarSelectionScreen(){
+        Minecraft.getInstance().setScreen(new FamiliarSelectionScreen());
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public static void openMultiSelectionScreen(){
+        Minecraft.getInstance().setScreen(new MultiSelectionCurioScreen());
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public static void handleFamiliarSelectionScreenUpdate(boolean shouldClose){
+        Minecraft minecraft = Minecraft.getInstance();
+
+        if (minecraft.screen instanceof FamiliarSelectionScreen familiarScreen) {
+            if (shouldClose) {
+                // Cerrar la pantalla si no quedan familiares
+                minecraft.setScreen(null);
+                FamiliarsLib.LOGGER.debug("Closed familiar selection screen - no familiars remaining");
+            } else {
+                // Recargar la pantalla con los nuevos datos
+                familiarScreen.reloadFamiliarData();
+                FamiliarsLib.LOGGER.debug("Reloaded familiar selection screen after familiar release");
+            }
+        }
     }
 }
