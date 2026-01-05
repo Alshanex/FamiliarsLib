@@ -1026,6 +1026,40 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         super.customServerAiStep();
     }
 
+    @Override
+    public void setSyncedSpellData(SyncedSpellData syncedSpellData) {
+        if (!level().isClientSide) {
+            return;
+        }
+
+        var playerMagicData = this.getMagicData();
+        var wasCasting = playerMagicData.isCasting();
+        playerMagicData.setSyncedData(syncedSpellData);
+
+        SpellData castingSpell = playerMagicData.getCastingSpell();
+
+        if (castingSpell == null) {
+            return;
+        }
+
+        // Handle transition from not-casting to casting
+        if (playerMagicData.isCasting() && !wasCasting) {
+            var spell = castingSpell.getSpell();
+            initiateCastSpell(spell, playerMagicData.getCastingSpellLevel());
+
+            if (castingSpell.getSpell().getCastType() == CastType.INSTANT) {
+                this.instantCastSpellType = castingSpell.getSpell();
+                castingSpell.getSpell().onClientPreCast(level(),
+                        castingSpell.getLevel(), this, InteractionHand.MAIN_HAND, playerMagicData);
+                castComplete();
+            }
+        }
+        // Handle transition from casting to not-casting
+        else if (!playerMagicData.isCasting() && wasCasting) {
+            castComplete();
+        }
+    }
+
     /**
      * GeckoLib Animations
      **/
