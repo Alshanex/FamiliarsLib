@@ -12,6 +12,7 @@ import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.capabilities.magic.SyncedSpellData;
 import io.redspace.ironsspellbooks.entity.mobs.IMagicSummon;
+import io.redspace.ironsspellbooks.entity.mobs.abstract_spell_casting_mob.AbstractSpellCastingMob;
 import io.redspace.ironsspellbooks.entity.mobs.goals.*;
 import io.redspace.ironsspellbooks.entity.spells.AoeEntity;
 import io.redspace.ironsspellbooks.spells.ender.TeleportSpell;
@@ -90,11 +91,9 @@ import java.util.UUID;
 /**
  * Generic class with the main methods of all familiars
  */
-public abstract class AbstractSpellCastingPet extends PathfinderMob implements GeoEntity, IMagicEntity {
-    private static final EntityDataAccessor<Boolean> DATA_CANCEL_CAST = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
+public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     protected static final EntityDataAccessor<Boolean> DATA_IS_SITTING;
     protected static final EntityDataAccessor<Boolean> DATA_IS_HOUSE;
-    protected final MagicData playerMagicData = new MagicData(true);
 
     static {
         DATA_ID_OWNER_UUID = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.OPTIONAL_UUID);
@@ -110,14 +109,10 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     protected LivingEntity cachedSummoner;
 
-    protected @Nullable SpellData castingSpell;
-    public boolean hasUsedSingleAttack;
-    protected boolean recreateSpell;
-
     protected boolean movementDisabled = false;
 
     private boolean lastTrinketState = false;
-    private FamiliarGoals.FamiliarWizardAttackGoal currentAttackGoal;
+    private WizardAttackGoal currentAttackGoal;
     private boolean pendingGoalUpdate = false;
     private boolean pendingTrinketState = false;
 
@@ -129,8 +124,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     protected AbstractSpellCastingPet(EntityType<? extends PathfinderMob> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
-        playerMagicData.setSyncedData(new SyncedSpellData(this));
-        this.lookControl = createLookControl();
     }
 
     //Sets the chance of the familiar being a disguised illusionist
@@ -142,28 +135,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
             if(this.getIsImpostor()){
                 this.goalSelector.addGoal(3, new FamiliarGoals.StealItemsWhenNotWatchedGoal(this, 3.0D));
             }
-        }
-    }
-
-    public boolean getHasUsedSingleAttack() {
-        return hasUsedSingleAttack;
-    }
-
-    @Override
-    public void setHasUsedSingleAttack(boolean hasUsedSingleAttack) {
-        this.hasUsedSingleAttack = hasUsedSingleAttack;
-    }
-
-    @Override
-    public Vec3 getPassengerRidingPosition(Entity pEntity) {
-        return super.getPassengerRidingPosition(pEntity);
-    }
-
-    @Override
-    public void rideTick() {
-        super.rideTick();
-        if (this.getVehicle() instanceof PathfinderMob pathfindermob) {
-            pathfindermob.yBodyRot = this.yBodyRot;
         }
     }
 
@@ -194,7 +165,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     }
 
     //This section handles the trinket power boost
-    protected abstract FamiliarGoals.FamiliarWizardAttackGoal createAttackGoal(float min, float max);
+    protected abstract WizardAttackGoal createAttackGoal(float min, float max);
 
     protected float[] getOriginalQualityValues() {
         return new float[]{0.1f, 0.3f};
@@ -486,7 +457,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
         super.defineSynchedData(pBuilder);
         pBuilder.define(DATA_ID_OWNER_UUID, Optional.empty());
-        pBuilder.define(DATA_CANCEL_CAST, false);
         pBuilder.define(DATA_IS_SITTING, false);
         pBuilder.define(DATA_IS_HOUSE, false);
         pBuilder.define(DATA_IMPOSTOR, false);
@@ -496,21 +466,11 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> pKey) {
         super.onSyncedDataUpdated(pKey);
-
-        if (!level().isClientSide) {
-            return;
-        }
-
-        if (pKey.id() == DATA_CANCEL_CAST.id()) {
-            cancelCast();
-        }
     }
 
     @Override
     public void addAdditionalSaveData(CompoundTag pCompound) {
         super.addAdditionalSaveData(pCompound);
-        playerMagicData.getSyncedData().saveNBTData(pCompound, level().registryAccess());
-        pCompound.putBoolean("usedSpecial", hasUsedSingleAttack);
 
         if (getOwnerUUID() != null) {
             pCompound.putUUID("ownerUUID", getOwnerUUID());
@@ -546,15 +506,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     @Override
     public void readAdditionalSaveData(CompoundTag pCompound) {
         super.readAdditionalSaveData(pCompound); // 1. Loads vanilla "Health" here
-
-        // Standard Spell Data Loading
-        var syncedSpellData = new SyncedSpellData(this);
-        syncedSpellData.loadNBTData(pCompound, level().registryAccess());
-        if (syncedSpellData.isCasting()) {
-            this.recreateSpell = true;
-        }
-        playerMagicData.setSyncedData(syncedSpellData);
-        hasUsedSingleAttack = pCompound.getBoolean("usedSpecial");
 
         if (pCompound.contains("ownerUUID")) {
             String ownerUUIDString = pCompound.getString("ownerUUID");
@@ -660,16 +611,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
     }
 
-    //Move and look controls
-    protected LookControl createLookControl() {
-        return new LookControl(this) {
-            @Override
-            protected boolean resetXRotOnTick() {
-                return getTarget() == null;
-            }
-        };
-    }
-
     protected MoveControl createMoveControl() {
         return new MoveControl(this) {
             @Override
@@ -683,10 +624,6 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 }
             }
         };
-    }
-
-    public MagicData getMagicData() {
-        return playerMagicData;
     }
 
     @Override
@@ -1084,184 +1021,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         return this.movementDisabled;
     }
 
-    public void cancelCast() {
-        if (isCasting()) {
-            if (level().isClientSide) {
-                cancelCastAnimation = true;
-            } else {
-                //Need to ensure we pass a different value if we want the data to sync
-                entityData.set(DATA_CANCEL_CAST, !entityData.get(DATA_CANCEL_CAST));
-            }
-
-            castComplete();
-        }
-
-    }
-
-    public void castComplete() {
-        if (!level().isClientSide) {
-            if (castingSpell != null) {
-                castingSpell.getSpell().onServerCastComplete(level(), castingSpell.getLevel(), this, playerMagicData, false);
-            }
-        } else {
-            playerMagicData.resetCastingState();
-        }
-
-        castingSpell = null;
-    }
-
-    public void setSyncedSpellData(SyncedSpellData syncedSpellData) {
-        if (!level().isClientSide) {
-            return;
-        }
-
-        var isCasting = playerMagicData.isCasting();
-        playerMagicData.setSyncedData(syncedSpellData);
-        castingSpell = playerMagicData.getCastingSpell();
-
-        if (castingSpell == null) {
-            return;
-        }
-
-        if (!playerMagicData.isCasting() && isCasting) {
-            castComplete();
-        } else if (playerMagicData.isCasting() && !isCasting)/* if (syncedSpellData.getCastingSpellType().getCastType() == CastType.CONTINUOUS)*/ {
-            var spell = playerMagicData.getCastingSpell().getSpell();
-
-            initiateCastSpell(spell, playerMagicData.getCastingSpellLevel());
-
-            if (castingSpell.getSpell().getCastType() == CastType.INSTANT) {
-                instantCastSpellType = castingSpell.getSpell();
-                castingSpell.getSpell().onClientPreCast(level(), castingSpell.getLevel(), this, InteractionHand.MAIN_HAND, playerMagicData);
-                castComplete();
-            }
-        }
-    }
-
     @Override
     protected void customServerAiStep() {
         super.customServerAiStep();
-        if (recreateSpell) {
-            recreateSpell = false;
-            var syncedSpellData = playerMagicData.getSyncedData();
-            setSyncedSpellData(syncedSpellData);
-        }
-
-        if (castingSpell == null) {
-            return;
-        }
-
-        playerMagicData.handleCastDuration();
-
-        if (playerMagicData.isCasting()) {
-            castingSpell.getSpell().onServerCastTick(level(), castingSpell.getLevel(), this, playerMagicData);
-        }
-
-        this.forceLookAtTarget(getTarget());
-
-        if (playerMagicData.getCastDurationRemaining() <= 0) {
-
-            if (castingSpell.getSpell().getCastType() == CastType.LONG || castingSpell.getSpell().getCastType() == CastType.INSTANT) {
-                castingSpell.getSpell().onCast(level(), castingSpell.getLevel(), this, CastSource.MOB, playerMagicData);
-            }
-            castComplete();
-        } else if (castingSpell.getSpell().getCastType() == CastType.CONTINUOUS) {
-            if ((playerMagicData.getCastDurationRemaining() + 1) % 10 == 0) {
-                castingSpell.getSpell().onCast(level(), castingSpell.getLevel(), this, CastSource.MOB, playerMagicData);
-            }
-        }
-    }
-
-    public void initiateCastSpell(AbstractSpell spell, int spellLevel) {
-        if (spell == SpellRegistry.none()) {
-            castingSpell = null;
-            return;
-        }
-
-        if (level().isClientSide) {
-            cancelCastAnimation = false;
-        }
-
-        castingSpell = new SpellData(spell, spellLevel);
-
-        if (getTarget() != null) {
-            forceLookAtTarget(getTarget());
-        }
-
-        if (!level().isClientSide && !castingSpell.getSpell().checkPreCastConditions(level(), spellLevel, this, playerMagicData)) {
-            castingSpell = null;
-            return;
-        }
-
-        if (spell == SpellRegistry.TELEPORT_SPELL.get() || spell == SpellRegistry.FROST_STEP_SPELL.get()) {
-            setTeleportLocationBehindTarget(10);
-        } else if (spell == SpellRegistry.BLOOD_STEP_SPELL.get()) {
-            setTeleportLocationBehindTarget(3);
-        } else if (spell == SpellRegistry.BURNING_DASH_SPELL.get()) {
-            setBurningDashDirectionData();
-        }
-
-        playerMagicData.initiateCast(castingSpell.getSpell(), castingSpell.getLevel(), castingSpell.getSpell().getEffectiveCastTime(castingSpell.getLevel(), this), CastSource.MOB, SpellSelectionManager.MAINHAND);
-
-        if (!level().isClientSide) {
-            castingSpell.getSpell().onServerPreCast(level(), castingSpell.getLevel(), this, playerMagicData);
-        }
-    }
-
-    public void notifyDangerousProjectile(Projectile projectile) {
-    }
-
-    public boolean isCasting() {
-        return playerMagicData.isCasting();
-    }
-
-    public boolean setTeleportLocationBehindTarget(int distance) {
-        var target = getTarget();
-        boolean valid = false;
-        if (target != null) {
-            var rotation = target.getLookAngle().normalize().scale(-distance);
-            var pos = target.position();
-            var teleportPos = rotation.add(pos);
-
-            for (int i = 0; i < 24; i++) {
-                Vec3 randomness = Utils.getRandomVec3(.15f * i).multiply(1, 0, 1);
-                teleportPos = Utils.moveToRelativeGroundLevel(level(), target.position().subtract(new Vec3(0, 0, distance / (float) (i / 7 + 1)).yRot(-(target.getYRot() + i * 45) * Mth.DEG_TO_RAD)).add(randomness), 5);
-                teleportPos = new Vec3(teleportPos.x, teleportPos.y + .1f, teleportPos.z);
-                var reposBB = this.getBoundingBox().move(teleportPos.subtract(this.position()));
-                if (!level().collidesWithSuffocatingBlock(this, reposBB.inflate(-.05f))) {
-                    valid = true;
-                    break;
-                }
-
-            }
-            if (valid) {
-                playerMagicData.setAdditionalCastData(new TeleportSpell.TeleportData(teleportPos));
-            } else {
-                playerMagicData.setAdditionalCastData(new TeleportSpell.TeleportData(this.position()));
-
-            }
-        } else {
-            playerMagicData.setAdditionalCastData(new TeleportSpell.TeleportData(this.position()));
-        }
-        return valid;
-    }
-
-    public void setBurningDashDirectionData() {
-        playerMagicData.setAdditionalCastData(new BurningDashSpell.BurningDashDirectionOverrideCastData());
-    }
-
-    protected void forceLookAtTarget(LivingEntity target) {
-        if (target != null) {
-            double d0 = target.getX() - this.getX();
-            double d2 = target.getZ() - this.getZ();
-            double d1 = target.getEyeY() - this.getEyeY();
-
-            double d3 = Math.sqrt(d0 * d0 + d2 * d2);
-            float f = (float) (Mth.atan2(d2, d0) * (double) (180F / (float) Math.PI)) - 90.0F;
-            float f1 = (float) (-(Mth.atan2(d1, d3) * (double) (180F / (float) Math.PI)));
-            this.setXRot(f1 % 360);
-            this.setYRot(f % 360);
-        }
     }
 
     /**
@@ -1270,7 +1032,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
     protected AbstractSpell lastCastSpellType = SpellRegistry.none();
-    protected AbstractSpell instantCastSpellType = SpellRegistry.none();
+    public AbstractSpell instantCastSpellType = SpellRegistry.none();
     protected boolean cancelCastAnimation = false;
     protected boolean animatingLegs = false;
 
@@ -1278,6 +1040,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected final RawAnimation walk = RawAnimation.begin().thenLoop("walk");
     protected final RawAnimation attack = RawAnimation.begin().thenPlay("skill");
     protected final RawAnimation longCast = RawAnimation.begin().thenPlay("long_cast");
+    protected final RawAnimation continuousCast = RawAnimation.begin().thenLoop("continuous");
     protected final RawAnimation interact = RawAnimation.begin().thenPlay("interact");
     protected final RawAnimation stomp = RawAnimation.begin().thenPlay("stomp");
     protected final RawAnimation spawn = RawAnimation.begin().thenPlay("spawn");
@@ -1285,6 +1048,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
 
     protected final AnimationController animationControllerInstantCast = new AnimationController(this, "instant_casting", 0, this::instantCastingPredicate);
     protected final AnimationController animationControllerLongCast = new AnimationController(this, "long_casting", 0, this::longCastingPredicate);
+    protected final AnimationController animationControllerOtherCast = new AnimationController(this, "other_casting", 0, this::otherCastingPredicate);
 
     @Override
     public AnimatableInstanceCache getAnimatableInstanceCache() {
@@ -1295,6 +1059,7 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     public void registerControllers(AnimatableManager.ControllerRegistrar controllerRegistrar) {
         controllerRegistrar.add(animationControllerInstantCast);
         controllerRegistrar.add(animationControllerLongCast);
+        controllerRegistrar.add(animationControllerOtherCast);
         controllerRegistrar.add(new AnimationController(this, "idle", 0, this::idlePredicate));
         controllerRegistrar.add(new AnimationController(this, "sleep", 0, this::sleepPredicate));
         controllerRegistrar.add(new AnimationController<>(this, "interact_controller", state -> PlayState.STOP)
@@ -1356,12 +1121,9 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
         }
 
         var controller = event.getController();
-        if (instantCastSpellType != SpellRegistry.none() && controller.getAnimationState() == AnimationController.State.STOPPED) {
-            if(castingSpell != null){
-                setStartAnimationFromSpell(controller, instantCastSpellType, castingSpell.getLevel());
-            } else {
-                setStartAnimationFromSpell(controller, instantCastSpellType, 1);
-            }
+        if (instantCastSpellType != SpellRegistry.none() &&
+                controller.getAnimationState() == AnimationController.State.STOPPED) {
+            setStartAnimationFromSpell(controller, instantCastSpellType);
             instantCastSpellType = SpellRegistry.none();
         }
         return PlayState.CONTINUE;
@@ -1370,38 +1132,92 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
     protected PlayState longCastingPredicate(AnimationState event) {
         var controller = event.getController();
 
-        if (cancelCastAnimation || (controller.getAnimationState() == AnimationController.State.STOPPED && !(isCasting() && castingSpell != null && castingSpell.getSpell().getCastType() == CastType.LONG))) {
+        // Get current casting spell
+        AbstractSpell castingSpell = null;
+        if (isCasting()) {
+            MagicData magicData = this.getMagicData();
+            SpellData spellData = magicData.getCastingSpell();
+            if (spellData != null) {
+                castingSpell = spellData.getSpell();
+            }
+        }
+
+        // Stop conditions
+        if (cancelCastAnimation ||
+                (controller.getAnimationState() == AnimationController.State.STOPPED &&
+                        !(isCasting() && castingSpell != null && castingSpell.getCastType() == CastType.LONG))) {
             return PlayState.STOP;
         }
 
-        if (isCasting()) {
-            if (controller.getAnimationState() == AnimationController.State.STOPPED) {
-                if(castingSpell != null){
-                    setStartAnimationFromSpell(controller, castingSpell.getSpell(), castingSpell.getLevel());
-                }
+        // Start animation if casting and controller stopped
+        if (isCasting() && controller.getAnimationState() == AnimationController.State.STOPPED) {
+            if (castingSpell != null) {
+                setStartAnimationFromSpell(controller, castingSpell);
             }
+        }
+        // Play finish animation if just finished a long cast
+        else if (!isCasting() && lastCastSpellType.getCastType() == CastType.LONG) {
+            setFinishAnimationFromSpell(controller, lastCastSpellType);
         }
 
         return PlayState.CONTINUE;
     }
 
-    // Handles spell animations
-    protected void setStartAnimationFromSpell(AnimationController controller, AbstractSpell spell, int spellLevel) {
-        spell.getCastStartAnimation().getForMob().ifPresentOrElse(animationBuilder -> {
-            controller.forceAnimationReset();
-            if(FamiliarAnimationUtils.isLongAnimCast(spell, spellLevel)){
-                controller.setAnimation(longCast);
-            } else if (spell == SpellRegistry.STOMP_SPELL.get()) {
-                controller.setAnimation(stomp);
-            } else {
-                controller.setAnimation(attack);
+    protected PlayState otherCastingPredicate(AnimationState event) {
+        if (cancelCastAnimation) {
+            return PlayState.STOP;
+        }
+
+        var controller = event.getController();
+
+        // Get current casting spell
+        AbstractSpell castingSpell = null;
+        if (isCasting()) {
+            MagicData magicData = this.getMagicData();
+            SpellData spellData = magicData.getCastingSpell();
+            if (spellData != null) {
+                castingSpell = spellData.getSpell();
             }
-            lastCastSpellType = spell;
-            cancelCastAnimation = false;
-            animatingLegs = false;
-        }, () -> {
-            cancelCastAnimation = true;
-        });
+        }
+
+        // Start continuous cast animation if needed
+        if (isCasting() && castingSpell != null &&
+                controller.getAnimationState() == AnimationController.State.STOPPED) {
+            if (castingSpell.getCastType() == CastType.CONTINUOUS) {
+                setStartAnimationFromSpell(controller, castingSpell);
+            }
+            return PlayState.CONTINUE;
+        }
+
+        // Continue or stop based on casting state
+        if (isCasting()) {
+            return PlayState.CONTINUE;
+        } else {
+            return PlayState.STOP;
+        }
+    }
+
+    protected void setFinishAnimationFromSpell(AnimationController controller, AbstractSpell spell) {
+        controller.forceAnimationReset();
+        lastCastSpellType = SpellRegistry.none();
+    }
+
+    // Handles spell animations
+    protected void setStartAnimationFromSpell(AnimationController controller, AbstractSpell spell) {
+        controller.forceAnimationReset();
+
+        if (spell.getCastType() == CastType.CONTINUOUS){
+            controller.setAnimation(continuousCast);
+        } else if (spell == SpellRegistry.STOMP_SPELL.get()) {
+            controller.setAnimation(stomp);
+        } else if(spell.getCastTime(spell.getMinLevel()) > 15){
+            controller.setAnimation(longCast);
+        } else {
+            controller.setAnimation(attack);
+        }
+        lastCastSpellType = spell;
+        cancelCastAnimation = false;
+        animatingLegs = false;
     }
 
     public boolean isAnimating() {
@@ -1413,26 +1229,32 @@ public abstract class AbstractSpellCastingPet extends PathfinderMob implements G
                 || isSleeping;
     }
 
+    @Override
     public boolean shouldAlwaysAnimateHead() {
         return false;
     }
 
+    @Override
     public boolean shouldPointArmsWhileCasting() {
         return false;
     }
 
+    @Override
     public boolean shouldBeExtraAnimated() {
         return true;
     }
 
+    @Override
     public boolean shouldAlwaysAnimateLegs() {
         return !animatingLegs;
     }
 
+    @Override
     public boolean bobBodyWhileWalking() {
         return true;
     }
 
+    @Override
     public boolean shouldSheathSword() {
         return false;
     }
