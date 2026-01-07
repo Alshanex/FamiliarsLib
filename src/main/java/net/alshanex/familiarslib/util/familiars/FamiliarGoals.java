@@ -9,6 +9,7 @@ import io.redspace.ironsspellbooks.api.spells.CastType;
 import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.entity.mobs.SummonedSkeleton;
+import io.redspace.ironsspellbooks.entity.mobs.goals.WizardAttackGoal;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
 import io.redspace.ironsspellbooks.registries.MobEffectRegistry;
 import io.redspace.ironsspellbooks.registries.ParticleRegistry;
@@ -1947,6 +1948,361 @@ public class FamiliarGoals {
                         alliedFamiliar.setLastHurtByMob(attacker);
                     }
                 }
+            }
+        }
+    }
+
+    public static class FlyingWizardAttackGoal extends WizardAttackGoal {
+
+        // Flight configuration
+        protected float preferredHeight = 4.0F;
+        protected float optimalCombatRange = 12.0F;
+        protected float minCombatRange = 6.0F;
+        protected float maxCombatRange = 20.0F;
+
+        // Movement state
+        protected MovementPattern currentPattern = MovementPattern.ORBIT;
+        protected int patternTicks = 0;
+        protected int patternDuration = 100;
+        protected double orbitAngle = 0.0;
+        protected boolean orbitClockwise = true;
+
+        public enum MovementPattern {
+            ORBIT,      // Circle around target
+            STRAFE,     // Side-to-side movement
+            APPROACH,   // Move closer to target
+            RETREAT,    // Move away from target
+            DIVE,       // Quick descent toward target
+            ASCEND,     // Gain altitude
+            HOVER       // Hold position (during casting)
+        }
+
+        public FlyingWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double speedModifier, int attackInterval) {
+            this(abstractSpellCastingMob, speedModifier, attackInterval, attackInterval);
+        }
+
+        public FlyingWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double speedModifier, int attackIntervalMin, int attackIntervalMax) {
+            super(abstractSpellCastingMob, speedModifier, attackIntervalMin, attackIntervalMax);
+            this.isFlying = true;
+            this.allowFleeing = false; // We handle our own retreat logic
+        }
+
+        // ==================== CONFIGURATION ====================
+
+        public FlyingWizardAttackGoal setPreferredHeight(float height) {
+            this.preferredHeight = height;
+            return this;
+        }
+
+        public FlyingWizardAttackGoal setCombatRanges(float min, float optimal, float max) {
+            this.minCombatRange = min;
+            this.optimalCombatRange = optimal;
+            this.maxCombatRange = max;
+            this.spellcastingRange = max;
+            this.spellcastingRangeSqr = max * max;
+            return this;
+        }
+
+        // ==================== LIFECYCLE OVERRIDES ====================
+
+        @Override
+        public void start() {
+            super.start();
+            this.orbitAngle = mob.getRandom().nextDouble() * Math.PI * 2;
+            this.orbitClockwise = mob.getRandom().nextBoolean();
+            selectNewPattern();
+        }
+
+        @Override
+        public void stop() {
+            super.stop();
+            this.currentPattern = MovementPattern.HOVER;
+            this.patternTicks = 0;
+        }
+
+        // ==================== MAIN MOVEMENT OVERRIDE ====================
+
+        @Override
+        protected void doMovement(double distanceSquared) {
+            if (target == null) {
+                return;
+            }
+
+            // Always look at target
+            mob.lookAt(target, 30, 30);
+
+            // Handle pattern transitions
+            patternTicks++;
+            if (patternTicks >= patternDuration) {
+                selectNewPattern();
+            }
+
+            // Execute the current movement pattern
+            double distance = Math.sqrt(distanceSquared);
+            executeMovement(distance);
+        }
+
+        // ==================== PATTERN SELECTION ====================
+
+        protected void selectNewPattern() {
+            patternTicks = 0;
+
+            if (target == null) {
+                currentPattern = MovementPattern.HOVER;
+                patternDuration = 60;
+                return;
+            }
+
+            double distance = mob.distanceTo(target);
+            float healthPercent = mob.getHealth() / mob.getMaxHealth();
+            boolean isCasting = spellCastingMob.isCasting();
+            boolean isDrinking = spellCastingMob.isDrinkingPotion();
+
+            // While casting or drinking, prefer stable positioning
+            if (isCasting || isDrinking) {
+                if (distance < minCombatRange) {
+                    currentPattern = MovementPattern.RETREAT;
+                    patternDuration = 40;
+                } else {
+                    currentPattern = mob.getRandom().nextFloat() < 0.7F ? MovementPattern.HOVER : MovementPattern.ORBIT;
+                    patternDuration = 60 + mob.getRandom().nextInt(40);
+                }
+                return;
+            }
+
+            // Dynamic pattern selection based on combat state
+            float roll = mob.getRandom().nextFloat();
+
+            if (!hasLineOfSight) {
+                // No line of sight - approach to regain
+                currentPattern = MovementPattern.APPROACH;
+                patternDuration = 80;
+            } else if (distance > maxCombatRange) {
+                // Too far - approach
+                currentPattern = MovementPattern.APPROACH;
+                patternDuration = 60 + mob.getRandom().nextInt(40);
+            } else if (distance < minCombatRange) {
+                // Too close - retreat or ascend
+                currentPattern = roll < 0.6F ? MovementPattern.RETREAT : MovementPattern.ASCEND;
+                patternDuration = 40 + mob.getRandom().nextInt(30);
+            } else if (healthPercent < 0.3F && roll < 0.4F) {
+                // Low health - be defensive
+                currentPattern = MovementPattern.RETREAT;
+                patternDuration = 60;
+            } else if (roll < 0.5F) {
+                // Most common - orbit
+                currentPattern = MovementPattern.ORBIT;
+                patternDuration = 80 + mob.getRandom().nextInt(60);
+                // Occasionally switch orbit direction
+                if (mob.getRandom().nextFloat() < 0.3F) {
+                    orbitClockwise = !orbitClockwise;
+                }
+            } else if (roll < 0.7F) {
+                // Strafe
+                currentPattern = MovementPattern.STRAFE;
+                patternDuration = 40 + mob.getRandom().nextInt(30);
+            } else if (roll < 0.85F) {
+                // Height changes
+                double heightDiff = mob.getY() - target.getY();
+                if (heightDiff < preferredHeight) {
+                    currentPattern = MovementPattern.ASCEND;
+                } else {
+                    currentPattern = MovementPattern.DIVE;
+                }
+                patternDuration = 30 + mob.getRandom().nextInt(20);
+            } else {
+                // Brief hover
+                currentPattern = MovementPattern.HOVER;
+                patternDuration = 30 + mob.getRandom().nextInt(30);
+            }
+        }
+
+        // ==================== MOVEMENT EXECUTION ====================
+
+        protected void executeMovement(double distance) {
+            double speed = getFlightSpeed();
+            Vec3 targetPos = target.position();
+            Vec3 mobPos = mob.position();
+
+            switch (currentPattern) {
+                case ORBIT -> executeOrbit(targetPos, mobPos, speed);
+                case STRAFE -> executeStrafe(targetPos, mobPos, speed);
+                case APPROACH -> executeApproach(targetPos, mobPos, speed);
+                case RETREAT -> executeRetreat(targetPos, mobPos, speed);
+                case DIVE -> executeDive(targetPos, mobPos, speed);
+                case ASCEND -> executeAscend(targetPos, mobPos, speed);
+                case HOVER -> executeHover(targetPos, mobPos);
+            }
+        }
+
+        protected double getFlightSpeed() {
+            double baseSpeed = speedModifier;
+
+            if (spellCastingMob.isCasting()) {
+                return baseSpeed * 0.5;
+            }
+
+            if (spellCastingMob.isDrinkingPotion()) {
+                return baseSpeed * 0.3;
+            }
+
+            return baseSpeed;
+        }
+
+        protected void executeOrbit(Vec3 targetPos, Vec3 mobPos, double speed) {
+            double orbitRadius = optimalCombatRange;
+            double orbitSpeed = 0.03 * (orbitClockwise ? 1 : -1);
+            orbitAngle += orbitSpeed;
+
+            // Target position on orbit circle with vertical bobbing
+            double targetX = targetPos.x + Math.cos(orbitAngle) * orbitRadius;
+            double targetZ = targetPos.z + Math.sin(orbitAngle) * orbitRadius;
+            double targetY = targetPos.y + preferredHeight + Math.sin(orbitAngle * 2) * 1.5;
+
+            // Add randomness for natural feel
+            if (mob.getRandom().nextInt(20) == 0) {
+                targetX += (mob.getRandom().nextDouble() - 0.5) * 2;
+                targetZ += (mob.getRandom().nextDouble() - 0.5) * 2;
+            }
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed);
+        }
+
+        protected void executeStrafe(Vec3 targetPos, Vec3 mobPos, double speed) {
+            Vec3 toTarget = targetPos.subtract(mobPos).normalize();
+            Vec3 strafeDir = new Vec3(-toTarget.z, 0, toTarget.x); // Perpendicular
+
+            if (!orbitClockwise) {
+                strafeDir = strafeDir.scale(-1);
+            }
+
+            // Maintain distance while strafing
+            double currentDist = mobPos.distanceTo(targetPos);
+            Vec3 adjustedDir = strafeDir;
+
+            if (currentDist < minCombatRange) {
+                adjustedDir = adjustedDir.subtract(toTarget.scale(0.5));
+            } else if (currentDist > maxCombatRange) {
+                adjustedDir = adjustedDir.add(toTarget.scale(0.5));
+            }
+
+            adjustedDir = adjustedDir.normalize();
+
+            double targetX = mobPos.x + adjustedDir.x * 6;
+            double targetZ = mobPos.z + adjustedDir.z * 6;
+            double targetY = targetPos.y + preferredHeight;
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.2);
+        }
+
+        protected void executeApproach(Vec3 targetPos, Vec3 mobPos, double speed) {
+            Vec3 toTarget = targetPos.subtract(mobPos);
+            double dist = toTarget.horizontalDistance();
+
+            Vec3 direction = toTarget.normalize();
+            double desiredDist = optimalCombatRange * 0.8;
+
+            double targetX, targetZ;
+            if (dist > desiredDist) {
+                targetX = targetPos.x - direction.x * desiredDist;
+                targetZ = targetPos.z - direction.z * desiredDist;
+            } else {
+                targetX = mobPos.x;
+                targetZ = mobPos.z;
+            }
+
+            double targetY = targetPos.y + preferredHeight;
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.3);
+        }
+
+        protected void executeRetreat(Vec3 targetPos, Vec3 mobPos, double speed) {
+            Vec3 awayFromTarget = mobPos.subtract(targetPos).normalize();
+
+            double retreatDist = 8.0;
+            double targetX = mobPos.x + awayFromTarget.x * retreatDist;
+            double targetZ = mobPos.z + awayFromTarget.z * retreatDist;
+            double targetY = mobPos.y + 2.0; // Gain height while retreating
+
+            // Add sideways movement for unpredictability
+            double sideOffset = (mob.getRandom().nextDouble() - 0.5) * 4;
+            targetX += -awayFromTarget.z * sideOffset;
+            targetZ += awayFromTarget.x * sideOffset;
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.4);
+        }
+
+        protected void executeDive(Vec3 targetPos, Vec3 mobPos, double speed) {
+            Vec3 toTarget = targetPos.subtract(mobPos).normalize();
+
+            double targetX = targetPos.x - toTarget.x * optimalCombatRange * 0.7;
+            double targetZ = targetPos.z - toTarget.z * optimalCombatRange * 0.7;
+            double targetY = targetPos.y + 2.0; // Stay above target
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.5);
+        }
+
+        protected void executeAscend(Vec3 targetPos, Vec3 mobPos, double speed) {
+            double horizontalDist = mobPos.subtract(targetPos).horizontalDistance();
+
+            double targetX = mobPos.x;
+            double targetZ = mobPos.z;
+
+            // If too close, also move away horizontally
+            if (horizontalDist < optimalCombatRange) {
+                Vec3 away = mobPos.subtract(targetPos).normalize();
+                targetX = mobPos.x + away.x * 4;
+                targetZ = mobPos.z + away.z * 4;
+            }
+
+            double targetY = mobPos.y + 6.0;
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed);
+        }
+
+        protected void executeHover(Vec3 targetPos, Vec3 mobPos) {
+            double currentDist = mobPos.distanceTo(targetPos);
+
+            double targetX = mobPos.x;
+            double targetZ = mobPos.z;
+            double targetY = targetPos.y + preferredHeight;
+
+            // Gentle adjustment toward optimal range
+            if (currentDist < minCombatRange - 1) {
+                Vec3 away = mobPos.subtract(targetPos).normalize();
+                targetX = mobPos.x + away.x * 2;
+                targetZ = mobPos.z + away.z * 2;
+            } else if (currentDist > maxCombatRange + 2) {
+                Vec3 toward = targetPos.subtract(mobPos).normalize();
+                targetX = mobPos.x + toward.x * 2;
+                targetZ = mobPos.z + toward.z * 2;
+            }
+
+            // Small bobbing motion
+            targetY += Math.sin(mob.tickCount * 0.08) * 0.3;
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, 0.5);
+        }
+
+        // ==================== OVERRIDE STRAFE MULTIPLIER ====================
+
+        @Override
+        public float getStrafeMultiplier() {
+            // Flying entities don't use ground strafing
+            return 0.0F;
+        }
+
+        // ==================== UTILITY FOR PATTERN CHANGES ON CAST ====================
+
+        @Override
+        protected void doSpellAction() {
+            super.doSpellAction();
+
+            // Switch to stable pattern when starting to cast
+            if (spellCastingMob.isCasting() || spellCastingMob.isDrinkingPotion()) {
+                currentPattern = mob.getRandom().nextFloat() < 0.7F ? MovementPattern.HOVER : MovementPattern.ORBIT;
+                patternTicks = 0;
+                patternDuration = 80;
             }
         }
     }
