@@ -5,11 +5,14 @@ import io.redspace.ironsspellbooks.api.magic.MagicData;
 import io.redspace.ironsspellbooks.api.registry.SchoolRegistry;
 import io.redspace.ironsspellbooks.api.registry.SpellRegistry;
 import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
+import io.redspace.ironsspellbooks.api.spells.CastSource;
 import io.redspace.ironsspellbooks.api.spells.CastType;
 import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
+import io.redspace.ironsspellbooks.entity.mobs.IAnimatedAttacker;
 import io.redspace.ironsspellbooks.entity.mobs.SummonedSkeleton;
 import io.redspace.ironsspellbooks.entity.mobs.goals.WizardAttackGoal;
+import io.redspace.ironsspellbooks.entity.mobs.wizards.GenericAnimatedWarlockAttackGoal;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
 import io.redspace.ironsspellbooks.registries.MobEffectRegistry;
 import io.redspace.ironsspellbooks.registries.ParticleRegistry;
@@ -2304,6 +2307,148 @@ public class FamiliarGoals {
                 patternTicks = 0;
                 patternDuration = 80;
             }
+        }
+    }
+
+    public static class MeleeSpellCastWarlockAttackGoal<T extends PathfinderMob & IAnimatedAttacker & IMagicEntity> extends GenericAnimatedWarlockAttackGoal<T> {
+
+        @Nullable
+        private AbstractSpell gapCloserSpell;
+        private int gapCloserSpellLevel;
+        private double gapCloserDistance = 3.0;
+        private int spellCooldown = 0;
+        private static final int SPELL_COOLDOWN_TICKS = 100; // 5 seconds between casts
+        private boolean hasAttemptedGapClose = false;
+
+        @Nullable
+        private LivingEntity lastTarget = null;
+
+        public MeleeSpellCastWarlockAttackGoal(T mob, float speedModifier, int attackIntervalMin, int attackIntervalMax) {
+            super(mob, speedModifier, attackIntervalMin, attackIntervalMax);
+        }
+
+        public MeleeSpellCastWarlockAttackGoal<T> setGapCloserSpell(@Nullable AbstractSpell spell, int level) {
+            this.gapCloserSpell = spell;
+            this.gapCloserSpellLevel = level;
+            return this;
+        }
+
+        public MeleeSpellCastWarlockAttackGoal<T> setGapCloserDistance(double distance) {
+            this.gapCloserDistance = distance;
+            return this;
+        }
+
+        @Override
+        public void start() {
+            super.start();
+            hasAttemptedGapClose = false;
+        }
+
+        @Override
+        public void stop() {
+            super.stop();
+            hasAttemptedGapClose = false;
+        }
+
+        @Override
+        public void tick() {
+            super.tick();
+
+            // Check for target change
+            LivingEntity currentTarget = mob.getTarget();
+            if (currentTarget != lastTarget) {
+                hasAttemptedGapClose = false;
+                lastTarget = currentTarget;
+            }
+
+            // Decrement spell cooldown
+            if (spellCooldown > 0) {
+                spellCooldown--;
+            }
+
+            // Check if we should cast the gap closer spell
+            if (shouldCastGapCloserSpell()) {
+                castGapCloserSpell();
+            }
+        }
+
+        private boolean shouldCastGapCloserSpell() {
+            // Don't cast if no spell configured
+            if (gapCloserSpell == null) {
+                return false;
+            }
+
+            // Don't cast if spell is on cooldown
+            if (spellCooldown > 0) {
+                return false;
+            }
+
+            // Don't cast if already attempted for this target
+            if (hasAttemptedGapClose) {
+                return false;
+            }
+
+            // Don't cast if no target
+            LivingEntity target = mob.getTarget();
+            if (target == null) {
+                return false;
+            }
+
+            // Don't cast if already casting
+            MagicData magicData = MagicData.getPlayerMagicData(mob);
+            if (magicData.isCasting()) {
+                return false;
+            }
+
+            // Don't cast if currently meleeing (mid-animation)
+            if (isMeleeing()) {
+                return false;
+            }
+
+            // Check if target is far enough away to warrant gap closing
+            double distanceToTarget = mob.distanceTo(target);
+
+            if (distanceToTarget < gapCloserDistance) {
+                return false;
+            }
+
+            return true;
+        }
+
+        private void castGapCloserSpell() {
+            if (gapCloserSpell == null || mob.getTarget() == null) {
+                return;
+            }
+
+            MagicData magicData = MagicData.getPlayerMagicData(mob);
+
+            // Get the spell level (use entity's spell power or default to 1)
+            int spellLevel = this.gapCloserSpellLevel;
+
+            // Initiate spell casting
+            mob.initiateCastSpell(gapCloserSpell, spellLevel);
+
+            // Mark as attempted and set cooldown
+            hasAttemptedGapClose = true;
+
+            spellCooldown = SPELL_COOLDOWN_TICKS;
+        }
+
+        @Nullable
+        public AbstractSpell getGapCloserSpell() {
+            return gapCloserSpell;
+        }
+
+        public double getGapCloserDistance() {
+            return gapCloserDistance;
+        }
+
+        public int getSpellCooldown() {
+            return spellCooldown;
+        }
+
+        public boolean hasAttemptedGapClose() {
+            return hasAttemptedGapClose;
         }
     }
 }

@@ -1129,7 +1129,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         }
     }
 
-    private boolean isOnBed() {
+    public boolean isOnBed() {
         BlockPos petPos = blockPosition();
 
         for (int x = -1; x <= 1; x++) {
