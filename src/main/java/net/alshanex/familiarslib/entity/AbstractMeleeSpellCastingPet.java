@@ -6,6 +6,7 @@ import net.alshanex.familiarslib.FamiliarsLib;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.DifficultyInstance;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
@@ -60,6 +61,11 @@ public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSp
     @Override
     public SpawnGroupData finalizeSpawn(ServerLevelAccessor pLevel, DifficultyInstance pDifficulty, MobSpawnType pReason, @Nullable SpawnGroupData pSpawnData) {
         return super.finalizeSpawn(pLevel, pDifficulty, pReason, pSpawnData);
+    }
+
+    @Override
+    public boolean doHurtTarget(Entity entity) {
+        return super.doHurtTarget(entity);
     }
 
     @Override

@@ -1,10 +1,13 @@
 package net.alshanex.familiarslib.event;
 
+import io.redspace.ironsspellbooks.api.registry.AttributeRegistry;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.entity.AbstractMeleeSpellCastingPet;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.item.AbstractMultiSelectionCurio;
 import net.alshanex.familiarslib.util.CurioUtils;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -22,6 +25,12 @@ public class ServerEvents {
             if(pet.isAlliedTo(event.getEntity())){
                 event.setNewDamage(0f);
             }
+        }
+
+        if(event.getSource().getEntity() instanceof AbstractMeleeSpellCastingPet pet){
+            float additionalDamage = (float)pet.getAttributeValue(AttributeRegistry.SPELL_POWER);
+            float newDamage = event.getOriginalDamage() * additionalDamage;
+            event.setNewDamage(newDamage);
         }
     }
 
