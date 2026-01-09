@@ -665,6 +665,13 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
             updateAttackGoal();
         }
 
+        if (this.tickCount % 10 == 0 && !level.isClientSide) {
+            if((this.isOnBed() || this.getIsInHouse() || this.getMovementDisabled())
+                    && this.currentAttackGoal.isActing()){
+                this.currentAttackGoal.stop();
+            }
+        }
+
         //Check to not despawn when tamed
         if (this.tickCount % 600 == 0 && !level.isClientSide) {
             if (getSummoner() != null || getOwnerUUID() != null) {
