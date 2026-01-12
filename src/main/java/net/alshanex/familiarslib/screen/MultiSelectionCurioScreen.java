@@ -102,12 +102,6 @@ public class MultiSelectionCurioScreen extends Screen {
                     FamiliarConsumableSystem.ConsumableData consumableData =
                             FamiliarConsumableSystem.loadConsumableDataFromNBT(nbt);
 
-                    // Legacy migration (same as before)
-                    if (!nbt.contains("consumableData")) {
-                        // ... same legacy migration code ...
-                    }
-
-                    // NEW SYSTEM: Use direct health value
                     float displayHealth = nbt.getFloat("currentHealth");
 
                     // Fallback for old saves with percentage system
