@@ -26,12 +26,6 @@ public class ServerEvents {
                 event.setNewDamage(0f);
             }
         }
-
-        if(event.getSource().getEntity() instanceof AbstractMeleeSpellCastingPet pet){
-            float additionalDamage = (float)pet.getAttributeValue(AttributeRegistry.SPELL_POWER);
-            float newDamage = event.getOriginalDamage() * additionalDamage;
-            event.setNewDamage(newDamage);
-        }
     }
 
     @SubscribeEvent
