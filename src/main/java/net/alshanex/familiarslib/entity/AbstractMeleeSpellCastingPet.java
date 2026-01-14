@@ -6,6 +6,7 @@ import io.redspace.ironsspellbooks.entity.mobs.wizards.fire_boss.NotIdioticNavig
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -13,6 +14,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.LookControl;
 import net.minecraft.world.entity.ai.control.MoveControl;
@@ -24,6 +26,9 @@ import software.bernie.geckolib.animation.*;
 import javax.annotation.Nullable;
 
 public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSpellCastingPet implements IAnimatedAttacker {
+    private static final ResourceLocation SPELL_POWER_DAMAGE_MODIFIER_ID =
+            ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "spell_power_damage_boost");
+
     protected AbstractMeleeSpellCastingPet(EntityType<? extends AbstractSpellCastingPet> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
         this.lookControl = createLookControl();
@@ -68,23 +73,36 @@ public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSp
     }
 
     @Override
-    public boolean doHurtTarget(Entity entity) {
+    public void tick() {
+        super.tick();
+
+        if (!level().isClientSide && tickCount % 20 == 0) {
+            updateSpellPowerDamageModifier();
+        }
+    }
+
+    private void updateSpellPowerDamageModifier() {
         AttributeInstance attackDamage = this.getAttribute(Attributes.ATTACK_DAMAGE);
         if (attackDamage == null) {
-            return super.doHurtTarget(entity);
+            return;
         }
 
-        float spellPower = (float) this.getAttributeValue(AttributeRegistry.SPELL_POWER);
+        double spellPower = this.getAttributeValue(AttributeRegistry.SPELL_POWER);
 
-        double originalBase = attackDamage.getBaseValue();
-        double boostedBase = originalBase * spellPower;
-        attackDamage.setBaseValue(boostedBase);
+        attackDamage.removeModifier(SPELL_POWER_DAMAGE_MODIFIER_ID);
 
-        boolean result = super.doHurtTarget(entity);
+        double multiplier = spellPower - 1.0;
 
-        attackDamage.setBaseValue(originalBase);
+        // Only add modifier if there's actually a bonus
+        if (multiplier > 0.0) {
+            AttributeModifier modifier = new AttributeModifier(
+                    SPELL_POWER_DAMAGE_MODIFIER_ID,
+                    multiplier,
+                    AttributeModifier.Operation.ADD_MULTIPLIED_BASE
+            );
 
-        return result;
+            attackDamage.addTransientModifier(modifier);
+        }
     }
 
     @Override
