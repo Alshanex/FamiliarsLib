@@ -64,11 +64,6 @@ public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSp
     }
 
     @Override
-    public boolean doHurtTarget(Entity entity) {
-        return super.doHurtTarget(entity);
-    }
-
-    @Override
     protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
         super.defineSynchedData(pBuilder);
     }
