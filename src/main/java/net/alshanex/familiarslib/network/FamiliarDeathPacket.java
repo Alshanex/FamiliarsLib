@@ -1,24 +1,16 @@
 package net.alshanex.familiarslib.network;
 
-import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 
-public class FamiliarDeathPacket implements CustomPacketPayload {
-    public static final Type<FamiliarDeathPacket> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_death"));
-
-    public static final StreamCodec<RegistryFriendlyByteBuf, FamiliarDeathPacket> STREAM_CODEC =
-            CustomPacketPayload.codec(FamiliarDeathPacket::write, FamiliarDeathPacket::new);
+public class FamiliarDeathPacket {
 
     private final UUID deadFamiliarId;
     private final Map<UUID, CompoundTag> remainingFamiliars;
@@ -39,9 +31,8 @@ public class FamiliarDeathPacket implements CustomPacketPayload {
     public FamiliarDeathPacket(FriendlyByteBuf buf) {
         this.deadFamiliarId = buf.readUUID();
 
-        // Leer familiares restantes
         int size = buf.readVarInt();
-        this.remainingFamiliars = new java.util.HashMap<>();
+        this.remainingFamiliars = new HashMap<>();
         for (int i = 0; i < size; i++) {
             UUID id = buf.readUUID();
             CompoundTag nbt = buf.readNbt();
@@ -53,10 +44,9 @@ public class FamiliarDeathPacket implements CustomPacketPayload {
         this.familiarData = buf.readNbt();
     }
 
-    public void write(FriendlyByteBuf buf) {
+    public void toBytes(FriendlyByteBuf buf) {
         buf.writeUUID(deadFamiliarId);
 
-        // Escribir familiares restantes
         buf.writeVarInt(remainingFamiliars.size());
         for (Map.Entry<UUID, CompoundTag> entry : remainingFamiliars.entrySet()) {
             buf.writeUUID(entry.getKey());
@@ -76,15 +66,12 @@ public class FamiliarDeathPacket implements CustomPacketPayload {
         buf.writeNbt(familiarData);
     }
 
-    public static void handle(FamiliarDeathPacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            FamiliarManager.handleFamiliarDeathPacket(packet.deadFamiliarId, packet.remainingFamiliars, packet.newSelectedFamiliarId,
-                    packet.currentSummonedFamiliarId, packet.familiarData);
+    public boolean handle(Supplier<NetworkEvent.Context> supplier) {
+        NetworkEvent.Context ctx = supplier.get();
+        ctx.enqueueWork(() -> {
+            FamiliarManager.handleFamiliarDeathPacket(deadFamiliarId, remainingFamiliars, newSelectedFamiliarId,
+                    currentSummonedFamiliarId, familiarData);
         });
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+        return true;
     }
 }

@@ -2,28 +2,43 @@ package net.alshanex.familiarslib.registry;
 
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.advancements.SimpleAdvancementTrigger;
-import net.minecraft.advancements.CriterionTrigger;
-import net.minecraft.core.registries.Registries;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraft.advancements.CriteriaTriggers;
+import net.minecraft.resources.ResourceLocation;
 
 public class CriteriaTriggersRegistry {
-    public static final DeferredRegister<CriterionTrigger<?>> TRIGGERS = DeferredRegister.create(Registries.TRIGGER_TYPE, FamiliarsLib.MODID);
 
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_ARCHMAGE_TRIGGER = TRIGGERS.register("archmage_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_CLERIC_TRIGGER = TRIGGERS.register("cleric_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_DRUID_TRIGGER = TRIGGERS.register("druid_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_HUNTER_TRIGGER = TRIGGERS.register("hunter_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_ILLUSIONIST_TRIGGER = TRIGGERS.register("illusionist_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_MAGE_TRIGGER = TRIGGERS.register("mage_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_NECROMANCER_TRIGGER = TRIGGERS.register("necromancer_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_PLAGUE_TRIGGER = TRIGGERS.register("plague_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_SCORCHER_TRIGGER = TRIGGERS.register("scorcher_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_SUMMONER_TRIGGER = TRIGGERS.register("summoner_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_BARD_TRIGGER = TRIGGERS.register("bard_taming", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_FROSTLING_TRIGGER = TRIGGERS.register("frostling_taming", SimpleAdvancementTrigger::new);
+    public static final SimpleAdvancementTrigger TAMING_ARCHMAGE_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "archmage_taming"));
+    public static final SimpleAdvancementTrigger TAMING_CLERIC_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "cleric_taming"));
+    public static final SimpleAdvancementTrigger TAMING_DRUID_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "druid_taming"));
+    public static final SimpleAdvancementTrigger TAMING_HUNTER_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "hunter_taming"));
+    public static final SimpleAdvancementTrigger TAMING_ILLUSIONIST_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "illusionist_taming"));
+    public static final SimpleAdvancementTrigger TAMING_MAGE_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "mage_taming"));
+    public static final SimpleAdvancementTrigger TAMING_NECROMANCER_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "necromancer_taming"));
+    public static final SimpleAdvancementTrigger TAMING_PLAGUE_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "plague_taming"));
+    public static final SimpleAdvancementTrigger TAMING_SCORCHER_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "scorcher_taming"));
+    public static final SimpleAdvancementTrigger TAMING_SUMMONER_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "summoner_taming"));
+    public static final SimpleAdvancementTrigger TAMING_BARD_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "bard_taming"));
+    public static final SimpleAdvancementTrigger TAMING_FROSTLING_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "frostling_taming"));
 
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> CONSUMABLE_TRIGGER = TRIGGERS.register("consumable_use", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> SHARD_TRIGGER = TRIGGERS.register("shard_use", SimpleAdvancementTrigger::new);
-    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> ILLUSIONIST_REVEAL_TRIGGER = TRIGGERS.register("illusionist_reveal", SimpleAdvancementTrigger::new);
+    public static final SimpleAdvancementTrigger CONSUMABLE_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "consumable_use"));
+    public static final SimpleAdvancementTrigger SHARD_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "shard_use"));
+    public static final SimpleAdvancementTrigger ILLUSIONIST_REVEAL_TRIGGER = new SimpleAdvancementTrigger(new ResourceLocation(FamiliarsLib.MODID, "illusionist_reveal"));
+
+    public static void register() {
+        CriteriaTriggers.register(TAMING_ARCHMAGE_TRIGGER);
+        CriteriaTriggers.register(TAMING_CLERIC_TRIGGER);
+        CriteriaTriggers.register(TAMING_DRUID_TRIGGER);
+        CriteriaTriggers.register(TAMING_HUNTER_TRIGGER);
+        CriteriaTriggers.register(TAMING_ILLUSIONIST_TRIGGER);
+        CriteriaTriggers.register(TAMING_MAGE_TRIGGER);
+        CriteriaTriggers.register(TAMING_NECROMANCER_TRIGGER);
+        CriteriaTriggers.register(TAMING_PLAGUE_TRIGGER);
+        CriteriaTriggers.register(TAMING_SCORCHER_TRIGGER);
+        CriteriaTriggers.register(TAMING_SUMMONER_TRIGGER);
+        CriteriaTriggers.register(TAMING_BARD_TRIGGER);
+        CriteriaTriggers.register(TAMING_FROSTLING_TRIGGER);
+        CriteriaTriggers.register(CONSUMABLE_TRIGGER);
+        CriteriaTriggers.register(SHARD_TRIGGER);
+        CriteriaTriggers.register(ILLUSIONIST_REVEAL_TRIGGER);
+    }
 }

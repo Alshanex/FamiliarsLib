@@ -3,14 +3,14 @@ package net.alshanex.familiarslib.screen;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.network.SetStorageModePacket;
 import net.alshanex.familiarslib.network.UpdateStorageSettingsPacket;
+import net.alshanex.familiarslib.setup.NetworkHandler;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
  * Familiar Storage Wander Mode screen
@@ -44,7 +44,6 @@ public class FamiliarWanderScreen extends Screen {
 
         loadStorageData();
 
-        // Switch to Store Mode button
         this.switchToStoreModeButton = Button.builder(
                         Component.translatable("ui.familiarslib.familiar_storage_screen.switch_to_store"),
                         button -> switchToStoreMode())
@@ -52,7 +51,6 @@ public class FamiliarWanderScreen extends Screen {
                 .size(200, 20)
                 .build();
 
-        // Toggle Goals button
         this.toggleGoalsButton = Button.builder(
                         getGoalsButtonText(),
                         button -> toggleGoals())
@@ -60,7 +58,6 @@ public class FamiliarWanderScreen extends Screen {
                 .size(200, 20)
                 .build();
 
-        // Distance slider
         this.distanceSlider = new DistanceSlider(panelX + 50, panelY + 160, 200, 20, maxDistance);
 
         addRenderableWidget(switchToStoreModeButton);
@@ -85,7 +82,7 @@ public class FamiliarWanderScreen extends Screen {
     }
 
     private void switchToStoreMode() {
-        PacketDistributor.sendToServer(new SetStorageModePacket(blockPos, true));
+        NetworkHandler.sendToServer(new SetStorageModePacket(blockPos, true));
         this.onClose();
     }
 
@@ -93,30 +90,25 @@ public class FamiliarWanderScreen extends Screen {
         canFamiliarsUseGoals = !canFamiliarsUseGoals;
         toggleGoalsButton.setMessage(getGoalsButtonText());
 
-        // Send update to server
-        PacketDistributor.sendToServer(new UpdateStorageSettingsPacket(blockPos, canFamiliarsUseGoals, maxDistance));
+        NetworkHandler.sendToServer(new UpdateStorageSettingsPacket(blockPos, canFamiliarsUseGoals, maxDistance));
     }
 
     private void updateMaxDistance(int newDistance) {
         maxDistance = newDistance;
-        // Send update to server
-        PacketDistributor.sendToServer(new UpdateStorageSettingsPacket(blockPos, canFamiliarsUseGoals, maxDistance));
+        NetworkHandler.sendToServer(new UpdateStorageSettingsPacket(blockPos, canFamiliarsUseGoals, maxDistance));
     }
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        renderBackground(guiGraphics);
 
-        // Render panel background
         guiGraphics.fill(panelX - 2, panelY - 2, panelX + PANEL_WIDTH + 2, panelY + PANEL_HEIGHT + 2, 0xFF555555);
         guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT, 0xFF222222);
 
-        // Render title
         Component title = Component.translatable("ui.familiarslib.familiar_wander_screen.title");
         int titleWidth = font.width(title);
         guiGraphics.drawString(font, title, panelX + (PANEL_WIDTH - titleWidth) / 2, panelY + 10, 0xFFFFFF);
 
-        // Render distance label
         Component distanceLabel = Component.translatable("ui.familiarslib.familiar_wander_screen.max_distance",
                 String.valueOf(maxDistance));
         guiGraphics.drawString(font, distanceLabel, panelX + 90, panelY + 145, 0xFFFFFF);
@@ -125,7 +117,7 @@ public class FamiliarWanderScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
     }
 
@@ -134,7 +126,6 @@ public class FamiliarWanderScreen extends Screen {
         return false;
     }
 
-    // Custom slider for distance
     private class DistanceSlider extends AbstractSliderButton {
         private static final int MIN_DISTANCE = 3;
         private static final int MAX_DISTANCE = 25;

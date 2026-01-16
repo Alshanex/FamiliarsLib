@@ -1,75 +1,86 @@
 package net.alshanex.familiarslib;
 
+import com.mojang.logging.LogUtils;
 import net.alshanex.familiarslib.registry.*;
-import net.neoforged.fml.ModList;
-import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
+import net.alshanex.familiarslib.setup.ModSetup;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.server.ServerStartingEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
-import com.mojang.logging.LogUtils;
-
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
-import net.neoforged.neoforge.event.server.ServerStartingEvent;
-
-// The value here should match an entry in the META-INF/neoforge.mods.toml file
+// The value here should match an entry in the META-INF/mods.toml file
 @Mod(FamiliarsLib.MODID)
-public class FamiliarsLib {
+public class FamiliarsLib
+{
     // Define mod id in a common place for everything to reference
     public static final String MODID = "familiarslib";
     // Directly reference a slf4j logger
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    // The constructor for the mod class is the first code that is run when your mod is loaded.
-    // FML will recognize some parameter types like IEventBus or ModContainer and pass them in automatically.
-    public FamiliarsLib(IEventBus modEventBus, ModContainer modContainer) {
+    public FamiliarsLib(FMLJavaModLoadingContext context)
+    {
+        ModSetup.setup();
+
+        IEventBus modEventBus = context.getModEventBus();
+
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
 
-        AttachmentRegistry.register(modEventBus);
+
+        // Register ourselves for server and other game events we are interested in
+        MinecraftForge.EVENT_BUS.register(this);
 
         AttributeRegistry.ATTRIBUTES.register(modEventBus);
 
-        CriteriaTriggersRegistry.TRIGGERS.register(modEventBus);
+        CriteriaTriggersRegistry.register();
 
         FParticleRegistry.register(modEventBus);
 
         FSchoolRegistry.SCHOOLS.register(modEventBus);
 
-        ComponentRegistry.COMPONENTS.register(modEventBus);
-
-        // Register ourselves for server and other game events we are interested in.
-        // Note that this is necessary if and only if we want *this* class (ExampleMod) to respond directly to events.
-        // Do not add this line if there are no @SubscribeEvent-annotated functions in this class, like onServerStarting() below.
-        NeoForge.EVENT_BUS.register(this);
-
         // Register the item to a creative tab
         modEventBus.addListener(this::addCreative);
 
-        // Register our mod's ModConfigSpec so that FML can create and load the config file for us
-        //modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
+        modEventBus.addListener(CapabilityRegistry::register);
+
+        // Register our mod's ForgeConfigSpec so that Forge can create and load the config file for us
+        //context.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
-    private void commonSetup(FMLCommonSetupEvent event) {
+    private void commonSetup(final FMLCommonSetupEvent event)
+    {
 
     }
 
     // Add the example block item to the building blocks tab
-    private void addCreative(BuildCreativeModeTabContentsEvent event) {
+    private void addCreative(BuildCreativeModeTabContentsEvent event)
+    {
 
     }
 
     // You can use SubscribeEvent and let the Event Bus discover methods to call
     @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event) {
+    public void onServerStarting(ServerStartingEvent event)
+    {
 
     }
 
-    public static boolean isModLoaded(String modId) {
-        return ModList.get().isLoaded(modId);
+    // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent
+    @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    public static class ClientModEvents
+    {
+        @SubscribeEvent
+        public static void onClientSetup(FMLClientSetupEvent event)
+        {
+
+        }
     }
 }

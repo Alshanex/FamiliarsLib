@@ -1,19 +1,12 @@
 package net.alshanex.familiarslib.data;
 
-import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
-import net.neoforged.neoforge.common.util.INBTSerializable;
 
 import java.util.*;
 
-/**
- * Stores the tamed familiars for the player
- */
-public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
-
-    // Max limit of familiars per player
+public class PlayerFamiliarData {
     public static final int MAX_FAMILIAR_LIMIT = 10;
 
     private final Map<UUID, CompoundTag> tamedFamiliars = new HashMap<>();
@@ -120,8 +113,7 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
         return tamedFamiliars.size();
     }
 
-    @Override
-    public CompoundTag serializeNBT(HolderLookup.Provider provider) {
+    public CompoundTag serializeNBT() {
         CompoundTag nbt = new CompoundTag();
 
         ListTag familiarsList = new ListTag();
@@ -136,11 +128,9 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
         if (selectedFamiliarId != null) {
             nbt.putUUID("selectedFamiliar", selectedFamiliarId);
         }
-
         if (currentSummonedFamiliarId != null) {
             nbt.putUUID("currentSummoned", currentSummonedFamiliarId);
         }
-
         if (!summonedFamiliarIds.isEmpty()) {
             ListTag summonedList = new ListTag();
             for (UUID summonedId : summonedFamiliarIds) {
@@ -150,15 +140,11 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
             }
             nbt.put("summonedFamiliars", summonedList);
         }
-
-        nbt.putInt("familiarCount", tamedFamiliars.size());
-        nbt.putLong("saveTime", System.currentTimeMillis());
-
         return nbt;
     }
 
-    @Override
-    public void deserializeNBT(HolderLookup.Provider provider, CompoundTag nbt) {
+    public void deserializeNBT(CompoundTag nbt) {
+
         tamedFamiliars.clear();
         selectedFamiliarId = null;
         currentSummonedFamiliarId = null;
@@ -175,24 +161,29 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
                 }
             }
         }
-
         if (nbt.hasUUID("selectedFamiliar")) {
             selectedFamiliarId = nbt.getUUID("selectedFamiliar");
         }
-
         if (nbt.hasUUID("currentSummoned")) {
             currentSummonedFamiliarId = nbt.getUUID("currentSummoned");
         }
-
         if (nbt.contains("summonedFamiliars", Tag.TAG_LIST)) {
             ListTag summonedList = nbt.getList("summonedFamiliars", Tag.TAG_COMPOUND);
             for (int i = 0; i < summonedList.size(); i++) {
                 CompoundTag summonedEntry = summonedList.getCompound(i);
                 if (summonedEntry.hasUUID("summonedId")) {
-                    UUID summonedId = summonedEntry.getUUID("summonedId");
-                    summonedFamiliarIds.add(summonedId);
+                    summonedFamiliarIds.add(summonedEntry.getUUID("summonedId"));
                 }
             }
         }
+    }
+
+    public void copyFrom(PlayerFamiliarData source) {
+        this.tamedFamiliars.clear();
+        this.tamedFamiliars.putAll(source.tamedFamiliars);
+        this.selectedFamiliarId = source.selectedFamiliarId;
+        this.currentSummonedFamiliarId = source.currentSummonedFamiliarId;
+        this.summonedFamiliarIds.clear();
+        this.summonedFamiliarIds.addAll(source.summonedFamiliarIds);
     }
 }

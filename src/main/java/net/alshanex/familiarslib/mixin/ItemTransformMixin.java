@@ -24,7 +24,7 @@ public class ItemTransformMixin {
                                       int combinedLight, int combinedOverlay, BakedModel model, CallbackInfo ci) {
 
         // Check if the item has the familiar consumable component (which makes it miniaturized)
-        if (FamiliarConsumableIntegration.isConsumableItem(itemStack) || itemStack.has(ComponentRegistry.FAMILIAR_FOOD) || itemStack.getItem() instanceof AbstractFamiliarTotem) {
+        if (FamiliarConsumableIntegration.isConsumableItem(itemStack) || ComponentRegistry.FAMILIAR_FOOD.has(itemStack) || itemStack.getItem() instanceof AbstractFamiliarTotem) {
             // Scale down for all contexts except GUI contexts
             if (shouldScaleItem(displayContext) == 1) {
                 poseStack.scale(0.5f, 0.5f, 0.5f);

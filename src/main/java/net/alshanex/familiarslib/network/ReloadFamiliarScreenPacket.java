@@ -1,20 +1,12 @@
 package net.alshanex.familiarslib.network;
 
-import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
-public class ReloadFamiliarScreenPacket implements CustomPacketPayload {
-    public static final Type<ReloadFamiliarScreenPacket> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "reload_familiar_screen"));
+import java.util.function.Supplier;
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, ReloadFamiliarScreenPacket> STREAM_CODEC =
-            CustomPacketPayload.codec(ReloadFamiliarScreenPacket::write, ReloadFamiliarScreenPacket::new);
+public class ReloadFamiliarScreenPacket {
 
     private final boolean shouldClose;
 
@@ -26,18 +18,15 @@ public class ReloadFamiliarScreenPacket implements CustomPacketPayload {
         this.shouldClose = buf.readBoolean();
     }
 
-    public void write(FriendlyByteBuf buf) {
+    public void toBytes(FriendlyByteBuf buf) {
         buf.writeBoolean(shouldClose);
     }
 
-    public static void handle(ReloadFamiliarScreenPacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            FamiliarManager.handleFamiliarSelectionScreenUpdate(packet.shouldClose);
+    public boolean handle(Supplier<NetworkEvent.Context> supplier) {
+        NetworkEvent.Context ctx = supplier.get();
+        ctx.enqueueWork(() -> {
+            FamiliarManager.handleFamiliarSelectionScreenUpdate(shouldClose);
         });
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+        return true;
     }
 }

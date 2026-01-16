@@ -2,9 +2,6 @@ package net.alshanex.familiarslib.util;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -19,13 +16,7 @@ public record SelectedFamiliarsComponent(Set<UUID> selectedFamiliars) {
                     .forGetter(component -> new HashSet<>(component.selectedFamiliars()))
     ).apply(instance, SelectedFamiliarsComponent::new));
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, SelectedFamiliarsComponent> STREAM_CODEC =
-            StreamCodec.composite(
-                    ByteBufCodecs.collection(HashSet::new, ByteBufCodecs.STRING_UTF8.map(UUID::fromString, UUID::toString))
-                            .map(set -> (Set<UUID>) set, set -> new HashSet<>(set)),
-                    SelectedFamiliarsComponent::selectedFamiliars,
-                    SelectedFamiliarsComponent::new
-            );
+    // No STREAM_CODEC needed - network sync handled via NBT in 1.20.1
 
     public SelectedFamiliarsComponent() {
         this(new HashSet<>());

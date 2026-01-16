@@ -8,7 +8,8 @@ import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.network.MoveFamiliarPacket;
 import net.alshanex.familiarslib.network.SetStorageModePacket;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.registry.CapabilityRegistry;
+import net.alshanex.familiarslib.setup.NetworkHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -21,7 +22,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -34,7 +34,6 @@ import java.util.UUID;
  * Familiar Storage blocks screen - Store Mode
  */
 public class FamiliarStorageScreen extends Screen {
-    // Tamaños base independientes del GUI scale
     private static final int BASE_PANEL_WIDTH = 200;
     private static final int BASE_PANEL_HEIGHT = 320;
     private static final int BASE_BUTTON_PANEL_WIDTH = 140;
@@ -42,7 +41,6 @@ public class FamiliarStorageScreen extends Screen {
     private static final int BASE_SCROLL_SPEED = 20;
     private static final int BASE_PADDING = 20;
 
-    // Tamaños escalados que se calculan en init()
     private int PANEL_WIDTH;
     private int PANEL_HEIGHT;
     private int BUTTON_PANEL_WIDTH;
@@ -82,11 +80,9 @@ public class FamiliarStorageScreen extends Screen {
     protected void init() {
         super.init();
 
-        // Calculate scaling
         double scale = Math.min(this.width / 1000.0, this.height / 600.0);
         scale = Math.max(0.7, Math.min(1.5, scale));
 
-        // Apply scaling
         PANEL_WIDTH = (int) (BASE_PANEL_WIDTH * scale);
         PANEL_HEIGHT = (int) (BASE_PANEL_HEIGHT * scale);
         BUTTON_PANEL_WIDTH = (int) (BASE_BUTTON_PANEL_WIDTH * scale);
@@ -94,7 +90,6 @@ public class FamiliarStorageScreen extends Screen {
         SCROLL_SPEED = (int) (BASE_SCROLL_SPEED * scale);
         PADDING = (int) (BASE_PADDING * scale);
 
-        // Calculate positions
         int totalWidth = PANEL_WIDTH * 2 + BUTTON_PANEL_WIDTH + PADDING * 2;
         int startX = (this.width - totalWidth) / 2;
 
@@ -103,12 +98,10 @@ public class FamiliarStorageScreen extends Screen {
         this.playerPanelX = startX + PANEL_WIDTH + BUTTON_PANEL_WIDTH + PADDING * 2;
         this.panelY = (this.height - PANEL_HEIGHT) / 2 + 30;
 
-        // Calculate scaled measurements
         int buttonWidth = Math.max(120, (int) (120 * scale));
         int buttonHeight = Math.max(20, (int) (20 * scale));
         int smallButtonHeight = Math.max(18, (int) (18 * scale));
 
-        // Switch to Wander Mode button
         this.switchToWanderModeButton = Button.builder(
                         Component.translatable("ui.familiarslib.familiar_storage_screen.switch_to_wander"),
                         button -> switchToWanderMode())
@@ -116,7 +109,6 @@ public class FamiliarStorageScreen extends Screen {
                 .size(buttonWidth, buttonHeight)
                 .build();
 
-        // Move buttons
         int screenCenterY = this.height / 2;
         int moveButtonWidth = Math.max(80, (int) (80 * scale));
 
@@ -139,7 +131,7 @@ public class FamiliarStorageScreen extends Screen {
     }
 
     private void switchToWanderMode() {
-        PacketDistributor.sendToServer(new SetStorageModePacket(blockPos, false));
+        NetworkHandler.sendToServer(new SetStorageModePacket(blockPos, false));
         this.onClose();
     }
 
@@ -163,18 +155,19 @@ public class FamiliarStorageScreen extends Screen {
             }
         }
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        Map<UUID, CompoundTag> playerFams = familiarData.getAllFamiliars();
+        minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(familiarData -> {
+            Map<UUID, CompoundTag> playerFams = familiarData.getAllFamiliars();
 
-        for (Map.Entry<UUID, CompoundTag> entry : playerFams.entrySet()) {
-            UUID id = entry.getKey();
-            CompoundTag nbt = entry.getValue();
+            for (Map.Entry<UUID, CompoundTag> entry : playerFams.entrySet()) {
+                UUID id = entry.getKey();
+                CompoundTag nbt = entry.getValue();
 
-            FamiliarEntry familiarEntry = createFamiliarEntry(id, nbt);
-            if (familiarEntry != null) {
-                playerFamiliars.add(familiarEntry);
+                FamiliarEntry familiarEntry = createFamiliarEntry(id, nbt);
+                if (familiarEntry != null) {
+                    playerFamiliars.add(familiarEntry);
+                }
             }
-        }
+        });
 
         calculateMaxScroll();
     }
@@ -222,23 +215,23 @@ public class FamiliarStorageScreen extends Screen {
     private void updateButtonStates() {
         BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
-            PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-
-            storeButton.active = selectedPlayerFamiliar != null && storageEntity.canStoreFamiliar();
-            retrieveButton.active = selectedStoredFamiliar != null && familiarData.canTameMoreFamiliars();
+            minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(familiarData -> {
+                storeButton.active = selectedPlayerFamiliar != null && storageEntity.canStoreFamiliar();
+                retrieveButton.active = selectedStoredFamiliar != null && familiarData.canTameMoreFamiliars();
+            });
         }
     }
 
     private void moveToStorage() {
         if (selectedPlayerFamiliar != null) {
-            PacketDistributor.sendToServer(new MoveFamiliarPacket(blockPos, selectedPlayerFamiliar, true));
+            NetworkHandler.sendToServer(new MoveFamiliarPacket(blockPos, selectedPlayerFamiliar, true));
             selectedPlayerFamiliar = null;
         }
     }
 
     private void moveToPlayer() {
         if (selectedStoredFamiliar != null) {
-            PacketDistributor.sendToServer(new MoveFamiliarPacket(blockPos, selectedStoredFamiliar, false));
+            NetworkHandler.sendToServer(new MoveFamiliarPacket(blockPos, selectedStoredFamiliar, false));
             selectedStoredFamiliar = null;
         }
     }
@@ -246,23 +239,20 @@ public class FamiliarStorageScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        renderBackground(guiGraphics);
 
         BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
-            // Render mode title at the top
             Component modeTitle = Component.translatable("ui.familiarslib.familiar_storage_screen.store_mode_title");
             int titleWidth = font.width(modeTitle);
             guiGraphics.drawString(font, modeTitle, (this.width - titleWidth) / 2, panelY - 50, 0x00FF00);
 
-            // Render panel titles (ajustados para la nueva escala)
             renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.storage_familiars",
                     storageEntity.getStoredFamiliarCount(),
                     storageEntity.getMaxStoredFamiliars()), storedPanelX, panelY - 20);
             renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.player_familiars"), playerPanelX, panelY - 20);
         }
 
-        // Render panels
         renderFamiliarPanel(guiGraphics, storedFamiliars, storedPanelX, panelY, storedScrollOffset, selectedStoredFamiliar, mouseX, mouseY, partialTick);
         renderFamiliarPanel(guiGraphics, playerFamiliars, playerPanelX, panelY, playerScrollOffset, selectedPlayerFamiliar, mouseX, mouseY, partialTick);
 
@@ -303,7 +293,6 @@ public class FamiliarStorageScreen extends Screen {
             guiGraphics.fill(x, y, x + PANEL_WIDTH, y + FAMILIAR_ITEM_HEIGHT, 0x44FFFFFF);
         }
 
-        // Ajustar tamaño y posición del familiar renderizado según la escala
         float entityScale = Math.max(15, FAMILIAR_ITEM_HEIGHT * 0.4f);
         int entityX = x + (int)(FAMILIAR_ITEM_HEIGHT * 0.5f);
         int entityY = y + (int)(FAMILIAR_ITEM_HEIGHT * 0.7f);
@@ -319,7 +308,6 @@ public class FamiliarStorageScreen extends Screen {
         renderEntity(guiGraphics, entry.familiar, 0, 0, 0);
         poseStack.popPose();
 
-        // Ajustar posición del texto según la escala
         Component nameComponent = Component.literal(entry.displayName);
         int textX = x + (int)(FAMILIAR_ITEM_HEIGHT * 1.1f);
         int textY = y + FAMILIAR_ITEM_HEIGHT / 2 - font.lineHeight / 2;
@@ -404,7 +392,7 @@ public class FamiliarStorageScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
         if (mouseX >= storedPanelX && mouseX < storedPanelX + PANEL_WIDTH &&
                 mouseY >= panelY && mouseY < panelY + PANEL_HEIGHT) {
 
@@ -421,12 +409,12 @@ public class FamiliarStorageScreen extends Screen {
             return true;
         }
 
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, scrollY);
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256) { // ESC
+        if (keyCode == 256) {
             onClose();
             return true;
         }
@@ -435,7 +423,7 @@ public class FamiliarStorageScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
     }
 
@@ -458,7 +446,6 @@ public class FamiliarStorageScreen extends Screen {
         RenderSystem.disableScissor();
     }
 
-    //Helper to store familiars data
     private static class FamiliarEntry {
         final UUID id;
         final AbstractSpellCastingPet familiar;

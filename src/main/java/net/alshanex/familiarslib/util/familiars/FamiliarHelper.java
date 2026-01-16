@@ -5,13 +5,13 @@ import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -32,45 +32,6 @@ import java.util.UUID;
  * Helper methods for the AbstractSpellCastingPet class
  */
 public class FamiliarHelper {
-
-    public static void attemptLegacyMigration(ServerPlayer player, AbstractSpellCastingPet familiar) {
-        try {
-            PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-            UUID familiarId = familiar.getUUID();
-
-            if (!familiarData.hasFamiliar(familiarId)) {
-                FamiliarsLib.LOGGER.debug("Migrating legacy familiar {} for player {}",
-                        familiarId, player.getName().getString());
-
-                CompoundTag familiarNBT = createFamiliarNBT(familiar);
-
-                if (familiarData.tryAddTamedFamiliar(familiarId, familiarNBT)) {
-                    if (familiarData.getSelectedFamiliarId() == null) {
-                        familiarData.setSelectedFamiliarId(familiarId);
-                        FamiliarsLib.LOGGER.debug("Set migrated familiar {} as selected", familiarId);
-                    }
-
-                    familiarData.setCurrentSummonedFamiliarId(familiarId);
-
-                    FamiliarManager.syncFamiliarDataForPlayer(player);
-
-                    FamiliarsLib.LOGGER.debug("Successfully migrated legacy familiar {} to data attachment", familiarId);
-                } else {
-                    FamiliarsLib.LOGGER.debug("Failed to migrate legacy familiar {} - player {} at max capacity ({}/{})",
-                            familiarId, player.getName().getString(),
-                            familiarData.getFamiliarCount(), PlayerFamiliarData.MAX_FAMILIAR_LIMIT);
-                }
-            } else {
-                if (!familiarId.equals(familiarData.getCurrentSummonedFamiliarId())) {
-                    familiarData.setCurrentSummonedFamiliarId(familiarId);
-                    FamiliarManager.syncFamiliarDataForPlayer(player);
-                }
-            }
-        } catch (Exception e) {
-            FamiliarsLib.LOGGER.error("Error during legacy familiar migration for {}: ", familiar.getUUID(), e);
-        }
-    }
-
     private static CompoundTag createFamiliarNBT(AbstractSpellCastingPet familiar) {
         CompoundTag nbt = new CompoundTag();
         familiar.saveWithoutId(nbt);
@@ -134,12 +95,12 @@ public class FamiliarHelper {
             return false;
         }
 
-        ResourceKey<LootTable> lootTableId = livingEntity.getLootTable();
+        ResourceLocation lootTableId = livingEntity.getLootTable();
         if (lootTableId == null) {
             return false;
         }
 
-        LootTable lootTable = level.getServer().reloadableRegistries().getLootTable(lootTableId);
+        LootTable lootTable = level.getServer().getLootData().getLootTable(lootTableId);
 
         LootParams params = new LootParams.Builder(level)
                 .withParameter(LootContextParams.THIS_ENTITY, entity)

@@ -7,7 +7,8 @@ import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.network.ReleaseFamiliarPacket;
 import net.alshanex.familiarslib.network.SelectFamiliarPacket;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.registry.CapabilityRegistry;
+import net.alshanex.familiarslib.setup.NetworkHandler;
 import net.alshanex.familiarslib.util.consumables.ConsumableUtils;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.client.Minecraft;
@@ -23,7 +24,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -35,11 +35,9 @@ public class FamiliarSelectionScreen extends Screen {
     private static final int FAMILIAR_ITEM_HEIGHT = 80;
     private static final int SCROLL_SPEED = 20;
 
-    private static final ResourceLocation HEART_CONTAINER = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/container.png");
-    private static final ResourceLocation HEART_FULL = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/full.png");
-    private static final ResourceLocation ARMOR_FULL = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/armor_full.png");
+    private static final ResourceLocation GUI_ICONS_LOCATION = new ResourceLocation("textures/gui/icons.png");
 
-    private static final ResourceLocation RED_MUSHROOM = ResourceLocation.withDefaultNamespace("textures/block/red_mushroom.png");
+    private static final ResourceLocation RED_MUSHROOM = new ResourceLocation("textures/block/red_mushroom.png");
 
     private final List<FamiliarEntry> familiarEntries = new ArrayList<>();
     private UUID selectedFamiliarId;
@@ -66,7 +64,6 @@ public class FamiliarSelectionScreen extends Screen {
         this.rightPanelX = this.leftPanelX + PANEL_WIDTH + 20;
         this.panelY = ((this.height - PANEL_HEIGHT) / 2) + 30;
 
-        // Crear botón de liberar
         int buttonWidth = 80;
         int buttonHeight = 20;
         int buttonX = leftPanelX + (PANEL_WIDTH - buttonWidth) / 2;
@@ -87,101 +84,94 @@ public class FamiliarSelectionScreen extends Screen {
 
         if (minecraft == null || minecraft.player == null) return;
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        selectedFamiliarId = familiarData.getSelectedFamiliarId();
+        minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(familiarData -> {
+            selectedFamiliarId = familiarData.getSelectedFamiliarId();
 
-        Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
+            Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
 
-        for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
-            UUID id = entry.getKey();
-            CompoundTag nbt = entry.getValue();
+            for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
+                UUID id = entry.getKey();
+                CompoundTag nbt = entry.getValue();
 
-            String entityTypeString = nbt.getString("id");
-            EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
+                String entityTypeString = nbt.getString("id");
+                EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
 
-            if (entityType != null) {
-                Entity entity = entityType.create(minecraft.level);
-                if (entity instanceof AbstractSpellCastingPet familiar) {
-                    familiar.load(nbt);
-                    familiar.setUUID(id);
+                if (entityType != null) {
+                    Entity entity = entityType.create(minecraft.level);
+                    if (entity instanceof AbstractSpellCastingPet familiar) {
+                        familiar.load(nbt);
+                        familiar.setUUID(id);
 
-                    String displayName = familiar.hasCustomName() ?
-                            familiar.getCustomName().getString() :
-                            familiar.getType().getDescription().getString();
+                        String displayName = familiar.hasCustomName() ?
+                                familiar.getCustomName().getString() :
+                                familiar.getType().getDescription().getString();
 
-                    // Get the base max health from NBT or familiar
-                    float baseMaxHealth = nbt.contains("baseMaxHealth") ?
-                            nbt.getFloat("baseMaxHealth") : familiar.getBaseMaxHealth();
+                        float baseMaxHealth = nbt.contains("baseMaxHealth") ?
+                                nbt.getFloat("baseMaxHealth") : familiar.getBaseMaxHealth();
 
-                    // Load consumable data properly
-                    FamiliarConsumableSystem.ConsumableData consumableData =
-                            FamiliarConsumableSystem.loadConsumableDataFromNBT(nbt);
+                        FamiliarConsumableSystem.ConsumableData consumableData =
+                                FamiliarConsumableSystem.loadConsumableDataFromNBT(nbt);
 
-                    // Check for legacy data and migrate if needed
-                    if (!nbt.contains("consumableData")) {
-                        int legacyArmor = nbt.getInt("armorStacks");
-                        int legacyEnraged = nbt.getInt("enragedStacks");
-                        int legacyHealth = nbt.getInt("healthStacks");
-                        boolean legacyBlocking = nbt.getBoolean("canBlock");
+                        if (!nbt.contains("consumableData")) {
+                            int legacyArmor = nbt.getInt("armorStacks");
+                            int legacyEnraged = nbt.getInt("enragedStacks");
+                            int legacyHealth = nbt.getInt("healthStacks");
+                            boolean legacyBlocking = nbt.getBoolean("canBlock");
 
-                        if (legacyArmor > 0 || legacyEnraged > 0 || legacyHealth > 0 || legacyBlocking) {
-                            // Migrate legacy data (same as before)
-                            if (legacyHealth > 0) {
-                                int healthPercentage = legacyHealth * 10;
-                                healthPercentage = Math.min(healthPercentage, FamiliarConsumableSystem.ConsumableType.HEALTH.getMaxLimit());
-                                consumableData.setValue(FamiliarConsumableSystem.ConsumableType.HEALTH, healthPercentage);
+                            if (legacyArmor > 0 || legacyEnraged > 0 || legacyHealth > 0 || legacyBlocking) {
+                                if (legacyHealth > 0) {
+                                    int healthPercentage = legacyHealth * 10;
+                                    healthPercentage = Math.min(healthPercentage, FamiliarConsumableSystem.ConsumableType.HEALTH.getMaxLimit());
+                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.HEALTH, healthPercentage);
+                                }
+
+                                if (legacyArmor > 0) {
+                                    int armorPoints = Math.min(legacyArmor, FamiliarConsumableSystem.ConsumableType.ARMOR.getMaxLimit());
+                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ARMOR, armorPoints);
+                                }
+
+                                if (legacyEnraged > 0) {
+                                    int enragedStacks = Math.min(legacyEnraged, FamiliarConsumableSystem.ConsumableType.ENRAGED.getMaxLimit());
+                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ENRAGED, enragedStacks);
+                                }
+
+                                if (legacyBlocking) {
+                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.BLOCKING, 1);
+                                }
+
+                                FamiliarConsumableSystem.saveConsumableDataToNBT(consumableData, nbt);
+                                familiarData.addTamedFamiliar(id, nbt);
                             }
-
-                            if (legacyArmor > 0) {
-                                int armorPoints = Math.min(legacyArmor, FamiliarConsumableSystem.ConsumableType.ARMOR.getMaxLimit());
-                                consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ARMOR, armorPoints);
-                            }
-
-                            if (legacyEnraged > 0) {
-                                int enragedStacks = Math.min(legacyEnraged, FamiliarConsumableSystem.ConsumableType.ENRAGED.getMaxLimit());
-                                consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ENRAGED, enragedStacks);
-                            }
-
-                            if (legacyBlocking) {
-                                consumableData.setValue(FamiliarConsumableSystem.ConsumableType.BLOCKING, 1);
-                            }
-
-                            FamiliarConsumableSystem.saveConsumableDataToNBT(consumableData, nbt);
-                            familiarData.addTamedFamiliar(id, nbt);
                         }
-                    }
 
-                    // NEW SYSTEM: Use direct health value from NBT
-                    float displayHealth = nbt.getFloat("currentHealth");
+                        float displayHealth = nbt.getFloat("currentHealth");
 
-                    // If currentHealth is 0 or missing, calculate from percentage (fallback for old saves)
-                    if (displayHealth <= 0 && nbt.contains("healthPercentage")) {
-                        float healthPercentage = nbt.getFloat("healthPercentage");
+                        if (displayHealth <= 0 && nbt.contains("healthPercentage")) {
+                            float healthPercentage = nbt.getFloat("healthPercentage");
+                            float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
+                                    consumableData, baseMaxHealth);
+                            displayHealth = healthPercentage * maxHealthWithModifiers;
+                        }
+
+                        if (displayHealth <= 0) {
+                            displayHealth = baseMaxHealth;
+                        }
+
+                        int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
+                        int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
+                        boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
+
+                        familiarEntries.add(new FamiliarEntry(id, familiar, displayName, displayHealth, armor, enraged, canBlock));
+
                         float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
                                 consumableData, baseMaxHealth);
-                        displayHealth = healthPercentage * maxHealthWithModifiers;
+
+                        FamiliarsLib.LOGGER.debug("FamiliarSelection: Loaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
+                                id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
                     }
-
-                    // Final fallback - use base max health
-                    if (displayHealth <= 0) {
-                        displayHealth = baseMaxHealth;
-                    }
-
-                    // Get current values from consumable system
-                    int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
-                    int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
-                    boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
-
-                    familiarEntries.add(new FamiliarEntry(id, familiar, displayName, displayHealth, armor, enraged, canBlock));
-
-                    float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
-                            consumableData, baseMaxHealth);
-
-                    FamiliarsLib.LOGGER.debug("FamiliarSelection: Loaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
-                            id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
                 }
             }
-        }
+        });
 
         int visibleItems = 3;
         maxScroll = Math.max(0, (familiarEntries.size() - visibleItems) * FAMILIAR_ITEM_HEIGHT);
@@ -204,7 +194,7 @@ public class FamiliarSelectionScreen extends Screen {
 
         minecraft.setScreen(new ConfirmReleaseScreen(this, title, message, (confirmed) -> {
             if (confirmed) {
-                PacketDistributor.sendToServer(new ReleaseFamiliarPacket(selectedFamiliarId));
+                NetworkHandler.sendToServer(new ReleaseFamiliarPacket(selectedFamiliarId));
             }
         }));
     }
@@ -225,128 +215,119 @@ public class FamiliarSelectionScreen extends Screen {
                 return;
             }
 
-            PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-            if (familiarData == null) {
-                FamiliarsLib.LOGGER.warn("FamiliarData is null");
-                return;
-            }
+            minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(familiarData -> {
+                Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
+                UUID currentSelected = familiarData.getSelectedFamiliarId();
 
-            Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
-            UUID currentSelected = familiarData.getSelectedFamiliarId();
+                FamiliarsLib.LOGGER.debug("Current data - Familiar count: {}, Selected: {}", familiars.size(), currentSelected);
 
-            FamiliarsLib.LOGGER.debug("Current data - Familiar count: {}, Selected: {}", familiars.size(), currentSelected);
+                if (familiars.isEmpty()) {
+                    FamiliarsLib.LOGGER.debug("No familiars found, closing screen");
+                    onClose();
+                    return;
+                }
 
-            if (familiars.isEmpty()) {
-                FamiliarsLib.LOGGER.debug("No familiars found, closing screen");
-                onClose();
-                return;
-            }
+                for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
+                    UUID id = entry.getKey();
+                    CompoundTag nbt = entry.getValue();
 
-            for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
-                UUID id = entry.getKey();
-                CompoundTag nbt = entry.getValue();
+                    FamiliarsLib.LOGGER.debug("Processing familiar: {} with saved health: {}", id, nbt.getFloat("currentHealth"));
 
-                FamiliarsLib.LOGGER.debug("Processing familiar: {} with saved health: {}", id, nbt.getFloat("currentHealth"));
+                    String entityTypeString = nbt.getString("id");
+                    EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
 
-                String entityTypeString = nbt.getString("id");
-                EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
+                    if (entityType != null) {
+                        Entity entity = entityType.create(minecraft.level);
+                        if (entity instanceof AbstractSpellCastingPet familiar) {
+                            familiar.load(nbt);
+                            familiar.setUUID(id);
 
-                if (entityType != null) {
-                    Entity entity = entityType.create(minecraft.level);
-                    if (entity instanceof AbstractSpellCastingPet familiar) {
-                        familiar.load(nbt);
-                        familiar.setUUID(id);
+                            String displayName = familiar.hasCustomName() ?
+                                    familiar.getCustomName().getString() :
+                                    familiar.getType().getDescription().getString();
 
-                        String displayName = familiar.hasCustomName() ?
-                                familiar.getCustomName().getString() :
-                                familiar.getType().getDescription().getString();
+                            float baseMaxHealth = nbt.contains("baseMaxHealth") ?
+                                    nbt.getFloat("baseMaxHealth") : familiar.getBaseMaxHealth();
 
-                        float baseMaxHealth = nbt.contains("baseMaxHealth") ?
-                                nbt.getFloat("baseMaxHealth") : familiar.getBaseMaxHealth();
+                            FamiliarConsumableSystem.ConsumableData consumableData =
+                                    FamiliarConsumableSystem.loadConsumableDataFromNBT(nbt);
 
-                        FamiliarConsumableSystem.ConsumableData consumableData =
-                                FamiliarConsumableSystem.loadConsumableDataFromNBT(nbt);
+                            if (!nbt.contains("consumableData")) {
+                                int legacyArmor = nbt.getInt("armorStacks");
+                                int legacyEnraged = nbt.getInt("enragedStacks");
+                                int legacyHealth = nbt.getInt("healthStacks");
+                                boolean legacyBlocking = nbt.getBoolean("canBlock");
 
-                        // Legacy migration
-                        if (!nbt.contains("consumableData")) {
-                            int legacyArmor = nbt.getInt("armorStacks");
-                            int legacyEnraged = nbt.getInt("enragedStacks");
-                            int legacyHealth = nbt.getInt("healthStacks");
-                            boolean legacyBlocking = nbt.getBoolean("canBlock");
+                                if (legacyArmor > 0 || legacyEnraged > 0 || legacyHealth > 0 || legacyBlocking) {
+                                    if (legacyHealth > 0) {
+                                        int healthPercentage = legacyHealth * 10;
+                                        healthPercentage = Math.min(healthPercentage, FamiliarConsumableSystem.ConsumableType.HEALTH.getMaxLimit());
+                                        consumableData.setValue(FamiliarConsumableSystem.ConsumableType.HEALTH, healthPercentage);
+                                    }
 
-                            if (legacyArmor > 0 || legacyEnraged > 0 || legacyHealth > 0 || legacyBlocking) {
-                                // Migrate legacy data
-                                if (legacyHealth > 0) {
-                                    int healthPercentage = legacyHealth * 10; // 10% per stack
-                                    healthPercentage = Math.min(healthPercentage, FamiliarConsumableSystem.ConsumableType.HEALTH.getMaxLimit());
-                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.HEALTH, healthPercentage);
+                                    if (legacyArmor > 0) {
+                                        int armorPoints = Math.min(legacyArmor, FamiliarConsumableSystem.ConsumableType.ARMOR.getMaxLimit());
+                                        consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ARMOR, armorPoints);
+                                    }
+
+                                    if (legacyEnraged > 0) {
+                                        int enragedStacks = Math.min(legacyEnraged, FamiliarConsumableSystem.ConsumableType.ENRAGED.getMaxLimit());
+                                        consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ENRAGED, enragedStacks);
+                                    }
+
+                                    if (legacyBlocking) {
+                                        consumableData.setValue(FamiliarConsumableSystem.ConsumableType.BLOCKING, 1);
+                                    }
+
+                                    FamiliarConsumableSystem.saveConsumableDataToNBT(consumableData, nbt);
+                                    familiarData.addTamedFamiliar(id, nbt);
                                 }
-
-                                if (legacyArmor > 0) {
-                                    int armorPoints = Math.min(legacyArmor, FamiliarConsumableSystem.ConsumableType.ARMOR.getMaxLimit());
-                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ARMOR, armorPoints);
-                                }
-
-                                if (legacyEnraged > 0) {
-                                    int enragedStacks = Math.min(legacyEnraged, FamiliarConsumableSystem.ConsumableType.ENRAGED.getMaxLimit());
-                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.ENRAGED, enragedStacks);
-                                }
-
-                                if (legacyBlocking) {
-                                    consumableData.setValue(FamiliarConsumableSystem.ConsumableType.BLOCKING, 1);
-                                }
-
-                                // Save migrated data back to NBT
-                                FamiliarConsumableSystem.saveConsumableDataToNBT(consumableData, nbt);
-                                familiarData.addTamedFamiliar(id, nbt);
                             }
-                        }
 
-                        // NEW SYSTEM: Use direct health value
-                        float displayHealth = nbt.getFloat("currentHealth");
+                            float displayHealth = nbt.getFloat("currentHealth");
 
-                        // Fallback for old saves with percentage system
-                        if (displayHealth <= 0 && nbt.contains("healthPercentage")) {
-                            float healthPercentage = nbt.getFloat("healthPercentage");
+                            if (displayHealth <= 0 && nbt.contains("healthPercentage")) {
+                                float healthPercentage = nbt.getFloat("healthPercentage");
+                                float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
+                                        consumableData, baseMaxHealth);
+                                displayHealth = healthPercentage * maxHealthWithModifiers;
+                            }
+
+                            if (displayHealth <= 0) {
+                                displayHealth = baseMaxHealth;
+                            }
+
+                            int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
+                            int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
+                            boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
+
+                            familiarEntries.add(new FamiliarEntry(id, familiar, displayName, displayHealth, armor, enraged, canBlock));
+
                             float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
                                     consumableData, baseMaxHealth);
-                            displayHealth = healthPercentage * maxHealthWithModifiers;
+
+                            FamiliarsLib.LOGGER.debug("Reloaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
+                                    id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
                         }
-
-                        if (displayHealth <= 0) {
-                            displayHealth = baseMaxHealth;
-                        }
-
-                        int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
-                        int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
-                        boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
-
-                        familiarEntries.add(new FamiliarEntry(id, familiar, displayName, displayHealth, armor, enraged, canBlock));
-
-                        float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
-                                consumableData, baseMaxHealth);
-
-                        FamiliarsLib.LOGGER.debug("Reloaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
-                                id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
-                    }
-                } else {
-                    FamiliarsLib.LOGGER.warn("Unknown entity type for familiar {}: {}", id, entityTypeString);
-                }
-            }
-
-            selectedFamiliarId = currentSelected;
-
-            if (selectedFamiliarId != null) {
-                boolean foundSelected = familiarEntries.stream().anyMatch(entry -> entry.id.equals(selectedFamiliarId));
-                if (!foundSelected) {
-                    FamiliarsLib.LOGGER.warn("Selected familiar {} not found in entries, selecting first available", selectedFamiliarId);
-                    if (!familiarEntries.isEmpty()) {
-                        selectedFamiliarId = familiarEntries.get(0).id;
                     } else {
-                        selectedFamiliarId = null;
+                        FamiliarsLib.LOGGER.warn("Unknown entity type for familiar {}: {}", id, entityTypeString);
                     }
                 }
-            }
+
+                selectedFamiliarId = currentSelected;
+
+                if (selectedFamiliarId != null) {
+                    boolean foundSelected = familiarEntries.stream().anyMatch(entry -> entry.id.equals(selectedFamiliarId));
+                    if (!foundSelected) {
+                        FamiliarsLib.LOGGER.warn("Selected familiar {} not found in entries, selecting first available", selectedFamiliarId);
+                        if (!familiarEntries.isEmpty()) {
+                            selectedFamiliarId = familiarEntries.get(0).id;
+                        } else {
+                            selectedFamiliarId = null;
+                        }
+                    }
+                }
+            });
 
             int visibleItems = 3;
             maxScroll = Math.max(0, (familiarEntries.size() - visibleItems) * FAMILIAR_ITEM_HEIGHT);
@@ -372,15 +353,17 @@ public class FamiliarSelectionScreen extends Screen {
     private Set<UUID> getAllSummonedFamiliarIds() {
         if (minecraft == null || minecraft.player == null) return new HashSet<>();
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        return familiarData.getSummonedFamiliarIds();
+        return minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA)
+                .map(PlayerFamiliarData::getSummonedFamiliarIds)
+                .orElse(new HashSet<>());
     }
 
     private boolean isFamiliarSummoned(UUID familiarId) {
         if (minecraft == null || minecraft.player == null) return false;
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        return familiarData.isFamiliarSummoned(familiarId);
+        return minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA)
+                .map(data -> data.isFamiliarSummoned(familiarId))
+                .orElse(false);
     }
 
     private void drawHeartIcon(GuiGraphics guiGraphics, int x, int y) {
@@ -388,8 +371,8 @@ public class FamiliarSelectionScreen extends Screen {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
-        guiGraphics.blit(HEART_CONTAINER, x, y - 1, 0, 0, 9, 9, 9, 9);
-        guiGraphics.blit(HEART_FULL, x, y - 1, 0, 0, 9, 9, 9, 9);
+        guiGraphics.blit(GUI_ICONS_LOCATION, x, y - 1, 16, 0, 9, 9);
+        guiGraphics.blit(GUI_ICONS_LOCATION, x, y - 1, 52, 0, 9, 9);
 
         RenderSystem.disableBlend();
     }
@@ -399,7 +382,7 @@ public class FamiliarSelectionScreen extends Screen {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
-        guiGraphics.blit(ARMOR_FULL, x, y, 0, 0, 9, 9, 9, 9);
+        guiGraphics.blit(GUI_ICONS_LOCATION, x, y, 43, 9, 9, 9);
 
         RenderSystem.disableBlend();
     }
@@ -418,7 +401,7 @@ public class FamiliarSelectionScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
 
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        renderBackground(guiGraphics);
 
         renderSelectedFamiliar(guiGraphics, mouseX, mouseY, partialTick);
 
@@ -455,24 +438,20 @@ public class FamiliarSelectionScreen extends Screen {
         int nameWidth = font.width(nameComponent);
         guiGraphics.drawString(font, nameComponent, leftPanelX + (PANEL_WIDTH - nameWidth) / 2, infoY, 0xFFFFFF);
 
-        // Crear recuadro para las estadísticas
-        int boxX = leftPanelX + (PANEL_WIDTH - 120) / 2; // Centrar el recuadro de 120 de ancho
+        int boxX = leftPanelX + (PANEL_WIDTH - 120) / 2;
         int boxY = infoY + 25;
         int boxWidth = 120;
         int boxHeight = 60;
 
-        // Dibujar fondo gris claro con bordes
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xAAC0C0C0); // Gris claro con transparencia
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + 1, 0xFF808080); // Borde superior
-        guiGraphics.fill(boxX, boxY + boxHeight - 1, boxX + boxWidth, boxY + boxHeight, 0xFF808080); // Borde inferior
-        guiGraphics.fill(boxX, boxY, boxX + 1, boxY + boxHeight, 0xFF808080); // Borde izquierdo
-        guiGraphics.fill(boxX + boxWidth - 1, boxY, boxX + boxWidth, boxY + boxHeight, 0xFF808080); // Borde derecho
+        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xAAC0C0C0);
+        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + 1, 0xFF808080);
+        guiGraphics.fill(boxX, boxY + boxHeight - 1, boxX + boxWidth, boxY + boxHeight, 0xFF808080);
+        guiGraphics.fill(boxX, boxY, boxX + 1, boxY + boxHeight, 0xFF808080);
+        guiGraphics.fill(boxX + boxWidth - 1, boxY, boxX + boxWidth, boxY + boxHeight, 0xFF808080);
 
-        // Posiciones para cada estadística (dividido en 4 cuadrantes)
         int halfWidth = boxWidth / 2;
         int halfHeight = boxHeight / 2;
 
-        // Arriba izquierda - Vida
         Component healthComponent = Component.literal(String.format("%.0f", selectedEntry.health));
         int healthTextWidth = font.width(healthComponent);
         int healthTotalWidth = 9 + 2 + healthTextWidth;
@@ -481,7 +460,6 @@ public class FamiliarSelectionScreen extends Screen {
         drawHeartIcon(guiGraphics, healthStartX, healthY);
         guiGraphics.drawString(font, healthComponent, healthStartX + 11, healthY, 0xFF5555);
 
-        // Arriba derecha - Armadura
         Component armorComponent = Component.literal(String.valueOf(selectedEntry.armor));
         int armorTextWidth = font.width(armorComponent);
         int armorTotalWidth = 9 + 2 + armorTextWidth;
@@ -490,7 +468,6 @@ public class FamiliarSelectionScreen extends Screen {
         drawArmorIcon(guiGraphics, armorStartX, armorY);
         guiGraphics.drawString(font, armorComponent, armorStartX + 11, armorY, 0xAAAAAA);
 
-        // Abajo izquierda - Can block
         Component blockComponent = Component.literal(selectedEntry.canBlock ? "1" : "0");
         int blockTextWidth = font.width(blockComponent);
         int blockTotalWidth = 16 + 2 + blockTextWidth;
@@ -501,7 +478,6 @@ public class FamiliarSelectionScreen extends Screen {
         int blockColor = selectedEntry.canBlock ? 0x55FF55 : 0xFF5555;
         guiGraphics.drawString(font, blockComponent, blockStartX + 18, blockY + 4, blockColor);
 
-        // Abajo derecha - Enraged stacks
         Component enragedComponent = Component.literal(String.valueOf(selectedEntry.enraged));
         int enragedTextWidth = font.width(enragedComponent);
         int enragedTotalWidth = 16 + 2 + enragedTextWidth;
@@ -514,8 +490,9 @@ public class FamiliarSelectionScreen extends Screen {
     private UUID getCurrentSummonedFamiliarId() {
         if (minecraft == null || minecraft.player == null) return null;
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        return familiarData.getCurrentSummonedFamiliarId();
+        return minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA)
+                .map(PlayerFamiliarData::getCurrentSummonedFamiliarId)
+                .orElse(null);
     }
 
     private void renderFamiliarList(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
@@ -569,15 +546,13 @@ public class FamiliarSelectionScreen extends Screen {
         Component nameComponent = Component.literal(entry.displayName);
         guiGraphics.drawString(font, nameComponent, x + 85, y + 20, 0xFFFFFF);
 
-        // Icono de corazón con salud
         drawHeartIcon(guiGraphics, x + 85, y + 35);
         Component healthComponent = Component.literal(String.format("%.0f", entry.health));
         guiGraphics.drawString(font, healthComponent, x + 85 + 12, y + 35, 0xFF5555);
 
-        // Icono de armadura con valor - alineado verticalmente con la vida
         drawArmorIcon(guiGraphics, x + 85, y + 49);
         Component armorComponent = Component.literal(String.valueOf(entry.armor));
-        guiGraphics.drawString(font, armorComponent, x + 85 + 12, y + 50, 0xAAAAAA); // Color gris
+        guiGraphics.drawString(font, armorComponent, x + 85 + 12, y + 50, 0xAAAAAA);
 
         if (isFamiliarSummoned(entry.id)) {
             Component summonedIndicator = Component.literal("★");
@@ -654,7 +629,7 @@ public class FamiliarSelectionScreen extends Screen {
                     FamiliarEntry selected = familiarEntries.get(itemIndex);
                     selectedFamiliarId = selected.id;
 
-                    PacketDistributor.sendToServer(new SelectFamiliarPacket(selected.id));
+                    NetworkHandler.sendToServer(new SelectFamiliarPacket(selected.id));
 
                     updateReleaseButtonVisibility();
 
@@ -667,7 +642,7 @@ public class FamiliarSelectionScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
         if (mouseX >= rightPanelX && mouseX < rightPanelX + PANEL_WIDTH &&
                 mouseY >= panelY && mouseY < panelY + PANEL_HEIGHT) {
 
@@ -677,7 +652,7 @@ public class FamiliarSelectionScreen extends Screen {
             return true;
         }
 
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, scrollY);
     }
 
     @Override
@@ -691,7 +666,7 @@ public class FamiliarSelectionScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
     }
 
@@ -735,7 +710,6 @@ public class FamiliarSelectionScreen extends Screen {
         }
     }
 
-    // Pantalla de confirmación interna
     private static class ConfirmReleaseScreen extends Screen {
         private final Screen parent;
         private final Component message;
@@ -760,7 +734,6 @@ public class FamiliarSelectionScreen extends Screen {
             int startX = (this.width - totalWidth) / 2;
             int buttonY = this.height / 2 + 20;
 
-            // Botón Confirmar
             addRenderableWidget(Button.builder(
                     Component.translatable("gui.yes"),
                     (button) -> {
@@ -769,7 +742,6 @@ public class FamiliarSelectionScreen extends Screen {
                     }
             ).bounds(startX, buttonY, buttonWidth, buttonHeight).build());
 
-            // Botón Cancelar
             addRenderableWidget(Button.builder(
                     Component.translatable("gui.cancel"),
                     (button) -> {
@@ -781,15 +753,13 @@ public class FamiliarSelectionScreen extends Screen {
 
         @Override
         public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-            renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+            renderBackground(guiGraphics);
 
-            // Dibujar título centrado
             Component titleComponent = this.getTitle();
             int titleWidth = font.width(titleComponent);
             guiGraphics.drawString(font, titleComponent,
                     (this.width - titleWidth) / 2, this.height / 2 - 40, 0xFFFFFF);
 
-            // Dibujar mensaje centrado
             int messageWidth = font.width(message);
             guiGraphics.drawString(font, message,
                     (this.width - messageWidth) / 2, this.height / 2 - 10, 0xFFFFFF);
@@ -798,10 +768,9 @@ public class FamiliarSelectionScreen extends Screen {
         }
 
         @Override
-        public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        public void renderBackground(GuiGraphics guiGraphics) {
             guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
 
-            // Dibujar recuadro para la confirmación
             int boxWidth = 300;
             int boxHeight = 120;
             int boxX = (this.width - boxWidth) / 2;

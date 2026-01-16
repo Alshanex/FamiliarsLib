@@ -1,74 +1,152 @@
 package net.alshanex.familiarslib.registry;
 
-import com.google.common.base.Suppliers;
-import net.alshanex.familiarslib.FamiliarsLib;
+import com.mojang.serialization.Codec;
 import net.alshanex.familiarslib.util.SelectedFamiliarsComponent;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableComponent;
 import net.alshanex.familiarslib.util.consumables.FamiliarFoodComponent;
-import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.registries.DeferredRegister;
 
-import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
+import javax.annotation.Nullable;
+import java.util.Optional;
 
-/**
- * Registry for data components
- */
 public class ComponentRegistry {
+    private static final String COMPONENT_ROOT = "familiarslib_components";
 
-    public static final DeferredRegister<DataComponentType<?>> COMPONENTS =
-            DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, FamiliarsLib.MODID);
+    public static final ItemComponent<FamiliarConsumableComponent> FAMILIAR_CONSUMABLE =
+            new ItemComponent<>("familiar_consumable", FamiliarConsumableComponent.CODEC);
 
-    public static final Supplier<DataComponentType<FamiliarConsumableComponent>> FAMILIAR_CONSUMABLE =
-            COMPONENTS.register("familiar_consumable", () ->
-                    DataComponentType.<FamiliarConsumableComponent>builder()
-                            .persistent(FamiliarConsumableComponent.CODEC)
-                            .networkSynchronized(FamiliarConsumableComponent.STREAM_CODEC)
-                            .build()
-            );
+    public static final ItemComponent<FamiliarFoodComponent> FAMILIAR_FOOD =
+            new ItemComponent<>("familiar_food", FamiliarFoodComponent.CODEC);
 
-    public static final Supplier<DataComponentType<FamiliarFoodComponent>> FAMILIAR_FOOD =
-            COMPONENTS.register("familiar_food", () ->
-                    DataComponentType.<FamiliarFoodComponent>builder()
-                            .persistent(FamiliarFoodComponent.CODEC)
-                            .networkSynchronized(FamiliarFoodComponent.STREAM_CODEC)
-                            .build()
-            );
+    public static final ItemComponent<SelectedFamiliarsComponent> SELECTED_FAMILIARS =
+            new ItemComponent<>("selected_familiars", SelectedFamiliarsComponent.CODEC);
 
-    public static final Supplier<DataComponentType<SelectedFamiliarsComponent>> SELECTED_FAMILIARS = COMPONENTS.register(
-            "selected_familiars",
-            () -> DataComponentType.<SelectedFamiliarsComponent>builder()
-                    .persistent(SelectedFamiliarsComponent.CODEC)
-                    .networkSynchronized(SelectedFamiliarsComponent.STREAM_CODEC)
-                    .build()
-    );
+    public static final ItemComponent<CompoundTag> SOUL_LINK =
+            new ItemComponent<>("soul_link", CompoundTag.CODEC);
 
-    public static final Supplier<DataComponentType<CompoundTag>> SOUL_LINK = register("soul_link", CompoundTag::new, op -> op.persistent(CompoundTag.CODEC));
+    public static class ItemComponent<T> {
+        private final String id;
+        private final Codec<T> codec;
 
-    private static <T> ComponentSupplier<T> register(String name, Supplier<T> defaultVal, UnaryOperator<DataComponentType.Builder<T>> op) {
-        var registered = COMPONENTS.register(name, () -> op.apply(DataComponentType.builder()).build());
-        return new ComponentSupplier<>(registered, defaultVal);
+        public ItemComponent(String id, Codec<T> codec) {
+            this.id = id;
+            this.codec = codec;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        /**
+         * Get the component value from an ItemStack
+         */
+        @Nullable
+        public T get(ItemStack stack) {
+            if (stack.isEmpty()) return null;
+
+            CompoundTag tag = stack.getTag();
+            if (tag == null || !tag.contains(COMPONENT_ROOT)) return null;
+
+            CompoundTag components = tag.getCompound(COMPONENT_ROOT);
+            if (!components.contains(id)) return null;
+
+            return codec.parse(NbtOps.INSTANCE, components.get(id))
+                    .result()
+                    .orElse(null);
+        }
+
+        /**
+         * Get the component value, or a default if not present
+         */
+        public T getOrDefault(ItemStack stack, T defaultValue) {
+            T value = get(stack);
+            return value != null ? value : defaultValue;
+        }
+
+        /**
+         * Get the component value as an Optional
+         */
+        public Optional<T> getOptional(ItemStack stack) {
+            return Optional.ofNullable(get(stack));
+        }
+
+        /**
+         * Check if the component is present on the stack
+         */
+        public boolean has(ItemStack stack) {
+            if (stack.isEmpty()) return false;
+            CompoundTag tag = stack.getTag();
+            if (tag == null || !tag.contains(COMPONENT_ROOT)) return false;
+            return tag.getCompound(COMPONENT_ROOT).contains(id);
+        }
+
+        /**
+         * Set the component value on an ItemStack
+         */
+        public void set(ItemStack stack, T value) {
+            if (stack.isEmpty()) return;
+
+            CompoundTag tag = stack.getOrCreateTag();
+            CompoundTag components = tag.contains(COMPONENT_ROOT)
+                    ? tag.getCompound(COMPONENT_ROOT)
+                    : new CompoundTag();
+
+            codec.encodeStart(NbtOps.INSTANCE, value)
+                    .result()
+                    .ifPresent(nbt -> components.put(id, nbt));
+
+            tag.put(COMPONENT_ROOT, components);
+        }
+
+        /**
+         * Remove the component from an ItemStack
+         */
+        public void remove(ItemStack stack) {
+            if (stack.isEmpty()) return;
+
+            CompoundTag tag = stack.getTag();
+            if (tag == null || !tag.contains(COMPONENT_ROOT)) return;
+
+            CompoundTag components = tag.getCompound(COMPONENT_ROOT);
+            components.remove(id);
+
+            // Clean up empty component root
+            if (components.isEmpty()) {
+                tag.remove(COMPONENT_ROOT);
+            }
+        }
+
+        /**
+         * Update the component value using a modifier function
+         */
+        public void update(ItemStack stack, T defaultValue, java.util.function.UnaryOperator<T> modifier) {
+            T current = getOrDefault(stack, defaultValue);
+            set(stack, modifier.apply(current));
+        }
     }
 
-    public static class ComponentSupplier<T> implements Supplier<DataComponentType<T>> {
-        private final Supplier<DataComponentType<T>> type;
-        private final Supplier<T> defaultSupplier;
+    /**
+     * Check if a stack has any familiar components
+     */
+    public static boolean hasAnyComponent(ItemStack stack) {
+        if (stack.isEmpty()) return false;
+        CompoundTag tag = stack.getTag();
+        if (tag == null) return false;
+        return tag.contains(COMPONENT_ROOT) && !tag.getCompound(COMPONENT_ROOT).isEmpty();
+    }
 
-        public ComponentSupplier(Supplier<DataComponentType<T>> type, Supplier<T> defaultSupplier) {
-            this.type = type;
-            this.defaultSupplier = Suppliers.memoize(defaultSupplier::get);
-        }
+    /**
+     * Copy all components from one stack to another
+     */
+    public static void copyComponents(ItemStack from, ItemStack to) {
+        if (from.isEmpty() || to.isEmpty()) return;
 
-        public T get(ItemStack stack) {
-            return stack.getOrDefault(type, defaultSupplier.get());
-        }
+        CompoundTag fromTag = from.getTag();
+        if (fromTag == null || !fromTag.contains(COMPONENT_ROOT)) return;
 
-        @Override
-        public DataComponentType<T> get() {
-            return type.get();
-        }
+        CompoundTag toTag = to.getOrCreateTag();
+        toTag.put(COMPONENT_ROOT, fromTag.getCompound(COMPONENT_ROOT).copy());
     }
 }

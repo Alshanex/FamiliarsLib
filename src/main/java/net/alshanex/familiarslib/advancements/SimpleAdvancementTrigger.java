@@ -1,91 +1,100 @@
 package net.alshanex.familiarslib.advancements;
 
-import com.mojang.serialization.Codec;
-import com.mojang.serialization.codecs.RecordCodecBuilder;
+import com.google.gson.JsonObject;
 import net.alshanex.familiarslib.registry.CriteriaTriggersRegistry;
-import net.minecraft.advancements.Criterion;
+import net.minecraft.advancements.critereon.AbstractCriterionTriggerInstance;
 import net.minecraft.advancements.critereon.ContextAwarePredicate;
-import net.minecraft.advancements.critereon.EntityPredicate;
+import net.minecraft.advancements.critereon.DeserializationContext;
 import net.minecraft.advancements.critereon.SimpleCriterionTrigger;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-
-import java.util.Optional;
 
 public class SimpleAdvancementTrigger extends SimpleCriterionTrigger<SimpleAdvancementTrigger.TriggerInstance> {
 
+    private final ResourceLocation id;
+
+    public SimpleAdvancementTrigger(ResourceLocation id) {
+        this.id = id;
+    }
+
     @Override
-    public Codec<TriggerInstance> codec() {
-        return TriggerInstance.CODEC;
+    public ResourceLocation getId() {
+        return this.id;
+    }
+
+    @Override
+    protected TriggerInstance createInstance(JsonObject json, ContextAwarePredicate player, DeserializationContext context) {
+        return new TriggerInstance(this.id, player);
     }
 
     public void trigger(ServerPlayer player) {
         this.trigger(player, (instance) -> true);
     }
 
-    public record TriggerInstance(Optional<ContextAwarePredicate> player) implements SimpleInstance {
+    public static class TriggerInstance extends AbstractCriterionTriggerInstance {
 
-        public static final Codec<TriggerInstance> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                        EntityPredicate.ADVANCEMENT_CODEC.optionalFieldOf("player").forGetter(TriggerInstance::player))
-                .apply(instance, TriggerInstance::new));
-
-        public static Criterion<TriggerInstance> tameArchmage() {
-            return CriteriaTriggersRegistry.TAMING_ARCHMAGE_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public TriggerInstance(ResourceLocation id, ContextAwarePredicate player) {
+            super(id, player);
         }
 
-        public static Criterion<TriggerInstance> tameCleric() {
-            return CriteriaTriggersRegistry.TAMING_CLERIC_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameArchmage() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_ARCHMAGE_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameDruid() {
-            return CriteriaTriggersRegistry.TAMING_DRUID_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameCleric() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_CLERIC_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameHunter() {
-            return CriteriaTriggersRegistry.TAMING_HUNTER_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameDruid() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_DRUID_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameIllusionist() {
-            return CriteriaTriggersRegistry.TAMING_ILLUSIONIST_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameHunter() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_HUNTER_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameMage() {
-            return CriteriaTriggersRegistry.TAMING_MAGE_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameIllusionist() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_ILLUSIONIST_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameNecromancer() {
-            return CriteriaTriggersRegistry.TAMING_NECROMANCER_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameMage() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_MAGE_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tamePlague() {
-            return CriteriaTriggersRegistry.TAMING_PLAGUE_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameNecromancer() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_NECROMANCER_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameScorcher() {
-            return CriteriaTriggersRegistry.TAMING_SCORCHER_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tamePlague() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_PLAGUE_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameSummoner() {
-            return CriteriaTriggersRegistry.TAMING_SUMMONER_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameScorcher() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_SCORCHER_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameBard() {
-            return CriteriaTriggersRegistry.TAMING_BARD_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameSummoner() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_SUMMONER_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> tameFrostling() {
-            return CriteriaTriggersRegistry.TAMING_FROSTLING_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameBard() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_BARD_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> consumableUse() {
-            return CriteriaTriggersRegistry.CONSUMABLE_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance tameFrostling() {
+            return new TriggerInstance(CriteriaTriggersRegistry.TAMING_FROSTLING_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> shardUse() {
-            return CriteriaTriggersRegistry.SHARD_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance consumableUse() {
+            return new TriggerInstance(CriteriaTriggersRegistry.CONSUMABLE_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
 
-        public static Criterion<TriggerInstance> illusionistReveal() {
-            return CriteriaTriggersRegistry.ILLUSIONIST_REVEAL_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        public static TriggerInstance shardUse() {
+            return new TriggerInstance(CriteriaTriggersRegistry.SHARD_TRIGGER.getId(), ContextAwarePredicate.ANY);
+        }
+
+        public static TriggerInstance illusionistReveal() {
+            return new TriggerInstance(CriteriaTriggersRegistry.ILLUSIONIST_REVEAL_TRIGGER.getId(), ContextAwarePredicate.ANY);
         }
     }
 }

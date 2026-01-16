@@ -9,6 +9,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -26,14 +27,14 @@ public abstract class AbstractFamiliarSpellbookItem extends UniqueSpellBook {
 
     protected AttributeContainer[] getSpellbookAttributes(){
         return new AttributeContainer[] {
-                new AttributeContainer(AttributeRegistry.MAX_MANA, 200, AttributeModifier.Operation.ADD_VALUE),
-                new AttributeContainer(AttributeRegistry.CAST_TIME_REDUCTION, 0.12, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
-                new AttributeContainer(AttributeRegistry.SPELL_POWER, 0.08, AttributeModifier.Operation.ADD_MULTIPLIED_BASE)
+                new AttributeContainer(AttributeRegistry.MAX_MANA, 200, AttributeModifier.Operation.ADDITION),
+                new AttributeContainer(AttributeRegistry.CAST_TIME_REDUCTION, 0.12, AttributeModifier.Operation.MULTIPLY_BASE),
+                new AttributeContainer(AttributeRegistry.SPELL_POWER, 0.08, AttributeModifier.Operation.MULTIPLY_BASE)
         };
     }
 
     @Override
-    public void appendHoverText(@NotNull ItemStack itemStack, TooltipContext context, @NotNull List<Component> lines, @NotNull TooltipFlag flag) {
+    public void appendHoverText(@NotNull ItemStack itemStack, Level context, @NotNull List<Component> lines, @NotNull TooltipFlag flag) {
         super.appendHoverText(itemStack, context, lines, flag);
         lines.add(DESCRIPTION);
     }

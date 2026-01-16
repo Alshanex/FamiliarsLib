@@ -1,22 +1,14 @@
 package net.alshanex.familiarslib.network;
 
-import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
-public class SetStorageModePacket implements CustomPacketPayload {
-    public static final Type<SetStorageModePacket> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "set_storage_mode"));
+import java.util.function.Supplier;
 
-    public static final StreamCodec<RegistryFriendlyByteBuf, SetStorageModePacket> STREAM_CODEC =
-            CustomPacketPayload.codec(SetStorageModePacket::write, SetStorageModePacket::new);
+public class SetStorageModePacket {
 
     private final BlockPos blockPos;
     private final boolean storeMode;
@@ -31,21 +23,19 @@ public class SetStorageModePacket implements CustomPacketPayload {
         this.storeMode = buf.readBoolean();
     }
 
-    public void write(FriendlyByteBuf buf) {
+    public void toBytes(FriendlyByteBuf buf) {
         buf.writeBlockPos(blockPos);
         buf.writeBoolean(storeMode);
     }
 
-    public static void handle(SetStorageModePacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (context.player() instanceof ServerPlayer serverPlayer) {
-                FamiliarManager.handleSetStorageMode(serverPlayer, packet.blockPos, packet.storeMode);
+    public boolean handle(Supplier<NetworkEvent.Context> supplier) {
+        NetworkEvent.Context ctx = supplier.get();
+        ctx.enqueueWork(() -> {
+            ServerPlayer serverPlayer = ctx.getSender();
+            if (serverPlayer != null) {
+                FamiliarManager.handleSetStorageMode(serverPlayer, blockPos, storeMode);
             }
         });
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+        return true;
     }
 }

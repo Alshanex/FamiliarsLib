@@ -2,6 +2,7 @@ package net.alshanex.familiarslib.event;
 
 import io.redspace.ironsspellbooks.api.magic.MagicData;
 import io.redspace.ironsspellbooks.network.SyncManaPacket;
+import io.redspace.ironsspellbooks.setup.PacketDistributor;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.item.AbstractFamiliarTotem;
@@ -11,17 +12,16 @@ import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.EventPriority;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-@EventBusSubscriber(modid = FamiliarsLib.MODID)
+@Mod.EventBusSubscriber(modid = FamiliarsLib.MODID)
 public class FamiliarDeathEventHandler {
 
     private static final Set<UUID> processedDeaths = new HashSet<>();
@@ -83,7 +83,7 @@ public class FamiliarDeathEventHandler {
     }
 
     private static void triggerTotem(AbstractSpellCastingPet pet){
-        pet.removeEffectsCuredBy(net.neoforged.neoforge.common.EffectCures.PROTECTED_BY_TOTEM);
+        pet.removeAllEffects();
         pet.level().broadcastEntityEvent(pet, (byte)35);
     }
 
@@ -124,7 +124,7 @@ public class FamiliarDeathEventHandler {
             return false;
         }
 
-        var nbt = stack.get(ComponentRegistry.SOUL_LINK);
+        var nbt = ComponentRegistry.SOUL_LINK.get(stack);
         if (nbt == null || !nbt.contains("petUUID")) {
             return false;
         }

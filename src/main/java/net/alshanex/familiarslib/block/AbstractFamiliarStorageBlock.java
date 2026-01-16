@@ -1,10 +1,11 @@
 package net.alshanex.familiarslib.block;
 
-import io.redspace.ironsspellbooks.registries.ParticleRegistry;
+import io.redspace.ironsspellbooks.setup.PacketDistributor;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.network.OpenFamiliarStoragePacket;
 import net.alshanex.familiarslib.network.UpdateFamiliarStoragePacket;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
+import net.alshanex.familiarslib.setup.NetworkHandler;
 import net.alshanex.familiarslib.util.CurioUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -15,6 +16,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -25,9 +27,7 @@ import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.BlockHitResult;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Map;
@@ -58,7 +58,7 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
 
     //Opens the storage block screen after updating familiars data from the player
     @Override
-    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+    public InteractionResult use(BlockState pState, Level level, BlockPos pos, Player player, InteractionHand pHand, BlockHitResult pHit) {
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
             BlockEntity blockEntity = level.getBlockEntity(pos);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
@@ -74,15 +74,15 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
                 }
 
                 Map<UUID, CompoundTag> storedData = storageEntity.getStoredFamiliars();
-                PacketDistributor.sendToPlayer(serverPlayer, new UpdateFamiliarStoragePacket(
+                NetworkHandler.sendToPlayer(new UpdateFamiliarStoragePacket(
                         pos,
                         storedData,
                         storageEntity.isStoreMode(),
                         storageEntity.canFamiliarsUseGoals(),
                         storageEntity.getMaxDistance()
-                ));
+                ), serverPlayer);
 
-                PacketDistributor.sendToPlayer(serverPlayer, new OpenFamiliarStoragePacket(pos));
+                NetworkHandler.sendToPlayer(new OpenFamiliarStoragePacket(pos), serverPlayer);
                 return InteractionResult.SUCCESS;
             }
         }
@@ -132,7 +132,7 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
 
     //Prevents the block to break in wander mode or in store mode with familiars inside
     @Override
-    protected float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
+    public float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
             if (player instanceof ServerPlayer serverPlayer && !storageEntity.isOwner(serverPlayer)) {
@@ -146,7 +146,7 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
             }
 
             if (!storageEntity.isStoreMode()) {
-                if (!player.level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+                if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
                     serverPlayer.displayClientMessage(
                             Component.translatable("message.familiarslib.cannot_break_wander_mode")
                                     .withStyle(ChatFormatting.RED), true);
@@ -156,7 +156,7 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
 
             // En modo Store, solo se puede romper si no hay familiares dentro
             if (storageEntity.getStoredFamiliarCount() > 0 || storageEntity.getOutsideFamiliarCount() > 0) {
-                if (!player.level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+                if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer) {
                     serverPlayer.displayClientMessage(
                             Component.translatable("message.familiarslib.cannot_break_has_familiars")
                                     .withStyle(ChatFormatting.RED), true);

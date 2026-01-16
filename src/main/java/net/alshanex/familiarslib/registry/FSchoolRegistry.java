@@ -4,11 +4,11 @@ import io.redspace.ironsspellbooks.api.registry.SchoolRegistry;
 import io.redspace.ironsspellbooks.api.spells.SchoolType;
 import io.redspace.ironsspellbooks.registries.SoundRegistry;
 import net.alshanex.familiarslib.FamiliarsLib;
-import net.alshanex.familiarslib.datagen.FDamageTypes;
-import net.alshanex.familiarslib.datagen.ItemTagProvider;
+import net.alshanex.familiarslib.util.ModTags;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraftforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
 
@@ -19,8 +19,8 @@ public class FSchoolRegistry {
 
     public static final Supplier<SchoolType> SOUND = registerSchool(new SchoolType(
             SOUND_RESOURCE,
-            ItemTagProvider.SOUND_FOCUS,
-            Component.translatable("school.familiarslib.sound").withColor(0xCFFFD2),
+            ModTags.SOUND_FOCUS,
+            Component.translatable("school.familiarslib.sound").withStyle(Style.EMPTY.withColor(0xCFFFD2)),
             AttributeRegistry.SOUND_SPELL_POWER,
             AttributeRegistry.SOUND_MAGIC_RESIST,
             SoundRegistry.GUST_CAST,

@@ -34,8 +34,8 @@ public abstract class AbstractTerrestrianSpellCastingPet extends AbstractSpellCa
     }
 
     @Override
-    protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
-        super.defineSynchedData(pBuilder);
+    protected void defineSynchedData() {
+        super.defineSynchedData();
     }
 
     @Override

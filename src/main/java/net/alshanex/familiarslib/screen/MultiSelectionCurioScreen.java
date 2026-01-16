@@ -7,7 +7,8 @@ import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.item.AbstractMultiSelectionCurio;
 import net.alshanex.familiarslib.network.UpdateMultiSelectionCurioPacket;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.registry.CapabilityRegistry;
+import net.alshanex.familiarslib.setup.NetworkHandler;
 import net.alshanex.familiarslib.util.CurioUtils;
 import net.alshanex.familiarslib.util.consumables.ConsumableUtils;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
@@ -24,7 +25,6 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.neoforged.neoforge.network.PacketDistributor;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
@@ -47,9 +47,8 @@ public class MultiSelectionCurioScreen extends Screen {
     private int gridStartX;
     private int gridStartY;
 
-    private static final ResourceLocation HEART_CONTAINER = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/container.png");
-    private static final ResourceLocation HEART_FULL = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/full.png");
-    private static final ResourceLocation ARMOR_FULL = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/armor_full.png");
+    private static final ResourceLocation GUI_ICONS_LOCATION = new ResourceLocation("textures/gui/icons.png");
+
     private static final ResourceLocation RED_MUSHROOM = ResourceLocation.withDefaultNamespace("textures/block/red_mushroom.png");
 
     public MultiSelectionCurioScreen() {
@@ -76,60 +75,61 @@ public class MultiSelectionCurioScreen extends Screen {
 
         if (minecraft == null || minecraft.player == null) return;
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
+        minecraft.player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(familiarData -> {
+            Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
 
-        for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
-            UUID id = entry.getKey();
-            CompoundTag nbt = entry.getValue();
+            for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
+                UUID id = entry.getKey();
+                CompoundTag nbt = entry.getValue();
 
-            String entityTypeString = nbt.getString("id");
-            EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
+                String entityTypeString = nbt.getString("id");
+                EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
 
-            if (entityType != null) {
-                Entity entity = entityType.create(minecraft.level);
-                if (entity instanceof AbstractSpellCastingPet familiar) {
-                    familiar.load(nbt);
-                    familiar.setUUID(id);
+                if (entityType != null) {
+                    Entity entity = entityType.create(minecraft.level);
+                    if (entity instanceof AbstractSpellCastingPet familiar) {
+                        familiar.load(nbt);
+                        familiar.setUUID(id);
 
-                    String displayName = familiar.hasCustomName() ?
-                            familiar.getCustomName().getString() :
-                            familiar.getType().getDescription().getString();
+                        String displayName = familiar.hasCustomName() ?
+                                familiar.getCustomName().getString() :
+                                familiar.getType().getDescription().getString();
 
-                    float baseMaxHealth = nbt.contains("baseMaxHealth") ?
-                            nbt.getFloat("baseMaxHealth") : familiar.getBaseMaxHealth();
+                        float baseMaxHealth = nbt.contains("baseMaxHealth") ?
+                                nbt.getFloat("baseMaxHealth") : familiar.getBaseMaxHealth();
 
-                    FamiliarConsumableSystem.ConsumableData consumableData =
-                            FamiliarConsumableSystem.loadConsumableDataFromNBT(nbt);
+                        FamiliarConsumableSystem.ConsumableData consumableData =
+                                FamiliarConsumableSystem.loadConsumableDataFromNBT(nbt);
 
-                    float displayHealth = nbt.getFloat("currentHealth");
+                        float displayHealth = nbt.getFloat("currentHealth");
 
-                    // Fallback for old saves with percentage system
-                    if (displayHealth <= 0 && nbt.contains("healthPercentage")) {
-                        float healthPercentage = nbt.getFloat("healthPercentage");
+                        // Fallback for old saves with percentage system
+                        if (displayHealth <= 0 && nbt.contains("healthPercentage")) {
+                            float healthPercentage = nbt.getFloat("healthPercentage");
+                            float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
+                                    consumableData, baseMaxHealth);
+                            displayHealth = healthPercentage * maxHealthWithModifiers;
+                        }
+
+                        if (displayHealth <= 0) {
+                            displayHealth = baseMaxHealth;
+                        }
+
+                        int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
+                        int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
+                        boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
+
+                        familiarEntries.add(new FamiliarGridEntry(id, familiar, displayName, displayHealth, armor, enraged, canBlock));
+
                         float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
                                 consumableData, baseMaxHealth);
-                        displayHealth = healthPercentage * maxHealthWithModifiers;
+
+                        FamiliarsLib.LOGGER.debug("Multi Selection curio: Loaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
+                                id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
                     }
-
-                    if (displayHealth <= 0) {
-                        displayHealth = baseMaxHealth;
-                    }
-
-                    int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
-                    int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
-                    boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
-
-                    familiarEntries.add(new FamiliarGridEntry(id, familiar, displayName, displayHealth, armor, enraged, canBlock));
-
-                    float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
-                            consumableData, baseMaxHealth);
-
-                    FamiliarsLib.LOGGER.debug("Multi Selection curio: Loaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
-                            id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
                 }
             }
-        }
+        });
     }
 
     private void loadSelectedFamiliars() {
@@ -173,8 +173,8 @@ public class MultiSelectionCurioScreen extends Screen {
         RenderSystem.defaultBlendFunc();
         RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
 
-        guiGraphics.blit(HEART_CONTAINER, x, y - 1, 0, 0, 9, 9, 9, 9);
-        guiGraphics.blit(HEART_FULL, x, y - 1, 0, 0, 9, 9, 9, 9);
+        guiGraphics.blit(GUI_ICONS_LOCATION, x, y - 1, 16, 0, 9, 9);
+        guiGraphics.blit(GUI_ICONS_LOCATION, x, y - 1, 52, 0, 9, 9);
 
         RenderSystem.disableBlend();
     }
@@ -184,7 +184,7 @@ public class MultiSelectionCurioScreen extends Screen {
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
 
-        guiGraphics.blit(ARMOR_FULL, x, y, 0, 0, 9, 9, 9, 9);
+        guiGraphics.blit(GUI_ICONS_LOCATION, x, y, 43, 9, 9, 9);
 
         RenderSystem.disableBlend();
     }
@@ -203,7 +203,7 @@ public class MultiSelectionCurioScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
 
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        renderBackground(guiGraphics);
 
         // Título
         Component title = Component.translatable("screen.familiarslib.multi_selection_curio");
@@ -438,19 +438,18 @@ public class MultiSelectionCurioScreen extends Screen {
         }
 
         // Enviar actualización al servidor
-        PacketDistributor.sendToServer(new UpdateMultiSelectionCurioPacket(new HashSet<>(selectedFamiliars)));
+        NetworkHandler.sendToServer(new UpdateMultiSelectionCurioPacket(new HashSet<>(selectedFamiliars)));
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        // Solo verificar que no sea scroll hacia los lados y que tengamos contenido para scrollear
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         if (maxScroll > 0) {
-            scrollOffset -= (int) (scrollY * SCROLL_SPEED);
+            scrollOffset -= (int) (delta * SCROLL_SPEED);
             scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
             return true;
         }
 
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, delta);
     }
 
     @Override
@@ -464,7 +463,7 @@ public class MultiSelectionCurioScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void renderBackground(GuiGraphics guiGraphics) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
     }
 

@@ -1,33 +1,25 @@
 package net.alshanex.familiarslib.entity;
 
-import io.redspace.ironsspellbooks.api.entity.IMagicEntity;
 import io.redspace.ironsspellbooks.api.magic.MagicData;
-import io.redspace.ironsspellbooks.api.magic.SpellSelectionManager;
 import io.redspace.ironsspellbooks.api.registry.SpellRegistry;
 import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
-import io.redspace.ironsspellbooks.api.spells.CastSource;
 import io.redspace.ironsspellbooks.api.spells.CastType;
 import io.redspace.ironsspellbooks.api.spells.SpellData;
-import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.capabilities.magic.SyncedSpellData;
 import io.redspace.ironsspellbooks.entity.mobs.IMagicSummon;
 import io.redspace.ironsspellbooks.entity.mobs.abstract_spell_casting_mob.AbstractSpellCastingMob;
 import io.redspace.ironsspellbooks.entity.mobs.goals.*;
 import io.redspace.ironsspellbooks.entity.spells.AoeEntity;
-import io.redspace.ironsspellbooks.spells.ender.TeleportSpell;
-import io.redspace.ironsspellbooks.spells.fire.BurningDashSpell;
 import io.redspace.ironsspellbooks.util.OwnerHelper;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.registry.CapabilityRegistry;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
-import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
-import net.alshanex.familiarslib.util.CylinderParticleManager;
 import net.alshanex.familiarslib.util.ModTags;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
@@ -42,12 +34,10 @@ import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.util.Mth;
 import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -58,14 +48,12 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.control.LookControl;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -76,11 +64,14 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.event.ForgeEventFactory;
 import org.jetbrains.annotations.Nullable;
-import software.bernie.geckolib.animatable.GeoEntity;
-import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
-import software.bernie.geckolib.animation.*;
-import software.bernie.geckolib.animation.AnimationState;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 import java.util.List;
@@ -176,9 +167,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     }
 
     protected void initializeAttackGoal(int goalPriority) {
-        float[] originalValues = getOriginalQualityValues();
-        this.currentAttackGoal = createAttackGoal(originalValues[0], originalValues[1]);
-        this.goalSelector.addGoal(goalPriority, this.currentAttackGoal);
+        if(!this.level().isClientSide()){
+            float[] originalValues = getOriginalQualityValues();
+            this.currentAttackGoal = createAttackGoal(originalValues[0], originalValues[1]);
+            this.goalSelector.addGoal(goalPriority, this.currentAttackGoal);
+        }
     }
 
     private void updateAttackGoal() {
@@ -259,7 +252,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     }
 
     @Override
-    public boolean canUsePortal(boolean allowPassengers) {
+    public boolean canChangeDimensions() {
         return false;
     }
 
@@ -453,14 +446,16 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         }
     }
 
+
+
     @Override
-    protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
-        super.defineSynchedData(pBuilder);
-        pBuilder.define(DATA_ID_OWNER_UUID, Optional.empty());
-        pBuilder.define(DATA_IS_SITTING, false);
-        pBuilder.define(DATA_IS_HOUSE, false);
-        pBuilder.define(DATA_IMPOSTOR, false);
-        pBuilder.define(DATA_TOTEM, false);
+    protected void defineSynchedData() {
+        super.defineSynchedData();
+        this.entityData.define(DATA_ID_OWNER_UUID, Optional.empty());
+        this.entityData.define(DATA_IS_SITTING, false);
+        this.entityData.define(DATA_IS_HOUSE, false);
+        this.entityData.define(DATA_IMPOSTOR, false);
+        this.entityData.define(DATA_TOTEM, false);
     }
 
     @Override
@@ -601,9 +596,9 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     }
 
     private void onDeathHelper() {
-        if (this instanceof LivingEntity entity) {
-            Level level = entity.level;
-            var deathMessage = entity.getCombatTracker().getDeathMessage();
+        if (getSummoner() != null) {
+            Level level = this.level();
+            var deathMessage = this.getCombatTracker().getDeathMessage();
 
             if (!level.isClientSide && level.getGameRules().getBoolean(GameRules.RULE_SHOWDEATHMESSAGES) && getSummoner() instanceof ServerPlayer player) {
                 player.sendSystemMessage(deathMessage);
@@ -637,35 +632,18 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
             FamiliarHelper.handleHouseBehavior(this);
         }
 
-        //Auto-migration to the new system
-        if (!level().isClientSide && !hasAttemptedMigration && getSummoner() != null) {
-            if (getSummoner() instanceof ServerPlayer serverPlayer) {
-                FamiliarHelper.attemptLegacyMigration(serverPlayer, this);
-                hasAttemptedMigration = true;
-            } else {
-                UUID ownerUUID = getOwnerUUID();
-                if (ownerUUID != null && level() instanceof ServerLevel serverLevel) {
-                    ServerPlayer serverPlayer = serverLevel.getServer().getPlayerList().getPlayer(ownerUUID);
-                    if (serverPlayer != null) {
-                        FamiliarHelper.attemptLegacyMigration(serverPlayer, this);
-                        hasAttemptedMigration = true;
-                    }
-                }
-            }
-        }
-
         //Goal update for the trinket boost
-        if (this.pendingGoalUpdate && !level.isClientSide) {
+        if (this.pendingGoalUpdate && !level().isClientSide) {
             if (this.currentAttackGoal == null || !this.currentAttackGoal.isActing()) {
                 updateGoalSafely(this.pendingTrinketState);
             }
         }
 
-        if (this.tickCount % 20 == 0 && !level.isClientSide) {
+        if (this.tickCount % 20 == 0 && !level().isClientSide) {
             updateAttackGoal();
         }
 
-        if (this.tickCount % 10 == 0 && !level.isClientSide) {
+        if (this.tickCount % 10 == 0 && !level().isClientSide) {
             if((this.isOnBed() || this.getIsInHouse() || this.getMovementDisabled())
                     && this.currentAttackGoal.isActing()){
                 this.currentAttackGoal.stop();
@@ -673,7 +651,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         }
 
         //Check to not despawn when tamed
-        if (this.tickCount % 600 == 0 && !level.isClientSide) {
+        if (this.tickCount % 600 == 0 && !level().isClientSide) {
             if (getSummoner() != null || getOwnerUUID() != null) {
                 this.setPersistenceRequired();
             }
@@ -715,12 +693,13 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         //Periodic status update for the player
         if (getSummoner() != null && this.tickCount % 40 == 0) {
             if (!level().isClientSide && getSummoner() instanceof ServerPlayer serverPlayer) {
-                PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-                if (familiarData.hasFamiliar(getUUID())) {
-                    FamiliarManager.updateFamiliarData(this);
-                } else {
-                    FamiliarsLib.LOGGER.debug("Familiar {} not in player data, skipping update", getUUID());
-                }
+                serverPlayer.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(familiarData -> {
+                    if (familiarData.hasFamiliar(getUUID())) {
+                        FamiliarManager.updateFamiliarData(this);
+                    } else {
+                        FamiliarsLib.LOGGER.debug("Familiar {} not in player data, skipping update", getUUID());
+                    }
+                });
             }
         }
     }
@@ -735,7 +714,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     }
 
     @Override
-    public boolean canBeLeashed() {
+    public boolean canBeLeashed(Player pPlayer) {
         return false;
     }
 
@@ -791,11 +770,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
 
                 if (isFood(itemstack) && this.getHealth() < this.getMaxHealth()) {
                     float healAmount = 4f;
-                    if(itemstack.has(ComponentRegistry.FAMILIAR_FOOD)){
-                        healAmount = itemstack.get(ComponentRegistry.FAMILIAR_FOOD).healing();
+                    if(ComponentRegistry.FAMILIAR_FOOD.has(itemstack)){
+                        healAmount = ComponentRegistry.FAMILIAR_FOOD.get(itemstack).healing();
                     }
                     this.heal(healAmount);
-                    itemstack.consume(1, player);
+                    itemstack.shrink(1);
                     FamiliarHelper.spawnEatingParticles(this);
                     this.gameEvent(GameEvent.EAT);
                     return InteractionResult.sidedSuccess(this.level().isClientSide());
@@ -814,10 +793,6 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         if (!this.level().isClientSide) {
             if(getOwnerUUID() != null){
                 if(getOwnerUUID().equals(player.getUUID())){
-                    if (getSummoner() instanceof ServerPlayer serverPlayer) {
-                        FamiliarHelper.attemptLegacyMigration(serverPlayer, this);
-                    }
-
                     triggerAnim("interact_controller", "interact");
 
                     InteractionResult consumableResult = FamiliarConsumableIntegration.handleConsumableInteraction(this, player, itemstack);
@@ -843,11 +818,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                     }
                     if(isFood(itemstack) && this.getHealth() < this.getMaxHealth()){
                         float healAmount = 4f;
-                        if(itemstack.has(ComponentRegistry.FAMILIAR_FOOD)){
-                            healAmount = itemstack.get(ComponentRegistry.FAMILIAR_FOOD).healing();
+                        if(ComponentRegistry.FAMILIAR_FOOD.has(itemstack)){
+                            healAmount = ComponentRegistry.FAMILIAR_FOOD.get(itemstack).healing();
                         }
                         this.heal(healAmount);
-                        itemstack.consume(1, player);
+                        itemstack.shrink(1);
                         FamiliarHelper.spawnEatingParticles(this);
                         this.gameEvent(GameEvent.EAT);
                         return InteractionResult.sidedSuccess(this.level().isClientSide());
@@ -877,7 +852,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                 //Taming interaction
 
                 if (itemstack.is(ModTags.FAMILIAR_TAMING)) {
-                    itemstack.consume(1, player);
+                    itemstack.shrink(1);
                     this.tryToTame(player);
                     return InteractionResult.SUCCESS;
                 }
@@ -898,7 +873,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
 
     //Placeholder food, can be changed in the familiar's class
     protected boolean isFood(ItemStack item){
-        return item.has(ComponentRegistry.FAMILIAR_FOOD);
+        return ComponentRegistry.FAMILIAR_FOOD.has(item);
     }
 
     //Taming logic
@@ -907,37 +882,37 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
             return;
         }
 
-        PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        serverPlayer.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(familiarData -> {
+            if (!familiarData.canTameMoreFamiliars()) {
+                serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.limit_familiars", PlayerFamiliarData.MAX_FAMILIAR_LIMIT).withStyle(ChatFormatting.RED)));
+                return;
+            }
 
-        if (!familiarData.canTameMoreFamiliars()) {
-            serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.limit_familiars", PlayerFamiliarData.MAX_FAMILIAR_LIMIT).withStyle(ChatFormatting.RED)));
-            return;
-        }
+            if (this.random.nextInt(10) <= 3) {
+                FamiliarHelper.spawnTamingParticles(true, this);
+                this.setTarget(null);
+                this.setOwnerUUID(player.getUUID());
 
-        if (this.random.nextInt(10) <= 3) {
-            FamiliarHelper.spawnTamingParticles(true, this);
-            this.setTarget(null);
-            this.setOwnerUUID(player.getUUID());
+                boolean success = FamiliarManager.handleFamiliarTaming(this, serverPlayer);
 
-            boolean success = FamiliarManager.handleFamiliarTaming(this, serverPlayer);
+                if (success) {
+                    this.setPersistenceRequired();
+                    triggerAdvancement(serverPlayer);
 
-            if (success) {
-                this.setPersistenceRequired();
-                triggerAdvancement(serverPlayer);
+                    int remainingSlots = familiarData.getRemainingFamiliarSlots();
+                    serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.tamed_successfully", remainingSlots).withStyle(ChatFormatting.WHITE)));
 
-                int remainingSlots = familiarData.getRemainingFamiliarSlots();
-                serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.tamed_successfully", remainingSlots).withStyle(ChatFormatting.WHITE)));
+                    serverPlayer.level().playSound(null, serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
+                            SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5F, 2.0F);
 
-                serverPlayer.level().playSound(null, serverPlayer.getX(), serverPlayer.getY(), serverPlayer.getZ(),
-                        SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5F, 2.0F);
-
-                clericSetGoal(serverPlayer);
+                    clericSetGoal(serverPlayer);
+                } else {
+                    FamiliarHelper.spawnTamingParticles(false, this);
+                }
             } else {
                 FamiliarHelper.spawnTamingParticles(false, this);
             }
-        } else {
-            FamiliarHelper.spawnTamingParticles(false, this);
-        }
+        });
     }
 
     //Handles advancement trigger if needed, overriden in familiar classes
@@ -947,38 +922,40 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
 
     //Spawning logic and effects
     @Override
-    public void onAddedToLevel() {
-        super.onAddedToLevel();
+    public void onAddedToWorld() {
+        super.onAddedToWorld();
         triggerAnim("spawn_controller", "spawn");
     }
 
+
+
     //Despawning logic and effects
     @Override
-    public void onRemovedFromLevel() {
-        super.onRemovedFromLevel();
-        if (!level.isClientSide && getSummoner() instanceof ServerPlayer serverPlayer) {
+    public void onRemovedFromWorld() {
+        super.onRemovedFromWorld();
+        if (!level().isClientSide && getSummoner() instanceof ServerPlayer serverPlayer) {
             FamiliarAttributesHelper.handleFamiliarDismissed(serverPlayer, this);
         }
 
-        if (!level.isClientSide) {
+        if (!level().isClientSide) {
             FamiliarConsumableIntegration.removeConsumableModifiers(this);
         }
 
-        if(!level.isClientSide){
+        if(!level().isClientSide){
             MagicManager.spawnParticles(level(), ParticleTypes.POOF, getX(), getY(), getZ(), 25, .4, .8, .4, .03, false);
         }
     }
 
     @Override
-    public SpawnGroupData finalizeSpawn(ServerLevelAccessor level, DifficultyInstance difficulty, MobSpawnType reason, @Nullable SpawnGroupData spawnData) {
-        SpawnGroupData result = super.finalizeSpawn(level, difficulty, reason, spawnData);
+    public @Nullable SpawnGroupData finalizeSpawn(ServerLevelAccessor pLevel, DifficultyInstance pDifficulty, MobSpawnType pReason, @Nullable SpawnGroupData pSpawnData, @Nullable CompoundTag pDataTag) {
+        SpawnGroupData result = super.finalizeSpawn(pLevel, pDifficulty, pReason, pSpawnData, pDataTag);
 
         // Handle command-spawned entities
-        if (reason == MobSpawnType.COMMAND) {
+        if (pReason == MobSpawnType.COMMAND) {
             FamiliarsLib.LOGGER.debug("Finalizing spawn for command-summoned familiar {}", getUUID());
 
             // Initialize consumable system for command-spawned entities
-            if (!level.isClientSide()) {
+            if (!pLevel.isClientSide()) {
                 FamiliarConsumableIntegration.applyConsumableModifiers(this);
 
                 // Ensure health is properly set

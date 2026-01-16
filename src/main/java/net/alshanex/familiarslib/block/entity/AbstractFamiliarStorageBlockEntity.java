@@ -3,7 +3,7 @@ package net.alshanex.familiarslib.block.entity;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.registry.CapabilityRegistry;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -30,6 +30,7 @@ import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import javax.annotation.Nonnull;
 import java.util.*;
 
 public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
@@ -575,16 +576,17 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             return false;
         }
 
-        PlayerFamiliarData playerData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        if (!playerData.canTameMoreFamiliars()) {
+        return player.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).map(playerData -> {
+            if (!playerData.canTameMoreFamiliars()) {
+                return false;
+            }
+
+            if (storedFamiliars.containsKey(familiarId)) {
+                return FamiliarManager.retrieveFamiliarFromHouse(familiarId, player, getBlockPos());
+            }
+
             return false;
-        }
-
-        if (storedFamiliars.containsKey(familiarId)) {
-            return FamiliarManager.retrieveFamiliarFromHouse(familiarId, player, getBlockPos());
-        }
-
-        return false;
+        }).orElse(false);
     }
 
     //Returns stored familiars to the owner
@@ -596,24 +598,24 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         if (level instanceof ServerLevel serverLevel) {
             ServerPlayer owner = serverLevel.getServer().getPlayerList().getPlayer(ownerUUID);
             if (owner != null) {
-                PlayerFamiliarData playerData = owner.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+                owner.getCapability(CapabilityRegistry.PLAYER_FAMILIAR_DATA).ifPresent(playerData -> {
+                    // Return stored familiars
+                    for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
+                        UUID familiarId = entry.getKey();
+                        CompoundTag familiarData = entry.getValue().nbtData;
 
-                // Return stored familiars
-                for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-                    UUID familiarId = entry.getKey();
-                    CompoundTag familiarData = entry.getValue().nbtData;
+                        if (playerData.canTameMoreFamiliars()) {
+                            familiarData.putBoolean("isInHouse", false);
+                            playerData.addTamedFamiliar(familiarId, familiarData);
 
-                    if (playerData.canTameMoreFamiliars()) {
-                        familiarData.putBoolean("isInHouse", false);
-                        playerData.addTamedFamiliar(familiarId, familiarData);
+                            if (playerData.getSelectedFamiliarId() == null) {
+                                playerData.setSelectedFamiliarId(familiarId);
+                            }
 
-                        if (playerData.getSelectedFamiliarId() == null) {
-                            playerData.setSelectedFamiliarId(familiarId);
+                            FamiliarsLib.LOGGER.debug("Returned familiar {} to owner {}", familiarId, owner.getName().getString());
                         }
-
-                        FamiliarsLib.LOGGER.debug("Returned familiar {} to owner {}", familiarId, owner.getName().getString());
                     }
-                }
+                });
 
                 // Remove outside familiars from world
                 for (UUID familiarId : outsideFamiliars) {
@@ -697,8 +699,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
+    protected void saveAdditional(@Nonnull CompoundTag tag) {
+        super.saveAdditional(tag);
 
         if (ownerUUID != null) {
             tag.putUUID("ownerUUID", ownerUUID);
@@ -747,8 +749,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
+    public void load(@Nonnull CompoundTag tag) {
+        super.load(tag);
 
         if (tag.hasUUID("ownerUUID")) {
             ownerUUID = tag.getUUID("ownerUUID");
@@ -809,16 +811,16 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     }
 
     @Override
-    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
-        CompoundTag tag = super.getUpdateTag(registries);
-        saveAdditional(tag, registries);
+    @Nonnull
+    public CompoundTag getUpdateTag() {
+        CompoundTag tag = super.getUpdateTag();
+        saveAdditional(tag);
         return tag;
     }
 
     @Override
-    public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
-        super.handleUpdateTag(tag, registries);
-        loadAdditional(tag, registries);
+    public void handleUpdateTag(CompoundTag tag) {
+        load(tag);
     }
 
     @Nullable

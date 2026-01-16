@@ -7,7 +7,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
-import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.FlyingMoveControl;
@@ -213,8 +212,8 @@ public abstract class AbstractFlyingSpellCastingPet extends AbstractSpellCasting
     }
 
     @Override
-    protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
-        super.defineSynchedData(pBuilder);
+    protected void defineSynchedData() {
+        super.defineSynchedData();
     }
 
     @Override
@@ -468,7 +467,7 @@ public abstract class AbstractFlyingSpellCastingPet extends AbstractSpellCasting
             this.mob = mob;
             this.speedModifier = speedModifier;
             this.nextStartTime = 0;
-            this.setFlags(EnumSet.of(Goal.Flag.MOVE));
+            this.setFlags(EnumSet.of(Flag.MOVE));
         }
 
         @Override

@@ -1,12 +1,10 @@
 package net.alshanex.familiarslib.util.familiars;
 
 import net.alshanex.familiarslib.FamiliarsLib;
-import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 
 /**

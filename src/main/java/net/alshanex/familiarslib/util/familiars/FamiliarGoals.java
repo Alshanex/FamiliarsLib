@@ -3,18 +3,13 @@ package net.alshanex.familiarslib.util.familiars;
 import io.redspace.ironsspellbooks.api.entity.IMagicEntity;
 import io.redspace.ironsspellbooks.api.magic.MagicData;
 import io.redspace.ironsspellbooks.api.registry.SchoolRegistry;
-import io.redspace.ironsspellbooks.api.registry.SpellRegistry;
 import io.redspace.ironsspellbooks.api.spells.AbstractSpell;
-import io.redspace.ironsspellbooks.api.spells.CastSource;
-import io.redspace.ironsspellbooks.api.spells.CastType;
-import io.redspace.ironsspellbooks.api.util.Utils;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.entity.mobs.IAnimatedAttacker;
 import io.redspace.ironsspellbooks.entity.mobs.SummonedSkeleton;
 import io.redspace.ironsspellbooks.entity.mobs.goals.WizardAttackGoal;
 import io.redspace.ironsspellbooks.entity.mobs.wizards.GenericAnimatedWarlockAttackGoal;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
-import io.redspace.ironsspellbooks.registries.MobEffectRegistry;
 import io.redspace.ironsspellbooks.registries.ParticleRegistry;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
@@ -22,51 +17,43 @@ import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.entity.AbstractFlyingSpellCastingPet;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CylinderParticleManager;
 import net.alshanex.familiarslib.util.ModTags;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
-import net.minecraft.tags.BlockTags;
-import net.minecraft.tags.TagKey;
-import net.minecraft.util.Mth;
-import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.*;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.TargetGoal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.ai.targeting.TargetingConditions;
-import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
-import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.WitherSkeleton;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.*;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.SculkShriekerBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.pathfinder.PathType;
+import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * Goals which can be added to any familiar
@@ -774,8 +761,8 @@ public class FamiliarGoals {
                 return false;
             }
 
-            PathType pathtype = WalkNodeEvaluator.getPathTypeStatic(mob, pPos);
-            if (pathtype != PathType.WALKABLE) {
+            BlockPathTypes pathtype = WalkNodeEvaluator.getBlockPathTypeStatic(mob.level(), pPos.mutable());
+            if (pathtype != BlockPathTypes.WALKABLE) {
                 return false;
             }
 
@@ -789,13 +776,13 @@ public class FamiliarGoals {
     }
 
     public static class StealItemsWhenNotWatchedGoal extends Goal {
-        private final net.alshanex.familiarslib.entity.AbstractSpellCastingPet mob;
+        private final AbstractSpellCastingPet mob;
         private final double searchRadius;
         private ItemEntity targetItem;
         private int stealingTime;
         private final int STEALING_DURATION = 20;
 
-        public StealItemsWhenNotWatchedGoal(net.alshanex.familiarslib.entity.AbstractSpellCastingPet mob, double searchRadius) {
+        public StealItemsWhenNotWatchedGoal(AbstractSpellCastingPet mob, double searchRadius) {
             this.mob = mob;
             this.searchRadius = searchRadius;
             this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
@@ -994,15 +981,15 @@ public class FamiliarGoals {
         @Override
         public void start() {
             this.timeToRecalcPath = 0;
-            this.oldWaterCost = this.pet.getPathfindingMalus(PathType.WATER);
-            this.pet.setPathfindingMalus(PathType.WATER, 0.0F);
+            this.oldWaterCost = this.pet.getPathfindingMalus(BlockPathTypes.WATER);
+            this.pet.setPathfindingMalus(BlockPathTypes.WATER, 0.0F);
         }
 
         @Override
         public void stop() {
             this.owner = null;
             this.navigation.stop();
-            this.pet.setPathfindingMalus(PathType.WATER, this.oldWaterCost);
+            this.pet.setPathfindingMalus(BlockPathTypes.WATER, this.oldWaterCost);
         }
 
         @Override
@@ -1063,8 +1050,8 @@ public class FamiliarGoals {
         }
 
         private boolean canTeleportTo(BlockPos pPos) {
-            PathType pathtype = WalkNodeEvaluator.getPathTypeStatic(pet, pPos);
-            if (pathtype != PathType.WALKABLE) {
+            BlockPathTypes pathtype = WalkNodeEvaluator.getBlockPathTypeStatic(pet.level(), pPos.mutable());
+            if (pathtype != BlockPathTypes.WALKABLE) {
                 return false;
             } else {
                 BlockState blockstate = pet.level().getBlockState(pPos.below());
@@ -1264,7 +1251,7 @@ public class FamiliarGoals {
             );
 
             if(!nearbyEntities.isEmpty()){
-                this.target = nearbyEntities.getFirst();
+                this.target = nearbyEntities.stream().findFirst().get();
                 return  true;
             }
 
@@ -1319,14 +1306,14 @@ public class FamiliarGoals {
 
             if (pet.distanceTo(creeper) < 8.0) {
                 pet.getLookControl().setLookAt(creeper, 10.0F, 10.0F);
-                if (!creeper.isPowered() && pet.level instanceof ServerLevel serverLevel) {
+                if (!creeper.isPowered() && pet.level() instanceof ServerLevel serverLevel) {
                     pet.triggerAnim("interact_controller", "interact");
 
-                    LightningBolt lightningBolt = EntityType.LIGHTNING_BOLT.create(pet.level);
+                    LightningBolt lightningBolt = EntityType.LIGHTNING_BOLT.create(pet.level());
                     lightningBolt.setVisualOnly(true);
                     lightningBolt.setDamage(0);
                     lightningBolt.setPos(creeper.getX(), creeper.getY(), creeper.getZ());
-                    pet.level.addFreshEntity(lightningBolt);
+                    pet.level().addFreshEntity(lightningBolt);
                     creeper.thunderHit(serverLevel, lightningBolt);
                 }
             } else {
@@ -1384,10 +1371,10 @@ public class FamiliarGoals {
 
                 WitherSkeleton witherSkeleton = new WitherSkeleton(EntityType.WITHER_SKELETON, pet.level());
                 witherSkeleton.setPos(skeleton.getX(), skeleton.getY(), skeleton.getZ());
-                witherSkeleton.finalizeSpawn((ServerLevel) pet.level(), pet.level.getCurrentDifficultyAt(skeleton.getOnPos()), MobSpawnType.MOB_SUMMONED, null);
+                witherSkeleton.finalizeSpawn((ServerLevel) pet.level(), pet.level().getCurrentDifficultyAt(skeleton.getOnPos()), MobSpawnType.MOB_SUMMONED, null, null);
                 pet.level().addFreshEntity(witherSkeleton);
 
-                MagicManager.spawnParticles(pet.level, new BlastwaveParticleOptions(SchoolRegistry.ELDRITCH.get().getTargetingColor(), 2), this.skeleton.getX(), this.skeleton.getY() + .165f, this.skeleton.getZ(), 1, 0, 0, 0, 0, true);
+                MagicManager.spawnParticles(pet.level(), new BlastwaveParticleOptions(SchoolRegistry.ELDRITCH.get().getTargetingColor(), 2), this.skeleton.getX(), this.skeleton.getY() + .165f, this.skeleton.getZ(), 1, 0, 0, 0, 0, true);
                 skeleton.remove(Entity.RemovalReason.DISCARDED);
             } else {
                 pet.getNavigation().moveTo(skeleton, 1.0);

@@ -7,6 +7,8 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.level.Level;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 import java.util.Set;
@@ -18,22 +20,21 @@ public abstract class AbstractMultiSelectionCurio extends CurioBaseItem {
     }
 
     public static Set<UUID> getSelectedFamiliars(ItemStack itemStack) {
-        var component = itemStack.get(ComponentRegistry.SELECTED_FAMILIARS.get());
+        var component = ComponentRegistry.SELECTED_FAMILIARS.get(itemStack);
         return component != null ? component.getSelectedFamiliars() : Set.of();
     }
 
     public static void setSelectedFamiliars(ItemStack itemStack, Set<UUID> familiars) {
-        itemStack.set(ComponentRegistry.SELECTED_FAMILIARS.get(), new SelectedFamiliarsComponent(familiars));
+        ComponentRegistry.SELECTED_FAMILIARS.set(itemStack, new SelectedFamiliarsComponent(familiars));
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
-        super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
-
+    public void appendHoverText(@NotNull ItemStack itemStack, Level context, @NotNull List<Component> tooltipComponents, @NotNull TooltipFlag flag) {
+        super.appendHoverText(itemStack, context, tooltipComponents, flag);
         tooltipComponents.add(Component.translatable("tooltip.familiarslib.multi_selection_item.line1").withStyle(ChatFormatting.GRAY));
         tooltipComponents.add(Component.empty());
 
-        Set<UUID> selectedFamiliars = getSelectedFamiliars(stack);
+        Set<UUID> selectedFamiliars = getSelectedFamiliars(itemStack);
         if (!selectedFamiliars.isEmpty()) {
             tooltipComponents.add(Component.translatable("tooltip.familiarslib.multi_selection_item.selected", selectedFamiliars.size()).withStyle(ChatFormatting.GOLD));
         } else {

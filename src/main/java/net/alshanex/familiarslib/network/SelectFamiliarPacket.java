@@ -1,23 +1,14 @@
 package net.alshanex.familiarslib.network;
 
-import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
+import net.minecraftforge.network.NetworkEvent;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 
-public class SelectFamiliarPacket implements CustomPacketPayload {
-    public static final Type<SelectFamiliarPacket> TYPE =
-            new Type<>(ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "select_familiar"));
-
-    public static final StreamCodec<RegistryFriendlyByteBuf, SelectFamiliarPacket> STREAM_CODEC =
-            CustomPacketPayload.codec(SelectFamiliarPacket::write, SelectFamiliarPacket::new);
+public class SelectFamiliarPacket {
 
     private final UUID familiarId;
 
@@ -29,20 +20,18 @@ public class SelectFamiliarPacket implements CustomPacketPayload {
         this.familiarId = buf.readUUID();
     }
 
-    public void write(FriendlyByteBuf buf) {
+    public void toBytes(FriendlyByteBuf buf) {
         buf.writeUUID(familiarId);
     }
 
-    public static void handle(SelectFamiliarPacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (context.player() instanceof ServerPlayer serverPlayer) {
-                FamiliarManager.handleFamiliarSelection(serverPlayer, packet.familiarId);
+    public boolean handle(Supplier<NetworkEvent.Context> supplier) {
+        NetworkEvent.Context ctx = supplier.get();
+        ctx.enqueueWork(() -> {
+            ServerPlayer serverPlayer = ctx.getSender();
+            if (serverPlayer != null) {
+                FamiliarManager.handleFamiliarSelection(serverPlayer, familiarId);
             }
         });
-    }
-
-    @Override
-    public Type<? extends CustomPacketPayload> type() {
-        return TYPE;
+        return true;
     }
 }

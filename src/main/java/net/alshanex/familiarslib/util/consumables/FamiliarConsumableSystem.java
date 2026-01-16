@@ -1,51 +1,32 @@
 package net.alshanex.familiarslib.util.consumables;
 
 import com.mojang.serialization.Codec;
+import io.redspace.ironsspellbooks.api.registry.AttributeRegistry;
+import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.ByteBufCodecs;
-import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.resources.ResourceLocation;
-import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import io.redspace.ironsspellbooks.api.registry.AttributeRegistry;
 
-/**
- * Handles consumable items for familiars that boost their attributes
- * Uses bit-packed storage for efficient NBT usage
- */
+import java.util.UUID;
+
 public class FamiliarConsumableSystem {
-
-    // ResourceLocation IDs for each stat modifier
-    private static final ResourceLocation CONSUMABLE_ARMOR_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_armor");
-    private static final ResourceLocation CONSUMABLE_HEALTH_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_health");
-    private static final ResourceLocation CONSUMABLE_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_spell_power");
-    private static final ResourceLocation CONSUMABLE_SPELL_RESIST_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_spell_resist");
-    private static final ResourceLocation CONSUMABLE_ENRAGED_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_enraged");
-    private static final ResourceLocation CONSUMABLE_BLOCKING_ID = ResourceLocation.fromNamespaceAndPath("familiarslib", "consumable_blocking");
+    private static final UUID CONSUMABLE_ARMOR_UUID = UUID.fromString("a1b2c3d4-1111-1111-1111-111111111111");
+    private static final UUID CONSUMABLE_HEALTH_UUID = UUID.fromString("a1b2c3d4-2222-2222-2222-222222222222");
+    private static final UUID CONSUMABLE_SPELL_POWER_UUID = UUID.fromString("a1b2c3d4-3333-3333-3333-333333333333");
+    private static final UUID CONSUMABLE_SPELL_RESIST_UUID = UUID.fromString("a1b2c3d4-4444-4444-4444-444444444444");
+    private static final UUID CONSUMABLE_ENRAGED_UUID = UUID.fromString("a1b2c3d4-5555-5555-5555-555555555555");
 
     public enum ConsumableType implements StringRepresentable {
         ARMOR(0, new int[]{2, 3, 4}, new int[]{10, 16, 20}, "armor"),
         HEALTH(1, new int[]{10, 25, 50}, new int[]{50, 100, 150}, "health"),
         SPELL_POWER(2, new int[]{3, 5, 15}, new int[]{15, 30, 45}, "spell_power"),
         SPELL_RESIST(3, new int[]{3, 5, 15}, new int[]{15, 30, 45}, "spell_resist"),
-        ENRAGED(5, new int[]{1}, new int[]{10}, "enraged"), // Only tier 1, +1 per use, max 10
-        BLOCKING(6, new int[]{1}, new int[]{1}, "blocking"); // Only tier 1, boolean toggle
+        ENRAGED(5, new int[]{1}, new int[]{10}, "enraged"),
+        BLOCKING(6, new int[]{1}, new int[]{1}, "blocking");
 
         public static final Codec<ConsumableType> CODEC = StringRepresentable.fromEnum(ConsumableType::values);
-        public static final StreamCodec<RegistryFriendlyByteBuf, ConsumableType> STREAM_CODEC =
-                ByteBufCodecs.idMapper(
-                        id -> {
-                            for (ConsumableType type : values()) {
-                                if (type.getId() == id) return type;
-                            }
-                            return ARMOR; // fallback
-                        },
-                        ConsumableType::getId
-                ).cast();
 
         private final int id;
         private final int[] tierBonuses;
@@ -66,8 +47,111 @@ public class FamiliarConsumableSystem {
         public int getMaxTier() { return tierBonuses.length; }
 
         @Override
-        public String getSerializedName() {
-            return serializedName;
+        public String getSerializedName() { return serializedName; }
+
+        public static ConsumableType byId(int id) {
+            for (ConsumableType type : values()) {
+                if (type.id == id) return type;
+            }
+            return ARMOR;
+        }
+    }
+
+    public static void applyAttributeModifiers(AbstractSpellCastingPet familiar, ConsumableData data) {
+        removeAllConsumableModifiers(familiar);
+
+        // Apply armor bonus
+        int armorBonus = data.getValue(ConsumableType.ARMOR);
+        if (armorBonus > 0) {
+            AttributeInstance armorAttribute = familiar.getAttribute(Attributes.ARMOR);
+            if (armorAttribute != null) {
+                AttributeModifier modifier = new AttributeModifier(
+                        CONSUMABLE_ARMOR_UUID,
+                        "Consumable armor bonus",
+                        armorBonus,
+                        AttributeModifier.Operation.ADDITION);
+                armorAttribute.addPermanentModifier(modifier);
+            }
+        }
+
+        // Apply health bonus (percentage)
+        int healthBonus = data.getValue(ConsumableType.HEALTH);
+        if (healthBonus > 0) {
+            AttributeInstance healthAttribute = familiar.getAttribute(Attributes.MAX_HEALTH);
+            if (healthAttribute != null) {
+                double multiplier = healthBonus / 100.0;
+                AttributeModifier modifier = new AttributeModifier(
+                        CONSUMABLE_HEALTH_UUID,
+                        "Consumable health bonus",
+                        multiplier,
+                        AttributeModifier.Operation.MULTIPLY_BASE);
+                healthAttribute.addPermanentModifier(modifier);
+            }
+        }
+
+        // Apply spell power bonus (percentage)
+        int spellPowerBonus = data.getValue(ConsumableType.SPELL_POWER);
+        if (spellPowerBonus > 0) {
+            AttributeInstance spellPowerAttribute = familiar.getAttribute(AttributeRegistry.SPELL_POWER.get());
+            if (spellPowerAttribute != null) {
+                double multiplier = spellPowerBonus / 100.0;
+                AttributeModifier modifier = new AttributeModifier(
+                        CONSUMABLE_SPELL_POWER_UUID,
+                        "Consumable spell power bonus",
+                        multiplier,
+                        AttributeModifier.Operation.MULTIPLY_BASE);
+                spellPowerAttribute.addPermanentModifier(modifier);
+            }
+        }
+
+        // Apply spell resist bonus (percentage)
+        int spellResistBonus = data.getValue(ConsumableType.SPELL_RESIST);
+        if (spellResistBonus > 0) {
+            AttributeInstance spellResistAttribute = familiar.getAttribute(AttributeRegistry.SPELL_RESIST.get());
+            if (spellResistAttribute != null) {
+                double multiplier = spellResistBonus / 100.0;
+                AttributeModifier modifier = new AttributeModifier(
+                        CONSUMABLE_SPELL_RESIST_UUID,
+                        "Consumable spell resist bonus",
+                        multiplier,
+                        AttributeModifier.Operation.MULTIPLY_BASE);
+                spellResistAttribute.addPermanentModifier(modifier);
+            }
+        }
+
+        // Apply enraged bonus
+        int enragedStacks = data.getValue(ConsumableType.ENRAGED);
+        if (enragedStacks > 0) {
+            AttributeInstance attackDamageAttribute = familiar.getAttribute(Attributes.ATTACK_DAMAGE);
+            if (attackDamageAttribute != null) {
+                double bonus = enragedStacks * 0.5;
+                AttributeModifier modifier = new AttributeModifier(
+                        CONSUMABLE_ENRAGED_UUID,
+                        "Consumable enraged bonus",
+                        bonus,
+                        AttributeModifier.Operation.ADDITION);
+                attackDamageAttribute.addPermanentModifier(modifier);
+            }
+        }
+    }
+
+    /**
+     * Removes all consumable-related attribute modifiers
+     */
+    public static void removeAllConsumableModifiers(AbstractSpellCastingPet familiar) {
+        removeModifierIfPresent(familiar.getAttribute(Attributes.ARMOR), CONSUMABLE_ARMOR_UUID);
+        removeModifierIfPresent(familiar.getAttribute(Attributes.MAX_HEALTH), CONSUMABLE_HEALTH_UUID);
+        removeModifierIfPresent(familiar.getAttribute(AttributeRegistry.SPELL_POWER.get()), CONSUMABLE_SPELL_POWER_UUID);
+        removeModifierIfPresent(familiar.getAttribute(AttributeRegistry.SPELL_RESIST.get()), CONSUMABLE_SPELL_RESIST_UUID);
+        removeModifierIfPresent(familiar.getAttribute(Attributes.ATTACK_DAMAGE), CONSUMABLE_ENRAGED_UUID);
+    }
+
+    private static void removeModifierIfPresent(AttributeInstance attribute, UUID modifierId) {
+        if (attribute != null) {
+            AttributeModifier modifier = attribute.getModifier(modifierId);
+            if (modifier != null) {
+                attribute.removeModifier(modifier);
+            }
         }
     }
 
@@ -162,159 +246,4 @@ public class FamiliarConsumableSystem {
         return new ConsumableData(tag);
     }
 
-    /**
-     * Applies all attribute modifiers based on consumable data
-     */
-    public static void applyAttributeModifiers(AbstractSpellCastingPet familiar, ConsumableData data) {
-        // Remove existing modifiers first
-        removeAllConsumableModifiers(familiar);
-
-        // Apply armor bonus
-        int armorBonus = data.getValue(ConsumableType.ARMOR);
-        if (armorBonus > 0) {
-            AttributeInstance armorAttribute = familiar.getAttribute(Attributes.ARMOR);
-            if (armorAttribute != null) {
-                AttributeModifier modifier = new AttributeModifier(
-                        CONSUMABLE_ARMOR_ID,
-                        armorBonus,
-                        AttributeModifier.Operation.ADD_VALUE);
-                armorAttribute.addPermanentModifier(modifier);
-            }
-        }
-
-        // Apply health bonus (percentage)
-        int healthBonus = data.getValue(ConsumableType.HEALTH);
-        if (healthBonus > 0) {
-            AttributeInstance healthAttribute = familiar.getAttribute(Attributes.MAX_HEALTH);
-            if (healthAttribute != null) {
-                double multiplier = healthBonus / 100.0; // Convert percentage to multiplier
-                AttributeModifier modifier = new AttributeModifier(
-                        CONSUMABLE_HEALTH_ID,
-                        multiplier,
-                        AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
-                healthAttribute.addPermanentModifier(modifier);
-            }
-        }
-
-        // Apply spell power bonus (percentage)
-        int spellPowerBonus = data.getValue(ConsumableType.SPELL_POWER);
-        if (spellPowerBonus > 0) {
-            AttributeInstance spellPowerAttribute = familiar.getAttribute(AttributeRegistry.SPELL_POWER);
-            if (spellPowerAttribute != null) {
-                double multiplier = spellPowerBonus / 100.0;
-                AttributeModifier modifier = new AttributeModifier(
-                        CONSUMABLE_SPELL_POWER_ID,
-                        multiplier,
-                        AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
-                spellPowerAttribute.addPermanentModifier(modifier);
-            }
-        }
-
-        // Apply spell resist bonus (percentage)
-        int spellResistBonus = data.getValue(ConsumableType.SPELL_RESIST);
-        if (spellResistBonus > 0) {
-            AttributeInstance spellResistAttribute = familiar.getAttribute(AttributeRegistry.SPELL_RESIST);
-            if (spellResistAttribute != null) {
-                double multiplier = spellResistBonus / 100.0;
-                AttributeModifier modifier = new AttributeModifier(
-                        CONSUMABLE_SPELL_RESIST_ID,
-                        multiplier,
-                        AttributeModifier.Operation.ADD_MULTIPLIED_BASE);
-                spellResistAttribute.addPermanentModifier(modifier);
-            }
-        }
-
-        // Apply enraged bonus (attack damage)
-        int enragedStacks = data.getValue(ConsumableType.ENRAGED);
-        if (enragedStacks > 0) {
-            AttributeInstance attackDamageAttribute = familiar.getAttribute(Attributes.ATTACK_DAMAGE);
-            if (attackDamageAttribute != null) {
-                double bonus = enragedStacks * 0.5; // +0.5 attack damage per stack
-                AttributeModifier modifier = new AttributeModifier(
-                        CONSUMABLE_ENRAGED_ID,
-                        bonus,
-                        AttributeModifier.Operation.ADD_VALUE);
-                attackDamageAttribute.addPermanentModifier(modifier);
-            }
-        }
-
-        // Blocking is handled separately as it's not an attribute
-        // Spell level is handled separately as it's not an attribute
-    }
-
-    /**
-     * Removes all consumable-related attribute modifiers
-     */
-    public static void removeAllConsumableModifiers(AbstractSpellCastingPet familiar) {
-        // Remove armor modifier
-        AttributeInstance armor = familiar.getAttribute(Attributes.ARMOR);
-        if (armor != null) {
-            AttributeModifier armorModifier = armor.getModifier(CONSUMABLE_ARMOR_ID);
-            if (armorModifier != null) {
-                armor.removeModifier(armorModifier);
-            }
-        }
-
-        // Remove health modifier
-        AttributeInstance health = familiar.getAttribute(Attributes.MAX_HEALTH);
-        if (health != null) {
-            AttributeModifier healthModifier = health.getModifier(CONSUMABLE_HEALTH_ID);
-            if (healthModifier != null) {
-                health.removeModifier(healthModifier);
-            }
-        }
-
-        // Remove spell power modifier
-        AttributeInstance spellPower = familiar.getAttribute(AttributeRegistry.SPELL_POWER);
-        if (spellPower != null) {
-            AttributeModifier spellPowerModifier = spellPower.getModifier(CONSUMABLE_SPELL_POWER_ID);
-            if (spellPowerModifier != null) {
-                spellPower.removeModifier(spellPowerModifier);
-            }
-        }
-
-        // Remove spell resist modifier
-        AttributeInstance spellResist = familiar.getAttribute(AttributeRegistry.SPELL_RESIST);
-        if (spellResist != null) {
-            AttributeModifier spellResistModifier = spellResist.getModifier(CONSUMABLE_SPELL_RESIST_ID);
-            if (spellResistModifier != null) {
-                spellResist.removeModifier(spellResistModifier);
-            }
-        }
-
-        // Remove enraged modifier
-        AttributeInstance attackDamage = familiar.getAttribute(Attributes.ATTACK_DAMAGE);
-        if (attackDamage != null) {
-            AttributeModifier enragedModifier = attackDamage.getModifier(CONSUMABLE_ENRAGED_ID);
-            if (enragedModifier != null) {
-                attackDamage.removeModifier(enragedModifier);
-            }
-        }
-    }
-
-    /**
-     * Removes legacy attribute modifiers from the old system
-     */
-    public static void removeLegacyModifiers(AbstractSpellCastingPet familiar) {
-        ResourceLocation legacyHealthModifierId = ResourceLocation.fromNamespaceAndPath("familiarslib", "familiar_health_modifier");
-        ResourceLocation legacyArmorModifierId = ResourceLocation.fromNamespaceAndPath("familiarslib", "familiar_armor_modifier");
-
-        // Remove legacy health modifier
-        AttributeInstance health = familiar.getAttribute(Attributes.MAX_HEALTH);
-        if (health != null) {
-            AttributeModifier legacyHealthModifier = health.getModifier(legacyHealthModifierId);
-            if (legacyHealthModifier != null) {
-                health.removeModifier(legacyHealthModifier);
-            }
-        }
-
-        // Remove legacy armor modifier
-        AttributeInstance armor = familiar.getAttribute(Attributes.ARMOR);
-        if (armor != null) {
-            AttributeModifier legacyArmorModifier = armor.getModifier(legacyArmorModifierId);
-            if (legacyArmorModifier != null) {
-                armor.removeModifier(legacyArmorModifier);
-            }
-        }
-    }
 }

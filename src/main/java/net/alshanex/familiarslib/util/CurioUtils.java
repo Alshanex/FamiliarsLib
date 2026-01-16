@@ -8,6 +8,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.common.util.LazyOptional;
 import top.theillusivec4.curios.api.CuriosApi;
 import top.theillusivec4.curios.api.SlotContext;
 import top.theillusivec4.curios.api.SlotResult;
@@ -39,7 +40,7 @@ public class CurioUtils {
         CuriosApi.broadcastCurioBreakEvent(slotContext);
     }
 
-    public static Optional<ICurio> getCurio(ItemStack stack) {
+    public static LazyOptional<ICurio> getCurio(ItemStack stack) {
         return CuriosApi.getCurio(stack);
     }
 

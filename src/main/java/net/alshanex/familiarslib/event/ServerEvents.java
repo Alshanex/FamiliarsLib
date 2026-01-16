@@ -7,23 +7,22 @@ import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.item.AbstractMultiSelectionCurio;
 import net.alshanex.familiarslib.util.CurioUtils;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.event.entity.living.LivingDamageEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 import top.theillusivec4.curios.api.event.CurioChangeEvent;
 
-@EventBusSubscriber(modid = FamiliarsLib.MODID)
+@Mod.EventBusSubscriber(modid = FamiliarsLib.MODID)
 public class ServerEvents {
     /**
      * Handles familiars attacks to not hurt their owner
      */
     @SubscribeEvent
-    public static void onDamageTaken(LivingDamageEvent.Pre event){
+    public static void onDamageTaken(LivingDamageEvent event){
         if(event.getSource().getEntity() instanceof AbstractSpellCastingPet pet){
             if(pet.isAlliedTo(event.getEntity())){
-                event.setNewDamage(0f);
+                event.setAmount(0f);
             }
         }
     }

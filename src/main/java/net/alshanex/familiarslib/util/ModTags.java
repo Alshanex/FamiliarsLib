@@ -24,6 +24,8 @@ public class ModTags {
     //Tag for items that illusionist can steal when not watching
     public static final TagKey<Item> ILLUSIONIST_STEALS = TagKey.create(Registries.ITEM, new ResourceLocation(FamiliarsLib.MODID, "illusionist_steals"));
 
+    public static final TagKey<Item> SOUND_FOCUS = TagKey.create(Registries.ITEM, new ResourceLocation(FamiliarsLib.MODID, "sound_focus"));
+
     public static TagKey<AbstractSpell> create(ResourceLocation name) {
         return new TagKey<AbstractSpell>(SpellRegistry.SPELL_REGISTRY_KEY, name);
     }

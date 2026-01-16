@@ -1,22 +1,22 @@
 package net.alshanex.familiarslib.util.consumables;
 
-import net.alshanex.familiarslib.util.consumables.FamiliarConsumableComponent;
+import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
+import net.alshanex.familiarslib.item.FamiliarConsumableItem;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem.ConsumableType;
+import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.network.chat.Component;
-import net.minecraft.ChatFormatting;
-import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem.ConsumableType;
-import net.alshanex.familiarslib.FamiliarsLib;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Data component-based consumable system integration
@@ -92,14 +92,24 @@ public class FamiliarConsumableIntegration {
      * Gets consumable information from an item stack using data components
      */
     public static FamiliarConsumableComponent getConsumableComponent(ItemStack itemStack) {
-        return itemStack.get(ComponentRegistry.FAMILIAR_CONSUMABLE.get());
+        // First check if it's a FamiliarConsumableItem (fixed/immutable)
+        if (itemStack.getItem() instanceof FamiliarConsumableItem consumableItem) {
+            return new FamiliarConsumableComponent(
+                    consumableItem.getConsumableType(),
+                    consumableItem.getTier()
+            );
+        }
+
+        // Fallback to data component (for dynamic consumables)
+        return ComponentRegistry.FAMILIAR_CONSUMABLE.get(itemStack);
     }
 
     /**
      * Checks if an item stack has the familiar consumable component
      */
     public static boolean isConsumableItem(ItemStack itemStack) {
-        return itemStack.has(ComponentRegistry.FAMILIAR_CONSUMABLE.get());
+        return itemStack.getItem() instanceof FamiliarConsumableItem
+                || ComponentRegistry.FAMILIAR_CONSUMABLE.has(itemStack);
     }
 
     /**
@@ -107,7 +117,7 @@ public class FamiliarConsumableIntegration {
      */
     public static ItemStack makeConsumableItem(ItemStack itemStack, ConsumableType type, int tier) {
         FamiliarConsumableComponent component = new FamiliarConsumableComponent(type, tier);
-        itemStack.set(ComponentRegistry.FAMILIAR_CONSUMABLE.get(), component);
+        ComponentRegistry.FAMILIAR_CONSUMABLE.set(itemStack, component);
         return itemStack;
     }
 
@@ -312,55 +322,5 @@ public class FamiliarConsumableIntegration {
     public static int getEnragedStacks(AbstractSpellCastingPet familiar) {
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
         return data.getValue(ConsumableType.ENRAGED);
-    }
-
-    /**
-     * Migrates legacy health and armor stacks to the new consumable system
-     */
-    public static void migrateLegacyData(AbstractSpellCastingPet familiar, int legacyHealthStacks, int legacyArmorStacks, int legacyEnragedStacks, boolean legacyCanBlock) {
-        FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
-
-        // Remove legacy modifiers first
-        FamiliarConsumableSystem.removeLegacyModifiers(familiar);
-
-        // Store current health before migration
-        float currentHealth = familiar.getHealth();
-
-        // Convert legacy data
-        if (legacyHealthStacks > 0) {
-            int healthPercentage = legacyHealthStacks * 10; // 10% per stack
-            healthPercentage = Math.min(healthPercentage, ConsumableType.HEALTH.getMaxLimit());
-            data.setValue(ConsumableType.HEALTH, healthPercentage);
-            FamiliarsLib.LOGGER.debug("Migrated {} legacy health stacks to {}% health bonus", legacyHealthStacks, healthPercentage);
-        }
-
-        if (legacyArmorStacks > 0) {
-            int armorPoints = Math.min(legacyArmorStacks, ConsumableType.ARMOR.getMaxLimit());
-            data.setValue(ConsumableType.ARMOR, armorPoints);
-            FamiliarsLib.LOGGER.debug("Migrated {} legacy armor stacks to {} armor points", legacyArmorStacks, armorPoints);
-        }
-
-        if (legacyEnragedStacks > 0) {
-            int enragedStacks = Math.min(legacyEnragedStacks, ConsumableType.ENRAGED.getMaxLimit());
-            data.setValue(ConsumableType.ENRAGED, enragedStacks);
-            FamiliarsLib.LOGGER.debug("Migrated {} legacy enraged stacks", enragedStacks);
-        }
-
-        if (legacyCanBlock) {
-            data.setValue(ConsumableType.BLOCKING, 1);
-            FamiliarsLib.LOGGER.debug("Migrated legacy blocking ability");
-        }
-
-        // Update both cache and entity NBT
-        updateConsumableData(familiar, data);
-        FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
-
-        // Restore the health after migration (clamp to new max health if needed)
-        float newMaxHealth = familiar.getMaxHealth();
-        float restoredHealth = Math.min(currentHealth, newMaxHealth);
-        familiar.setHealth(restoredHealth);
-
-        FamiliarsLib.LOGGER.debug("Completed legacy data migration for familiar {}: {} (health: {}/{})",
-                familiar.getUUID(), data.toString(), familiar.getHealth(), familiar.getMaxHealth());
     }
 }

@@ -42,6 +42,6 @@ public abstract class AbstractRuneItem extends Item {
     }
 
     protected void triggerShardAdvancement(ServerPlayer player){
-        CriteriaTriggersRegistry.SHARD_TRIGGER.get().trigger(player);
+        CriteriaTriggersRegistry.SHARD_TRIGGER.trigger(player);
     }
 }

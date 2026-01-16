@@ -1,6 +1,5 @@
 package net.alshanex.familiarslib.util.consumables;
 
-import net.alshanex.familiarslib.util.consumables.FamiliarConsumableComponent;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem.ConsumableType;
 import net.minecraft.ChatFormatting;
@@ -19,9 +18,9 @@ public class ConsumableTooltipHelper {
      * Adds consumable tooltip information to an item stack if it has the consumable component
      */
     public static void addConsumableTooltip(ItemStack stack, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
-        FamiliarConsumableComponent consumableComponent = stack.get(ComponentRegistry.FAMILIAR_CONSUMABLE.get());
+        FamiliarConsumableComponent consumableComponent = ComponentRegistry.FAMILIAR_CONSUMABLE.get(stack);
+
         if (consumableComponent != null) {
-            // Add consumable information to tooltip
             String typeKey = getTypeTranslationKey(consumableComponent.type());
             int bonus = consumableComponent.getBonus();
             int limit = consumableComponent.getLimit();
@@ -40,14 +39,13 @@ public class ConsumableTooltipHelper {
                     consumableComponent.tier()).withStyle(ChatFormatting.YELLOW));
         }
 
-        FamiliarFoodComponent foodComponent = stack.get(ComponentRegistry.FAMILIAR_FOOD.get());
+        FamiliarFoodComponent foodComponent = ComponentRegistry.FAMILIAR_FOOD.get(stack);
 
-        if(foodComponent != null){
+        if (foodComponent != null) {
             int healingValue = foodComponent.healing();
             tooltipComponents.add(Component.translatable("item.familiarslib.consumable.tooltip.food",
                     healingValue + " hearts").withStyle(ChatFormatting.RED));
         }
-
     }
 
     private static String getTypeTranslationKey(ConsumableType type) {

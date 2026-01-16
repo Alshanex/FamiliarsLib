@@ -8,7 +8,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.DifficultyInstance;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobSpawnType;
@@ -21,13 +20,18 @@ import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
-import software.bernie.geckolib.animation.*;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.object.PlayState;
 
 import javax.annotation.Nullable;
+import java.util.UUID;
 
 public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSpellCastingPet implements IAnimatedAttacker {
-    private static final ResourceLocation SPELL_POWER_DAMAGE_MODIFIER_ID =
-            ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "spell_power_damage_boost");
+    private static final UUID SPELL_POWER_DAMAGE_MODIFIER_UUID =
+            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
 
     protected AbstractMeleeSpellCastingPet(EntityType<? extends AbstractSpellCastingPet> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
@@ -68,8 +72,8 @@ public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSp
     }
 
     @Override
-    public SpawnGroupData finalizeSpawn(ServerLevelAccessor pLevel, DifficultyInstance pDifficulty, MobSpawnType pReason, @Nullable SpawnGroupData pSpawnData) {
-        return super.finalizeSpawn(pLevel, pDifficulty, pReason, pSpawnData);
+    public @org.jetbrains.annotations.Nullable SpawnGroupData finalizeSpawn(ServerLevelAccessor pLevel, DifficultyInstance pDifficulty, MobSpawnType pReason, @org.jetbrains.annotations.Nullable SpawnGroupData pSpawnData, @org.jetbrains.annotations.Nullable CompoundTag pDataTag) {
+        return super.finalizeSpawn(pLevel, pDifficulty, pReason, pSpawnData, pDataTag);
     }
 
     @Override
@@ -87,18 +91,18 @@ public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSp
             return;
         }
 
-        double spellPower = this.getAttributeValue(AttributeRegistry.SPELL_POWER);
+        double spellPower = this.getAttributeValue(AttributeRegistry.SPELL_POWER.get());
 
-        attackDamage.removeModifier(SPELL_POWER_DAMAGE_MODIFIER_ID);
+        attackDamage.removeModifier(SPELL_POWER_DAMAGE_MODIFIER_UUID);
 
         double multiplier = spellPower - 1.0;
 
-        // Only add modifier if there's actually a bonus
         if (multiplier > 0.0) {
             AttributeModifier modifier = new AttributeModifier(
-                    SPELL_POWER_DAMAGE_MODIFIER_ID,
+                    SPELL_POWER_DAMAGE_MODIFIER_UUID,
+                    "spell_power_damage_boost",
                     multiplier,
-                    AttributeModifier.Operation.ADD_MULTIPLIED_BASE
+                    AttributeModifier.Operation.MULTIPLY_BASE
             );
 
             attackDamage.addTransientModifier(modifier);
@@ -106,8 +110,8 @@ public abstract class AbstractMeleeSpellCastingPet extends AbstractTerrestrianSp
     }
 
     @Override
-    protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
-        super.defineSynchedData(pBuilder);
+    protected void defineSynchedData() {
+        super.defineSynchedData();
     }
 
     @Override

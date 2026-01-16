@@ -8,9 +8,9 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 public class StaffTier implements IronsWeaponTier {
 
     public static StaffTier SOUND_STAFF = new StaffTier(7, -3,
-            new AttributeContainer(AttributeRegistry.SOUND_SPELL_POWER, .15, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
-            new AttributeContainer(io.redspace.ironsspellbooks.api.registry.AttributeRegistry.CAST_TIME_REDUCTION, .15, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
-            new AttributeContainer(io.redspace.ironsspellbooks.api.registry.AttributeRegistry.SPELL_POWER, .05, AttributeModifier.Operation.ADD_MULTIPLIED_BASE)
+            new AttributeContainer(AttributeRegistry.SOUND_SPELL_POWER, .15, AttributeModifier.Operation.MULTIPLY_BASE),
+            new AttributeContainer(io.redspace.ironsspellbooks.api.registry.AttributeRegistry.CAST_TIME_REDUCTION, .15, AttributeModifier.Operation.MULTIPLY_BASE),
+            new AttributeContainer(io.redspace.ironsspellbooks.api.registry.AttributeRegistry.SPELL_POWER, .05, AttributeModifier.Operation.MULTIPLY_BASE)
     );
 
     float damage;
