@@ -22,6 +22,7 @@ public class CriteriaTriggersRegistry {
     public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_SUMMONER_TRIGGER = TRIGGERS.register("summoner_taming", SimpleAdvancementTrigger::new);
     public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_BARD_TRIGGER = TRIGGERS.register("bard_taming", SimpleAdvancementTrigger::new);
     public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_FROSTLING_TRIGGER = TRIGGERS.register("frostling_taming", SimpleAdvancementTrigger::new);
+    public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> TAMING_DRAGOON_TRIGGER = TRIGGERS.register("dragoon_taming", SimpleAdvancementTrigger::new);
 
     public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> CONSUMABLE_TRIGGER = TRIGGERS.register("consumable_use", SimpleAdvancementTrigger::new);
     public static final DeferredHolder<CriterionTrigger<?>, SimpleAdvancementTrigger> SHARD_TRIGGER = TRIGGERS.register("shard_use", SimpleAdvancementTrigger::new);

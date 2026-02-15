@@ -76,6 +76,10 @@ public class SimpleAdvancementTrigger extends SimpleCriterionTrigger<SimpleAdvan
             return CriteriaTriggersRegistry.TAMING_FROSTLING_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
         }
 
+        public static Criterion<TriggerInstance> tameDragoon() {
+            return CriteriaTriggersRegistry.TAMING_DRAGOON_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
+        }
+
         public static Criterion<TriggerInstance> consumableUse() {
             return CriteriaTriggersRegistry.CONSUMABLE_TRIGGER.get().createCriterion(new TriggerInstance(Optional.empty()));
         }
