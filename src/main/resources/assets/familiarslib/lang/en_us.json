@@ -57,6 +57,7 @@
   "message.familiarslib.storage_block_chunk_limit": "These houses are too close together!",
   "message.familiarslib.no_familiars_selected": "No familiars selected!",
   "message.familiarslib.familiars_toggled": "Familiars summoned/desummoned!",
+  "message.familiarslib.familiar_died_in_house": "If you see this message report that your familiar died in a familiar house.",
 
   "key.familiarslib.summoning_keys": "FamiliarLib",
   "key.familiarslib.summoning_key": "Summon/Unsummon Familiar",

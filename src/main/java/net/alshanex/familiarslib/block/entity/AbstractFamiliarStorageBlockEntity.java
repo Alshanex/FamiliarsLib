@@ -34,27 +34,15 @@ import java.util.*;
 
 public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private static final int MAX_STORED_FAMILIARS = 10;
-    private static final int MIN_OCCUPATION_TICKS = 100; // 5 seconds
-    private static final int RELEASE_CHANCE_PER_TICK = 40; // 1/40 chance
-    private static final int DEFAULT_MAX_DISTANCE = 25; // Default max distance to wander before recall
-    private int ticksSinceLastRelease = 0;
-    private static final int MAX_TICKS_WITHOUT_RELEASE = 400; // 20 seconds without activity
-
-    private boolean wasNightTime = false;
-    private int dayNightTransitionCooldown = 0; // Cooldown to prevent rapid day/night switches
-    private static final int TRANSITION_COOLDOWN_TICKS = 200; // 10 seconds cooldown
+    private static final int DEFAULT_MAX_DISTANCE = 25;
 
     private UUID ownerUUID;
     public final Map<UUID, FamiliarData> storedFamiliars = new HashMap<>();
     public final Set<UUID> outsideFamiliars = new HashSet<>();
 
     private boolean storeMode = true; // Default to store mode
-    private boolean canFamiliarsUseGoals = true; // New setting
-    private int maxDistance = DEFAULT_MAX_DISTANCE; // Configurable max distance
-
-    private static final int RELEASE_COOLDOWN_TICKS = 100; // 5 seconds cooldown between releases
-    private int lastReleaseTick = 0;
-    private final Map<UUID, Integer> familiarReleaseCooldowns = new HashMap<>(); // Per-familiar cooldown
+    private boolean canFamiliarsUseGoals = true;
+    private int maxDistance = DEFAULT_MAX_DISTANCE;
 
     public AbstractFamiliarStorageBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
         super(type, pos, blockState);
@@ -67,89 +55,89 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     protected void tick() {
         if (level == null || level.isClientSide) return;
 
-        boolean isNight = !isDaytime();
-
-        // Reduce transition cooldown
-        if (dayNightTransitionCooldown > 0) {
-            dayNightTransitionCooldown--;
-        }
-
-        // Reduce individual familiar release cooldowns
-        familiarReleaseCooldowns.entrySet().removeIf(entry -> {
-            entry.setValue(entry.getValue() - 1);
-            return entry.getValue() <= 0;
-        });
-
-        // Handle night transition (recall familiars)
-        if (isNight && !wasNightTime && !storeMode && dayNightTransitionCooldown == 0) {
-            recallAllOutsideFamiliars();
-            dayNightTransitionCooldown = TRANSITION_COOLDOWN_TICKS;
-        }
-
-        // Handle day transition (add cooldown to prevent immediate release)
-        if (!isNight && wasNightTime && !storeMode && dayNightTransitionCooldown == 0) {
-            dayNightTransitionCooldown = TRANSITION_COOLDOWN_TICKS / 2; // Shorter cooldown for day
-        }
-
-        // Update the night state only when cooldown is over or when it's clearly day
-        if (dayNightTransitionCooldown == 0 || !isNight) {
-            wasNightTime = isNight;
-        }
-
+        // In store mode, nothing to do - familiars are stored as NBT
         if (storeMode) {
-            cleanupMissingFamiliars();
             return;
         }
 
-        if (isNight) {
-            cleanupMissingFamiliars();
-            handleDistantFamiliars();
-            return;
+        // Every 2 seconds, enforce distance limits on wandering familiars
+        if (level.getGameTime() % 40 == 0) {
+            enforceDistanceLimits();
         }
 
-        // Release familiars logic (only during day and not in cooldown)
-        if (!storedFamiliars.isEmpty() && dayNightTransitionCooldown == 0) {
-            ticksSinceLastRelease++;
+        // In wander mode, only do a gentle cleanup of truly dead/removed familiars
+        // This runs infrequently to avoid performance issues
+        if (level.getGameTime() % 100 == 0) { // Every 5 seconds
+            cleanupDeadFamiliars();
+        }
+    }
 
-            // Add cooldown check to prevent rapid releases
-            boolean canReleaseNow = (level.getGameTime() - lastReleaseTick) >= RELEASE_COOLDOWN_TICKS;
+    // Teleports familiars back near the house if they exceed the max distance
+    protected void enforceDistanceLimits() {
+        if (outsideFamiliars.isEmpty()) return;
 
-            //Random chance release
-            if (canReleaseNow && level.random.nextInt(RELEASE_CHANCE_PER_TICK) == 0) {
-                if (releaseRandomFamiliar()) {
-                    ticksSinceLastRelease = 0;
-                    lastReleaseTick = (int) level.getGameTime();
-                }
+        ServerLevel serverLevel = (ServerLevel) level;
+        Vec3 houseCenter = Vec3.atCenterOf(getBlockPos());
+
+        for (UUID familiarId : new HashSet<>(outsideFamiliars)) {
+            Entity entity = serverLevel.getEntity(familiarId);
+
+            // Skip null entities - they might be in unloaded chunks
+            if (entity == null) {
+                continue;
             }
 
-            //Forces release of a familiar with a timer
-            if (canReleaseNow && ticksSinceLastRelease >= MAX_TICKS_WITHOUT_RELEASE) {
-                if (releaseRandomFamiliar()) {
-                    ticksSinceLastRelease = 0;
-                    lastReleaseTick = (int) level.getGameTime();
-                }
-            }
+            if (entity instanceof AbstractSpellCastingPet familiar) {
+                double distance = familiar.position().distanceTo(houseCenter);
 
-            //Increased chance to release when many familiars inside
-            if (canReleaseNow && storedFamiliars.size() >= 3 && level.random.nextInt(80) == 0) {
-                if (releaseRandomFamiliar()) {
-                    lastReleaseTick = (int) level.getGameTime();
-                }
-            }
+                // If familiar is beyond the max distance + a small buffer, teleport them back
+                if (distance > maxDistance + 2.0) {
+                    // Calculate a position near the house within the allowed range
+                    Vec3 direction = familiar.position().subtract(houseCenter).normalize();
+                    Vec3 targetPos = houseCenter.add(direction.scale(maxDistance * 0.6));
 
-            //Additional release chance
-            if (canReleaseNow && level.random.nextInt(60) == 0) {
-                if (releaseRandomFamiliar()) {
-                    lastReleaseTick = (int) level.getGameTime();
+                    // Find safe ground position
+                    BlockPos targetBlock = BlockPos.containing(targetPos);
+                    BlockPos safePos = findSafePositionNear(targetBlock);
+
+                    if (safePos != null) {
+                        familiar.teleportTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5);
+                        familiar.getNavigation().stop();
+                        FamiliarsLib.LOGGER.debug("Teleported familiar {} back within range (was {} blocks away, max {})",
+                                familiarId, (int) distance, maxDistance);
+                    } else {
+                        // Fallback: teleport to house position
+                        Vec3 releasePos = findSafeReleasePosition();
+                        if (releasePos != null) {
+                            familiar.teleportTo(releasePos.x, releasePos.y, releasePos.z);
+                            familiar.getNavigation().stop();
+                            FamiliarsLib.LOGGER.debug("Teleported familiar {} to house position (no safe nearby pos found)", familiarId);
+                        }
+                    }
                 }
             }
-        } else {
-            ticksSinceLastRelease = 0;
+        }
+    }
+
+    // Finds a safe position near the given block position
+    private BlockPos findSafePositionNear(BlockPos center) {
+        // Try the center first
+        if (isSafeSpawnPosition(center)) {
+            return center;
         }
 
-        // Check outside familiars
-        cleanupMissingFamiliars();
-        handleDistantFamiliars();
+        // Try nearby positions
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    BlockPos check = center.offset(dx, dy, dz);
+                    if (isSafeSpawnPosition(check)) {
+                        return check;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public boolean isStoreMode() {
@@ -161,7 +149,11 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             this.storeMode = storeMode;
 
             if (storeMode) {
+                // Only recall when manually switching to store mode
                 recallAllOutsideFamiliars();
+            } else {
+                // When switching to wander mode, release all stored familiars
+                releaseAllStoredFamiliars();
             }
 
             setChanged();
@@ -195,111 +187,44 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         FamiliarsLib.LOGGER.debug("Max distance changed to: {}", this.maxDistance);
     }
 
-    //Recalls familiars outside the house
+    // Recalls all outside familiars back into storage (used when switching to store mode)
     protected void recallAllOutsideFamiliars() {
         if (outsideFamiliars.isEmpty()) return;
 
         ServerLevel serverLevel = (ServerLevel) level;
-        // Create a copy of the set to avoid ConcurrentModificationException
         Set<UUID> familiarsToRecall = new HashSet<>(outsideFamiliars);
 
         for (UUID familiarId : familiarsToRecall) {
             Entity entity = serverLevel.getEntity(familiarId);
             if (entity instanceof AbstractSpellCastingPet familiar) {
-                // Crear NBT of the familiar
                 CompoundTag nbtData = FamiliarManager.createFamiliarNBT(familiar);
-
-                // Move familiar to the storage block
                 FamiliarData data = new FamiliarData(nbtData, 0);
                 storedFamiliars.put(familiarId, data);
 
-                // Despawn familiar from world
                 familiar.remove(Entity.RemovalReason.DISCARDED);
 
-                FamiliarsLib.LOGGER.debug("Recalled familiar {} due to Store Mode activation or nighttime", familiarId);
+                FamiliarsLib.LOGGER.debug("Recalled familiar {} due to Store Mode activation", familiarId);
             }
         }
 
         outsideFamiliars.clear();
+        setChanged();
+        syncToClient();
     }
 
-    //Releases a random familiar from the storage block
-    protected boolean releaseRandomFamiliar() {
-        if (!isDaytime()) {
-            return false;
+    // Releases all stored familiars into the world (used when switching to wander mode)
+    protected void releaseAllStoredFamiliars() {
+        if (storedFamiliars.isEmpty()) return;
+
+        Map<UUID, FamiliarData> familiarsToRelease = new HashMap<>(storedFamiliars);
+
+        for (Map.Entry<UUID, FamiliarData> entry : familiarsToRelease.entrySet()) {
+            releaseFamiliar(entry.getKey());
         }
-
-        // Don't release during transition cooldown
-        if (dayNightTransitionCooldown > 0) {
-            return false;
-        }
-
-        if (storeMode || storedFamiliars.isEmpty()) return false;
-
-        // Find familiars that can be released (not in individual cooldown)
-        List<UUID> availableFamiliars = new ArrayList<>();
-        for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-            UUID familiarId = entry.getKey();
-
-            // Check if this familiar is in cooldown
-            if (familiarReleaseCooldowns.containsKey(familiarId)) {
-                continue;
-            }
-
-            if (entry.getValue().canBeReleased()) {
-                availableFamiliars.add(familiarId);
-            }
-        }
-
-        // If no familiars can be released due to cooldowns, try older ones
-        if (availableFamiliars.isEmpty()) {
-            for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-                UUID familiarId = entry.getKey();
-
-                if (familiarReleaseCooldowns.containsKey(familiarId)) {
-                    continue;
-                }
-
-                if (entry.getValue().occupationTime >= 100) {
-                    availableFamiliars.add(familiarId);
-                }
-            }
-        }
-
-        // Last resort - any familiar not in cooldown
-        if (availableFamiliars.isEmpty() && !storedFamiliars.isEmpty()) {
-            for (UUID familiarId : storedFamiliars.keySet()) {
-                if (!familiarReleaseCooldowns.containsKey(familiarId)) {
-                    availableFamiliars.add(familiarId);
-                }
-            }
-        }
-
-        if (!availableFamiliars.isEmpty()) {
-            UUID familiarToRelease = availableFamiliars.get(level.random.nextInt(availableFamiliars.size()));
-            releaseFamiliar(familiarToRelease);
-            return true;
-        }
-
-        return false;
     }
 
-    //Releases a specific familiar
+    // Releases a specific familiar from storage into the world
     protected void releaseFamiliar(UUID familiarId) {
-        if (!isDaytime()) {
-            return;
-        }
-
-        // Don't release during transition cooldown
-        if (dayNightTransitionCooldown > 0) {
-            return;
-        }
-
-        // Check individual familiar cooldown
-        if (familiarReleaseCooldowns.containsKey(familiarId)) {
-            return;
-        }
-
         FamiliarData familiarData = storedFamiliars.get(familiarId);
         if (familiarData == null) return;
 
@@ -326,16 +251,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         float savedHealth = familiarData.nbtData.getFloat("currentHealth");
         familiar.setHealth(Math.min(savedHealth, familiar.getMaxHealth()));
 
-        // Set position near the storage block - make sure it's not too far
+        // Set position near the storage block
         Vec3 spawnPos = findSafeReleasePosition();
         if (spawnPos == null) {
-            return;
-        }
-
-        // Verify the spawn position is within acceptable range
-        double distanceFromHouse = spawnPos.distanceTo(Vec3.atCenterOf(getBlockPos()));
-        if (distanceFromHouse > maxDistance * 0.8) { // Keep them closer to prevent immediate recall
-            FamiliarsLib.LOGGER.debug("Spawn position too far from house, not releasing familiar {}", familiarId);
+            FamiliarsLib.LOGGER.debug("No safe release position found for familiar {}", familiarId);
             return;
         }
 
@@ -356,28 +275,24 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         storedFamiliars.remove(familiarId);
         outsideFamiliars.add(familiarId);
 
-        // Add cooldown to prevent this familiar from being immediately recalled and re-released
-        familiarReleaseCooldowns.put(familiarId, RELEASE_COOLDOWN_TICKS * 2);
-
         setChanged();
         syncToClient();
 
         FamiliarsLib.LOGGER.debug("Released familiar {} from storage at {}", familiarId, getBlockPos());
     }
 
-    //Cleans missing/dead familiars
-    protected void cleanupMissingFamiliars() {
+    // Only cleans up familiars that are confirmed dead or removed from the world
+    // Does NOT remove familiars that are simply null (could be in unloaded chunks)
+    protected void cleanupDeadFamiliars() {
         if (outsideFamiliars.isEmpty()) return;
 
         ServerLevel serverLevel = (ServerLevel) level;
         Set<UUID> familiarsToRemove = new HashSet<>();
 
-        // Create a copy of the set to avoid ConcurrentModificationException
-        Set<UUID> outsideFamiliarsCopy = new HashSet<>(outsideFamiliars);
-
-        for (UUID familiarId : outsideFamiliarsCopy) {
+        for (UUID familiarId : new HashSet<>(outsideFamiliars)) {
             Entity entity = serverLevel.getEntity(familiarId);
 
+            // Skip null entities - they might just be in unloaded chunks
             if (entity == null) {
                 continue;
             }
@@ -388,7 +303,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                     FamiliarsLib.LOGGER.debug("Familiar {} is dead or removed, cleaning up", familiarId);
                 }
             } else {
-                // If the UUID points to something that isn't a familiar (e.g. UUID conflict or weird state), remove it.
+                // UUID points to something that isn't a familiar
                 familiarsToRemove.add(familiarId);
                 FamiliarsLib.LOGGER.debug("Entity {} is not a familiar, removing from tracking", familiarId);
             }
@@ -401,46 +316,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         }
     }
 
-    //Handles familiars going outside the max wander distance
-    protected void handleDistantFamiliars() {
-        if (outsideFamiliars.isEmpty()) return;
-
-        ServerLevel serverLevel = (ServerLevel) level;
-        BlockPos storagePos = getBlockPos();
-        Set<UUID> familiarsToRecall = new HashSet<>();
-
-        // Create a copy of the set to avoid ConcurrentModificationException
-        Set<UUID> outsideFamiliarsCopy = new HashSet<>(outsideFamiliars);
-
-        for (UUID familiarId : outsideFamiliarsCopy) {
-            Entity entity = serverLevel.getEntity(familiarId);
-            if (entity instanceof AbstractSpellCastingPet familiar) {
-                double distance = familiar.position().distanceTo(Vec3.atCenterOf(storagePos));
-
-                if (!isDaytime()) {
-                    FamiliarsLib.LOGGER.debug("Night time - forcing recall of familiar {}", familiarId);
-                    if (tryRecallFamiliar(familiar)) {
-                        familiarsToRecall.add(familiarId);
-                    }
-                    continue;
-                }
-
-                if (distance > maxDistance) {
-                    FamiliarsLib.LOGGER.debug("Familiar {} too far from house ({}), forcing recall", familiarId, distance);
-                    if (tryRecallFamiliar(familiar)) {
-                        familiarsToRecall.add(familiarId);
-                    }
-                }
-            }
-        }
-
-        outsideFamiliars.removeAll(familiarsToRecall);
-    }
-
-    //Direction for the familiars to spawn, recommended to set the opposite to the block's FACING property
+    // Direction for the familiars to spawn, recommended to set the opposite to the block's FACING property
     protected abstract Direction getFacingDirection();
 
-    //Finds a safe position to spawn in the set direction
+    // Finds a safe position to spawn in the set direction
     protected Vec3 findSafeReleasePosition() {
         BlockPos storagePos = getBlockPos();
 
@@ -454,19 +333,14 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return null;
     }
 
-    //Checks if the position is safe to spawn
+    // Checks if the position is safe to spawn
     protected boolean isSafeSpawnPosition(BlockPos pos) {
         return level.getBlockState(pos).isAir() &&
                 level.getBlockState(pos.above()).isAir() &&
                 level.getBlockState(pos.below()).isSolid();
     }
 
-    private boolean isDaytime() {
-        long time = level.getDayTime() % 24000;
-        return (time >= 1000 && time <= 12000) && !level.isRaining();
-    }
-
-    // Method to manually recall a familiar
+    // Method to manually recall a familiar (e.g., from the familiar's AI returning to house)
     public boolean tryRecallFamiliar(AbstractSpellCastingPet familiar) {
         if (!canStoreFamiliar()) {
             return false;
@@ -479,21 +353,14 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                 familiar.getIsInHouse() &&
                 getBlockPos().equals(familiar.housePosition)) {
 
-            // Create NBT data
             CompoundTag nbtData = FamiliarManager.createFamiliarNBT(familiar);
 
-            // Store familiar
-            FamiliarData familiarData = new FamiliarData(nbtData, 0);
-            storedFamiliars.put(familiarId, familiarData);
+            FamiliarData familiarDataObj = new FamiliarData(nbtData, 0);
+            storedFamiliars.put(familiarId, familiarDataObj);
             outsideFamiliars.remove(familiarId);
 
-            // Add cooldown to prevent immediate re-release
-            familiarReleaseCooldowns.put(familiarId, RELEASE_COOLDOWN_TICKS);
-
-            // Remove from world
             familiar.remove(Entity.RemovalReason.DISCARDED);
 
-            // Play sound and effects
             level.playSound(null, getBlockPos(), SoundEvents.BEEHIVE_ENTER, SoundSource.BLOCKS, 1.0F, 1.0F);
             level.gameEvent(GameEvent.BLOCK_CHANGE, getBlockPos(), GameEvent.Context.of(familiar, getBlockState()));
 
@@ -556,7 +423,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return outsideFamiliars.size();
     }
 
-    //Stores familiar in the house
+    // Stores familiar in the house
     public boolean storeFamiliar(UUID familiarId, CompoundTag familiarData, ServerPlayer player) {
         if (!isOwner(player)) {
             return false;
@@ -569,7 +436,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return FamiliarManager.storeFamiliarInHouse(familiarId, familiarData, player, getBlockPos());
     }
 
-    //Retrieves familiar from the house
+    // Retrieves familiar from the house
     public boolean retrieveFamiliar(UUID familiarId, ServerPlayer player) {
         if (!isOwner(player)) {
             return false;
@@ -587,7 +454,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return false;
     }
 
-    //Returns stored familiars to the owner
+    // Returns stored familiars to the owner
     public void returnFamiliarsToOwner() {
         if (ownerUUID == null || level == null || level.isClientSide) {
             return;
@@ -633,7 +500,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         outsideFamiliars.clear();
     }
 
-    //Update mode in the client
+    // Update mode in the client
     public void setClientStoreMode(boolean storeMode) {
         if (level != null && level.isClientSide) {
             this.storeMode = storeMode;
@@ -659,7 +526,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return storedFamiliars.containsKey(familiarId) || outsideFamiliars.contains(familiarId);
     }
 
-    //Handles familiar death, unneeded since they can't be killed inside houses, but just in case
+    // Handles familiar death
     public void handleFamiliarDeath(UUID familiarId) {
         if (level == null || level.isClientSide) return;
 
@@ -704,12 +571,9 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             tag.putUUID("ownerUUID", ownerUUID);
         }
 
-        tag.putInt("ticksSinceLastRelease", ticksSinceLastRelease);
         tag.putBoolean("storeMode", storeMode);
-        tag.putBoolean("wasNightTime", wasNightTime);
         tag.putBoolean("canFamiliarsUseGoals", canFamiliarsUseGoals);
         tag.putInt("maxDistance", maxDistance);
-        tag.putInt("dayNightTransitionCooldown", dayNightTransitionCooldown);
 
         // Save stored familiars
         ListTag storedList = new ListTag();
@@ -730,20 +594,6 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             outsideList.add(outsideEntry);
         }
         tag.put("outsideFamiliars", outsideList);
-
-        tag.putInt("lastReleaseTick", lastReleaseTick);
-
-        // Save familiar cooldowns
-        if (!familiarReleaseCooldowns.isEmpty()) {
-            ListTag cooldownList = new ListTag();
-            for (Map.Entry<UUID, Integer> entry : familiarReleaseCooldowns.entrySet()) {
-                CompoundTag cooldownEntry = new CompoundTag();
-                cooldownEntry.putUUID("familiarId", entry.getKey());
-                cooldownEntry.putInt("cooldown", entry.getValue());
-                cooldownList.add(cooldownEntry);
-            }
-            tag.put("familiarCooldowns", cooldownList);
-        }
     }
 
     @Override
@@ -754,12 +604,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             ownerUUID = tag.getUUID("ownerUUID");
         }
 
-        ticksSinceLastRelease = tag.getInt("ticksSinceLastRelease");
         storeMode = tag.getBoolean("storeMode");
-        wasNightTime = tag.getBoolean("wasNightTime");
         canFamiliarsUseGoals = tag.getBoolean("canFamiliarsUseGoals");
         maxDistance = tag.getInt("maxDistance");
-        dayNightTransitionCooldown = tag.getInt("dayNightTransitionCooldown");
+        if (maxDistance == 0) maxDistance = DEFAULT_MAX_DISTANCE; // Fallback for old saves
 
         // Load stored familiars
         storedFamiliars.clear();
@@ -785,24 +633,6 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                 if (outsideEntry.hasUUID("id")) {
                     UUID id = outsideEntry.getUUID("id");
                     outsideFamiliars.add(id);
-                }
-            }
-        }
-
-        lastReleaseTick = tag.getInt("lastReleaseTick");
-
-        // Load familiar cooldowns
-        familiarReleaseCooldowns.clear();
-        if (tag.contains("familiarCooldowns", Tag.TAG_LIST)) {
-            ListTag cooldownList = tag.getList("familiarCooldowns", Tag.TAG_COMPOUND);
-            for (int i = 0; i < cooldownList.size(); i++) {
-                CompoundTag cooldownEntry = cooldownList.getCompound(i);
-                if (cooldownEntry.hasUUID("familiarId")) {
-                    UUID familiarId = cooldownEntry.getUUID("familiarId");
-                    int cooldown = cooldownEntry.getInt("cooldown");
-                    if (cooldown > 0) {
-                        familiarReleaseCooldowns.put(familiarId, cooldown);
-                    }
                 }
             }
         }
@@ -838,7 +668,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         }
 
         public boolean canBeReleased() {
-            return occupationTime >= MIN_OCCUPATION_TICKS;
+            return true; // No longer need minimum occupation time since release is manual
         }
     }
 }

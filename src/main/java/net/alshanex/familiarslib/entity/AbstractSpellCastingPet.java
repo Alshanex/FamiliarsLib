@@ -392,13 +392,13 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     private void addHouseGoals() {
         if (housePosition == null) return;
 
-        this.goalSelector.addGoal(1, new FamiliarGoals.WanderAroundHouseGoal(this, housePosition, 15.0, 1.0));
+        this.goalSelector.addGoal(1, new FamiliarGoals.WanderAroundHouseGoal(this, housePosition, 1.0));
 
         this.goalSelector.addGoal(2, new FamiliarGoals.CasualLookAtPlayerGoal(this, Player.class, 8.0F));
 
         this.goalSelector.addGoal(3, new FamiliarGoals.CasualRandomLookGoal(this));
 
-        this.goalSelector.addGoal(8, new FamiliarGoals.StayNearHouseGoal(this, housePosition, 20.0));
+        this.goalSelector.addGoal(8, new FamiliarGoals.StayNearHouseGoal(this, housePosition));
 
         this.goalSelector.addGoal(9, new FloatGoal(this));
     }
@@ -409,6 +409,17 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                         goal.getGoal() instanceof FamiliarGoals.StayNearHouseGoal ||
                         goal.getGoal() instanceof FamiliarGoals.CasualLookAtPlayerGoal ||
                         goal.getGoal() instanceof FamiliarGoals.CasualRandomLookGoal);
+    }
+
+    public int getHouseMaxDistance() {
+        if (housePosition == null || level() == null) {
+            return 25;
+        }
+        BlockEntity blockEntity = level().getBlockEntity(housePosition);
+        if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
+            return storageEntity.getMaxDistance();
+        }
+        return 25;
     }
 
     //Handles sitting logic

@@ -1452,17 +1452,25 @@ public class FamiliarGoals {
     public static class WanderAroundHouseGoal extends Goal {
         private final AbstractSpellCastingPet familiar;
         private final BlockPos housePos;
-        private final double wanderRadius;
         private final double speedModifier;
         private Vec3 targetPos;
         private int cooldown = 0;
 
-        public WanderAroundHouseGoal(AbstractSpellCastingPet familiar, BlockPos housePos, double wanderRadius, double speedModifier) {
+        public WanderAroundHouseGoal(AbstractSpellCastingPet familiar, BlockPos housePos, double speedModifier) {
             this.familiar = familiar;
             this.housePos = housePos;
-            this.wanderRadius = wanderRadius;
             this.speedModifier = speedModifier;
             this.setFlags(EnumSet.of(Flag.MOVE));
+        }
+
+        private double getWanderRadius() {
+            if (familiar.level() == null) return 15.0;
+
+            BlockEntity blockEntity = familiar.level().getBlockEntity(housePos);
+            if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
+                return storageEntity.getMaxDistance();
+            }
+            return 15.0; // fallback default
         }
 
         @Override
@@ -1491,6 +1499,7 @@ public class FamiliarGoals {
                 return false;
             }
 
+            double wanderRadius = getWanderRadius();
             double distanceToHouse = familiar.position().distanceTo(Vec3.atCenterOf(housePos));
             if (distanceToHouse > wanderRadius + 5) {
                 return false;
@@ -1503,6 +1512,7 @@ public class FamiliarGoals {
         public void start() {
             Vec3 houseCenter = Vec3.atCenterOf(housePos);
             Vec3 currentPos = familiar.position();
+            double wanderRadius = getWanderRadius();
 
             for (int attempt = 0; attempt < 10; attempt++) {
                 double angle = familiar.getRandom().nextDouble() * 2 * Math.PI;
@@ -1691,13 +1701,21 @@ public class FamiliarGoals {
     public static class StayNearHouseGoal extends Goal {
         private final AbstractSpellCastingPet familiar;
         private final BlockPos housePos;
-        private final double maxDistance;
 
-        public StayNearHouseGoal(AbstractSpellCastingPet familiar, BlockPos housePos, double maxDistance) {
+        public StayNearHouseGoal(AbstractSpellCastingPet familiar, BlockPos housePos) {
             this.familiar = familiar;
             this.housePos = housePos;
-            this.maxDistance = maxDistance;
             this.setFlags(EnumSet.of(Flag.MOVE));
+        }
+
+        private double getMaxDistance() {
+            if (familiar.level() == null) return 20.0;
+
+            BlockEntity blockEntity = familiar.level().getBlockEntity(housePos);
+            if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
+                return storageEntity.getMaxDistance();
+            }
+            return 20.0; // fallback default
         }
 
         @Override
@@ -1711,6 +1729,7 @@ public class FamiliarGoals {
                 return false;
             }
 
+            double maxDistance = getMaxDistance();
             double distance = familiar.position().distanceTo(Vec3.atCenterOf(housePos));
             return distance > maxDistance;
         }
@@ -1721,6 +1740,7 @@ public class FamiliarGoals {
                 return false;
             }
 
+            double maxDistance = getMaxDistance();
             double distance = familiar.position().distanceTo(Vec3.atCenterOf(housePos));
             return distance > maxDistance * 0.8 && familiar.getNavigation().isInProgress();
         }
