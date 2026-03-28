@@ -9,7 +9,6 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
 import java.util.*;
-import java.util.function.Supplier;
 
 /**
  * Tracks which registered armor sets each player currently has fully equipped.
@@ -26,14 +25,6 @@ public class ArmorSetTracker {
     public static void register(ArmorSetDefinition definition) {
         REGISTERED_SETS.add(definition);
         FamiliarsLib.LOGGER.debug("Registered armor set: {}", definition.getName());
-    }
-
-    public static void register(String name,
-                                Supplier<? extends Item> helmet,
-                                Supplier<? extends net.minecraft.world.item.Item> chestplate,
-                                Supplier<? extends net.minecraft.world.item.Item> leggings,
-                                Supplier<? extends net.minecraft.world.item.Item> boots) {
-        register(new ArmorSetDefinition(name, helmet, chestplate, leggings, boots));
     }
 
     public static boolean isWearingSet(ServerPlayer player, ArmorSetDefinition setDef) {
@@ -53,6 +44,15 @@ public class ArmorSetTracker {
             }
         }
         return names;
+    }
+
+    public static ArmorSetDefinition getSetForItem(net.minecraft.world.item.Item item) {
+        for (ArmorSetDefinition def : REGISTERED_SETS) {
+            if (def.isPartOfSet(item)) {
+                return def;
+            }
+        }
+        return null;
     }
 
     public static List<ArmorSetDefinition> getRegisteredSets() {
