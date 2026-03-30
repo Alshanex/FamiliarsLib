@@ -32,7 +32,7 @@ public class FamiliarBedHelper {
                             if (distance <= 3.0) {
                                 familiar.setPos(exactPos.x, exactPos.y, exactPos.z);
                                 if (!familiar.level().isClientSide) {
-                                    FamiliarsLib.LOGGER.debug("Snapped pet " + familiar.getUUID() + " to bed position: " + exactPos);
+                                    //FamiliarsLib.LOGGER.debug("Snapped pet " + familiar.getUUID() + " to bed position: " + exactPos);
                                 }
                                 return;
                             }

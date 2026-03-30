@@ -24,7 +24,7 @@ public class ArmorSetTracker {
 
     public static void register(ArmorSetDefinition definition) {
         REGISTERED_SETS.add(definition);
-        FamiliarsLib.LOGGER.debug("Registered armor set: {}", definition.getName());
+        //FamiliarsLib.LOGGER.debug("Registered armor set: {}", definition.getName());
     }
 
     public static boolean isWearingSet(ServerPlayer player, ArmorSetDefinition setDef) {

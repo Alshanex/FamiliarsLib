@@ -39,8 +39,11 @@ public class FamiliarHelper {
             UUID familiarId = familiar.getUUID();
 
             if (!familiarData.hasFamiliar(familiarId)) {
+                /*
                 FamiliarsLib.LOGGER.debug("Migrating legacy familiar {} for player {}",
                         familiarId, player.getName().getString());
+
+                 */
 
                 CompoundTag familiarNBT = createFamiliarNBT(familiar);
 

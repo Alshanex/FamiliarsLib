@@ -373,10 +373,10 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
             clearHouseGoals();
             addHouseGoals();
 
-            FamiliarsLib.LOGGER.debug("Familiar {} entered house mode at {}", getUUID(), housePos);
+            //FamiliarsLib.LOGGER.debug("Familiar {} entered house mode at {}", getUUID(), housePos);
         } else {
             clearHouseGoals();
-            FamiliarsLib.LOGGER.debug("Familiar {} exited house mode", getUUID());
+            //FamiliarsLib.LOGGER.debug("Familiar {} exited house mode", getUUID());
         }
     }
 
@@ -492,10 +492,10 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         float currentHealth = getHealth();
         pCompound.putFloat("currentHealth", currentHealth);
         pCompound.putFloat("baseMaxHealth", getBaseMaxHealth()); // Keep for reference
-
+/*
         FamiliarsLib.LOGGER.debug("Saving health for familiar {}: current={}, max={}, base={}",
                 getUUID(), currentHealth, getMaxHealth(), getBaseMaxHealth());
-
+*/
         pCompound.putBoolean("Sitting", getIsSitting());
         pCompound.putBoolean("isImpostor", getIsImpostor());
         pCompound.putBoolean("hasTotem", getTotem());
@@ -550,7 +550,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                 }
             }
 
-            FamiliarsLib.LOGGER.debug("Loading health for familiar {}: saved health = {}", getUUID(), savedHealth);
+            //FamiliarsLib.LOGGER.debug("Loading health for familiar {}: saved health = {}", getUUID(), savedHealth);
 
             if (!level().isClientSide) {
                 // Recalculate max health based on the migrated stacks
@@ -562,7 +562,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                 setHealth(restoredHealth);
                 hasInitializedHealth = true;
 
-                FamiliarsLib.LOGGER.debug("Restored health: {}/{}", restoredHealth, newMaxHealth);
+                //FamiliarsLib.LOGGER.debug("Restored health: {}/{}", restoredHealth, newMaxHealth);
             } else {
                 getPersistentData().putFloat("pendingHealth", savedHealth);
             }
@@ -730,7 +730,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                 if (familiarData.hasFamiliar(getUUID())) {
                     FamiliarManager.updateFamiliarData(this);
                 } else {
-                    FamiliarsLib.LOGGER.debug("Familiar {} not in player data, skipping update", getUUID());
+                    //FamiliarsLib.LOGGER.debug("Familiar {} not in player data, skipping update", getUUID());
                 }
             }
         }
@@ -986,7 +986,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
 
         // Handle command-spawned entities
         if (reason == MobSpawnType.COMMAND) {
-            FamiliarsLib.LOGGER.debug("Finalizing spawn for command-summoned familiar {}", getUUID());
+            //FamiliarsLib.LOGGER.debug("Finalizing spawn for command-summoned familiar {}", getUUID());
 
             // Initialize consumable system for command-spawned entities
             if (!level.isClientSide()) {

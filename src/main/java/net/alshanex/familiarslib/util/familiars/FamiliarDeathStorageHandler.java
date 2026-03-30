@@ -19,13 +19,13 @@ public class FamiliarDeathStorageHandler {
         UUID familiarId = familiar.getUUID();
         ServerLevel level = (ServerLevel) familiar.level();
 
-        FamiliarsLib.LOGGER.debug("Notifying storage blocks about death of familiar {}", familiarId);
+        //FamiliarsLib.LOGGER.debug("Notifying storage blocks about death of familiar {}", familiarId);
 
         if (familiar.getIsInHouse() && familiar.housePosition != null) {
             BlockEntity blockEntity = level.getBlockEntity(familiar.housePosition);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
                 storageEntity.handleFamiliarDeath(familiarId);
-                FamiliarsLib.LOGGER.debug("Notified house at {} about familiar death", familiar.housePosition);
+                //FamiliarsLib.LOGGER.debug("Notified house at {} about familiar death", familiar.housePosition);
             }
         }
     }

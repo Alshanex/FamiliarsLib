@@ -31,10 +31,10 @@ public class PlayerLoginHandler {
 
         if (event.getEntity() instanceof ServerPlayer newPlayer &&
                 event.getOriginal() instanceof ServerPlayer oldPlayer) {
-
+/*
             FamiliarsLib.LOGGER.debug("Player {} cloned (death: {}), copying familiar and bed link data",
                     newPlayer.getName().getString(), event.isWasDeath());
-
+*/
             PlayerFamiliarData oldFamiliarData = oldPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
             PlayerFamiliarData newFamiliarData = newPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
 
@@ -56,9 +56,10 @@ public class PlayerLoginHandler {
 
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            /*
             FamiliarsLib.LOGGER.debug("Player {} died, desummoning all familiars",
                     serverPlayer.getName().getString());
-
+            */
             ServerLevel level = serverPlayer.serverLevel();
             Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
             Set<UUID> familiarUUIDs = familiars.keySet();
@@ -87,9 +88,9 @@ public class PlayerLoginHandler {
                         level.playSound(null, familiar.getX(), familiar.getY(), familiar.getZ(),
                                 SoundEvents.BEACON_DEACTIVATE,
                                 SoundSource.BLOCKS, 1.0F, 1.0F);
-                        FamiliarsLib.LOGGER.debug("Familiar desummoned due to player death: {}", familiarUUID);
+                        //FamiliarsLib.LOGGER.debug("Familiar desummoned due to player death: {}", familiarUUID);
                     } else {
-                        FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarUUID);
+                        //FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarUUID);
                     }
                 }
             }
@@ -105,7 +106,7 @@ public class PlayerLoginHandler {
 
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
             PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-            FamiliarsLib.LOGGER.debug("Player {} changed dimension, syncing familiar and bed link data", serverPlayer.getName().getString());
+            //FamiliarsLib.LOGGER.debug("Player {} changed dimension, syncing familiar and bed link data", serverPlayer.getName().getString());
 
             if(!serverPlayer.level.isClientSide){
                 ServerLevel originalLevel = serverPlayer.server.getLevel(event.getFrom());
@@ -136,9 +137,9 @@ public class PlayerLoginHandler {
                             originalLevel.playSound(null, familiar.getX(), familiar.getY(), familiar.getZ(),
                                     SoundEvents.BEACON_DEACTIVATE,
                                     SoundSource.BLOCKS, 1.0F, 1.0F);
-                            FamiliarsLib.LOGGER.debug("Specific familiar desummoned successfully: {}", familiarUUID);
+                            //FamiliarsLib.LOGGER.debug("Specific familiar desummoned successfully: {}", familiarUUID);
                         } else {
-                            FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarUUID);
+                            //FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarUUID);
                         }
                     }
                 }

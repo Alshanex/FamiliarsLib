@@ -44,7 +44,7 @@ public class FamiliarManager {
 
     public static void markFamiliarAsDead(UUID familiarId) {
         deadFamiliars.add(familiarId);
-        FamiliarsLib.LOGGER.debug("Marked familiar {} as dead", familiarId);
+        //FamiliarsLib.LOGGER.debug("Marked familiar {} as dead", familiarId);
     }
 
     public static boolean isFamiliarDead(UUID familiarId) {
@@ -53,17 +53,20 @@ public class FamiliarManager {
 
     public static void unmarkFamiliarAsDead(UUID familiarId) {
         deadFamiliars.remove(familiarId);
-        FamiliarsLib.LOGGER.debug("Unmarked familiar {} as dead", familiarId);
+        //FamiliarsLib.LOGGER.debug("Unmarked familiar {} as dead", familiarId);
     }
 
     public static boolean handleFamiliarTaming(AbstractSpellCastingPet familiar, ServerPlayer player) {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
 
         if (!familiarData.canTameMoreFamiliars()) {
+            /*
             FamiliarsLib.LOGGER.debug("Player {} tried to tame familiar but is at max capacity ({}/{})",
                     player.getName().getString(),
                     familiarData.getFamiliarCount(),
                     PlayerFamiliarData.MAX_FAMILIAR_LIMIT);
+
+             */
             return false;
         }
 
@@ -78,13 +81,13 @@ public class FamiliarManager {
             }
 
             syncFamiliarData(player, familiarData);
-
+/*
             FamiliarsLib.LOGGER.debug("Player {} successfully tamed familiar {}. ({}/{})",
                     player.getName().getString(),
                     familiarId,
                     familiarData.getFamiliarCount(),
                     PlayerFamiliarData.MAX_FAMILIAR_LIMIT);
-
+*/
             return true;
         } else {
             FamiliarsLib.LOGGER.error("Failed to add familiar to player data despite limit check");
@@ -105,12 +108,12 @@ public class FamiliarManager {
     public static void handleFamiliarSummoning(ServerPlayer player) {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
         UUID selectedFamiliarId = familiarData.getSelectedFamiliarId();
-
+/*
         FamiliarsLib.LOGGER.debug("Handling familiar summoning for player: {}", player.getName().getString());
         FamiliarsLib.LOGGER.debug("Selected familiar ID: {}", selectedFamiliarId);
-
+*/
         if (selectedFamiliarId == null) {
-            FamiliarsLib.LOGGER.debug("No familiar selected, aborting summoning");
+            //FamiliarsLib.LOGGER.debug("No familiar selected, aborting summoning");
             return;
         }
 
@@ -118,13 +121,13 @@ public class FamiliarManager {
         Entity existingEntity = level.getEntity(selectedFamiliarId);
         boolean familiarExistsInWorld = existingEntity instanceof AbstractSpellCastingPet;
 
-        FamiliarsLib.LOGGER.debug("Familiar exists in world: {}", familiarExistsInWorld);
+        //FamiliarsLib.LOGGER.debug("Familiar exists in world: {}", familiarExistsInWorld);
 
         if (familiarExistsInWorld) {
-            FamiliarsLib.LOGGER.debug("Dessummoning familiar: {}", selectedFamiliarId);
+            //FamiliarsLib.LOGGER.debug("Dessummoning familiar: {}", selectedFamiliarId);
             desummonFamiliar(player, selectedFamiliarId);
         } else {
-            FamiliarsLib.LOGGER.debug("Summoning familiar: {}", selectedFamiliarId);
+            //FamiliarsLib.LOGGER.debug("Summoning familiar: {}", selectedFamiliarId);
             summonFamiliar(player, selectedFamiliarId);
         }
     }
@@ -133,10 +136,10 @@ public class FamiliarManager {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
         CompoundTag familiarNBT = familiarData.getFamiliarData(familiarId);
 
-        FamiliarsLib.LOGGER.debug("Attempting to summon familiar: {}", familiarId);
+        //FamiliarsLib.LOGGER.debug("Attempting to summon familiar: {}", familiarId);
 
         if (familiarNBT == null) {
-            FamiliarsLib.LOGGER.debug("No NBT data found for familiar: {}", familiarId);
+            //FamiliarsLib.LOGGER.debug("No NBT data found for familiar: {}", familiarId);
             return;
         }
 

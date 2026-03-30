@@ -37,7 +37,7 @@ public class FamiliarDeathEventHandler {
             if (familiar.getSummoner() != null && familiar.getSummoner() instanceof ServerPlayer serverPlayer) {
 
                 if (FamiliarAdvancementsHelper.hasRevivalAdvancement(serverPlayer)) {
-                    FamiliarsLib.LOGGER.debug("Player {} has revival advancement", serverPlayer.getName().getString());
+                    //FamiliarsLib.LOGGER.debug("Player {} has revival advancement", serverPlayer.getName().getString());
 
                     MagicData magicData = MagicData.getPlayerMagicData(serverPlayer);
 
@@ -53,7 +53,7 @@ public class FamiliarDeathEventHandler {
                     } else {
                         ItemStack boundSoulLink = findBoundSoulLink(serverPlayer, familiar);
                         if (boundSoulLink != null) {
-                            FamiliarsLib.LOGGER.debug("Found Tiny Totem, reviving familiar");
+                            //FamiliarsLib.LOGGER.debug("Found Tiny Totem, reviving familiar");
                             familiar.setHealth(familiar.getMaxHealth() / 2);
                             event.setCanceled(true);
                             boundSoulLink.shrink(1);
@@ -63,11 +63,11 @@ public class FamiliarDeathEventHandler {
                         }
                     }
                 } else {
-                    FamiliarsLib.LOGGER.debug("Player {} does not have revival advancement", serverPlayer.getName().getString());
+                    //FamiliarsLib.LOGGER.debug("Player {} does not have revival advancement", serverPlayer.getName().getString());
 
                     ItemStack boundSoulLink = findBoundSoulLink(serverPlayer, familiar);
                     if (boundSoulLink != null) {
-                        FamiliarsLib.LOGGER.debug("Found Tiny Totem, reviving familiar");
+                        //FamiliarsLib.LOGGER.debug("Found Tiny Totem, reviving familiar");
                         familiar.setHealth(familiar.getMaxHealth() / 2);
                         event.setCanceled(true);
                         boundSoulLink.shrink(1);
@@ -136,24 +136,25 @@ public class FamiliarDeathEventHandler {
         UUID familiarId = familiar.getUUID();
 
         if (processedDeaths.contains(familiarId)) {
-            FamiliarsLib.LOGGER.debug("Death already processed for familiar {}", familiarId);
+            //FamiliarsLib.LOGGER.debug("Death already processed for familiar {}", familiarId);
             return;
         }
-
+/*
         FamiliarsLib.LOGGER.debug("Processing death event for familiar {} with health {} (BEFORE die() method)",
                 familiarId, familiar.getHealth());
-
+*/
         // Marcar como procesado inmediatamente
         processedDeaths.add(familiarId);
 
         if (familiar.getSummoner() instanceof ServerPlayer serverPlayer) {
+            /*
             FamiliarsLib.LOGGER.debug("Found owner {} for dying familiar {}",
                     serverPlayer.getName().getString(), familiarId);
-
+            */
             try {
                 // Procesar la muerte ANTES de que die() sea llamado
                 FamiliarManager.handleFamiliarDeath(familiar, serverPlayer);
-                FamiliarsLib.LOGGER.debug("Successfully processed death for familiar {} - death packet sent", familiarId);
+                //FamiliarsLib.LOGGER.debug("Successfully processed death for familiar {} - death packet sent", familiarId);
             } catch (Exception e) {
                 FamiliarsLib.LOGGER.error("Error processing death for familiar {}: ", familiarId, e);
             }
@@ -165,14 +166,14 @@ public class FamiliarDeathEventHandler {
         familiar.level().getServer().execute(() -> {
             familiar.level().getServer().execute(() -> {
                 processedDeaths.remove(familiarId);
-                FamiliarsLib.LOGGER.debug("Cleaned up processed death entry for familiar {}", familiarId);
+                //FamiliarsLib.LOGGER.debug("Cleaned up processed death entry for familiar {}", familiarId);
             });
         });
     }
 
     public static void clearProcessedDeaths() {
         processedDeaths.clear();
-        FamiliarsLib.LOGGER.debug("Cleared all processed deaths");
+        //FamiliarsLib.LOGGER.debug("Cleared all processed deaths");
     }
 
     public static boolean wasDeathProcessed(UUID familiarId) {

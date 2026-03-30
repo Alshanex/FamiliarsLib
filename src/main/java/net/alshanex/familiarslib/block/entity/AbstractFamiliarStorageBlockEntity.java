@@ -103,15 +103,18 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                     if (safePos != null) {
                         familiar.teleportTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5);
                         familiar.getNavigation().stop();
+                        /*
                         FamiliarsLib.LOGGER.debug("Teleported familiar {} back within range (was {} blocks away, max {})",
                                 familiarId, (int) distance, maxDistance);
+
+                         */
                     } else {
                         // Fallback: teleport to house position
                         Vec3 releasePos = findSafeReleasePosition();
                         if (releasePos != null) {
                             familiar.teleportTo(releasePos.x, releasePos.y, releasePos.z);
                             familiar.getNavigation().stop();
-                            FamiliarsLib.LOGGER.debug("Teleported familiar {} to house position (no safe nearby pos found)", familiarId);
+                            //FamiliarsLib.LOGGER.debug("Teleported familiar {} to house position (no safe nearby pos found)", familiarId);
                         }
                     }
                 }
@@ -159,7 +162,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             setChanged();
             syncToClient();
 
-            FamiliarsLib.LOGGER.debug("Storage mode changed to: {}", storeMode ? "Store" : "Wander");
+            //FamiliarsLib.LOGGER.debug("Storage mode changed to: {}", storeMode ? "Store" : "Wander");
         }
     }
 
@@ -172,7 +175,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             this.canFamiliarsUseGoals = canFamiliarsUseGoals;
             setChanged();
             syncToClient();
-            FamiliarsLib.LOGGER.debug("Can familiars use goals changed to: {}", canFamiliarsUseGoals);
+            //FamiliarsLib.LOGGER.debug("Can familiars use goals changed to: {}", canFamiliarsUseGoals);
         }
     }
 
@@ -184,7 +187,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         this.maxDistance = Math.max(3, Math.min(25, maxDistance));
         setChanged();
         syncToClient();
-        FamiliarsLib.LOGGER.debug("Max distance changed to: {}", this.maxDistance);
+        //FamiliarsLib.LOGGER.debug("Max distance changed to: {}", this.maxDistance);
     }
 
     // Recalls all outside familiars back into storage (used when switching to store mode)
@@ -203,7 +206,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
                 familiar.remove(Entity.RemovalReason.DISCARDED);
 
-                FamiliarsLib.LOGGER.debug("Recalled familiar {} due to Store Mode activation", familiarId);
+                //FamiliarsLib.LOGGER.debug("Recalled familiar {} due to Store Mode activation", familiarId);
             }
         }
 
@@ -233,13 +236,13 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
 
         if (entityType == null) {
-            FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
+            //FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
             return;
         }
 
         Entity entity = entityType.create(serverLevel);
         if (!(entity instanceof AbstractSpellCastingPet familiar)) {
-            FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
+            //FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
             return;
         }
 
@@ -254,7 +257,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         // Set position near the storage block
         Vec3 spawnPos = findSafeReleasePosition();
         if (spawnPos == null) {
-            FamiliarsLib.LOGGER.debug("No safe release position found for familiar {}", familiarId);
+            //FamiliarsLib.LOGGER.debug("No safe release position found for familiar {}", familiarId);
             return;
         }
 
@@ -278,7 +281,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         setChanged();
         syncToClient();
 
-        FamiliarsLib.LOGGER.debug("Released familiar {} from storage at {}", familiarId, getBlockPos());
+        //FamiliarsLib.LOGGER.debug("Released familiar {} from storage at {}", familiarId, getBlockPos());
     }
 
     // Only cleans up familiars that are confirmed dead or removed from the world
@@ -300,12 +303,12 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             if (entity instanceof AbstractSpellCastingPet familiar) {
                 if (!familiar.isAlive() || familiar.isRemoved()) {
                     familiarsToRemove.add(familiarId);
-                    FamiliarsLib.LOGGER.debug("Familiar {} is dead or removed, cleaning up", familiarId);
+                    //FamiliarsLib.LOGGER.debug("Familiar {} is dead or removed, cleaning up", familiarId);
                 }
             } else {
                 // UUID points to something that isn't a familiar
                 familiarsToRemove.add(familiarId);
-                FamiliarsLib.LOGGER.debug("Entity {} is not a familiar, removing from tracking", familiarId);
+                //FamiliarsLib.LOGGER.debug("Entity {} is not a familiar, removing from tracking", familiarId);
             }
         }
 
@@ -367,7 +370,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             setChanged();
             syncToClient();
 
-            FamiliarsLib.LOGGER.debug("Recalled familiar {} to storage", familiarId);
+            //FamiliarsLib.LOGGER.debug("Recalled familiar {} to storage", familiarId);
             return true;
         }
 
@@ -478,7 +481,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                             playerData.setSelectedFamiliarId(familiarId);
                         }
 
-                        FamiliarsLib.LOGGER.debug("Returned familiar {} to owner {}", familiarId, owner.getName().getString());
+                        //FamiliarsLib.LOGGER.debug("Returned familiar {} to owner {}", familiarId, owner.getName().getString());
                     }
                 }
 

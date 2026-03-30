@@ -76,9 +76,11 @@ public class FamiliarConsumableIntegration {
         CompoundTag consumableNBT = new CompoundTag();
         FamiliarConsumableSystem.saveConsumableDataToNBT(data, consumableNBT);
         familiar.getPersistentData().put(CONSUMABLE_NBT_KEY, consumableNBT);
-
+/*
         FamiliarsLib.LOGGER.debug("Saved consumable data to entity NBT for familiar {}: {}",
                 familiarId, data.toString());
+
+ */
     }
 
     /**
@@ -157,10 +159,10 @@ public class FamiliarConsumableIntegration {
             int bonus = component.getBonus();
             int newValue = Math.min(currentValue + bonus, maxAllowed);
             data.setValue(component.type(), newValue);
-
+/*
             FamiliarsLib.LOGGER.debug("Applying consumable {} to familiar {}: {} -> {}",
                     component.type(), familiar.getUUID(), currentValue, newValue);
-
+*/
             // Update both cache and entity NBT
             updateConsumableData(familiar, data);
             FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
@@ -168,8 +170,11 @@ public class FamiliarConsumableIntegration {
             // Heal the familiar if it was a health consumable
             if (isHealthConsumable) {
                 familiar.setHealth(familiar.getMaxHealth());
+                /*
                 FamiliarsLib.LOGGER.debug("Applied health consumable to familiar {}: healed to full health {}",
                         familiar.getUUID(), familiar.getMaxHealth());
+
+                 */
             }
 
             // Consume the item
@@ -242,8 +247,11 @@ public class FamiliarConsumableIntegration {
         UUID familiarId = familiar.getUUID();
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
         FamiliarConsumableSystem.saveConsumableDataToNBT(data, compound);
+        /*
         FamiliarsLib.LOGGER.debug("Saving consumable data to NBT for familiar {}: {}",
                 familiarId, data.toString());
+
+         */
     }
 
     /**
@@ -253,8 +261,11 @@ public class FamiliarConsumableIntegration {
         UUID familiarId = familiar.getUUID();
         FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableSystem.loadConsumableDataFromNBT(compound);
         saveToEntityNBT(familiar, data);
+        /*
         FamiliarsLib.LOGGER.debug("Loading consumable data from NBT for familiar {}: {}",
                 familiarId, data.toString());
+
+         */
     }
 
     /**
@@ -271,8 +282,11 @@ public class FamiliarConsumableIntegration {
     public static void applyConsumableModifiers(AbstractSpellCastingPet familiar) {
         FamiliarConsumableSystem.ConsumableData data = getConsumableData(familiar);
         FamiliarConsumableSystem.applyAttributeModifiers(familiar, data);
+        /*
         FamiliarsLib.LOGGER.debug("Applied consumable modifiers for familiar {}: {}",
                 familiar.getUUID(), data.toString());
+
+         */
     }
 
     /**
@@ -331,24 +345,24 @@ public class FamiliarConsumableIntegration {
             int healthPercentage = legacyHealthStacks * 10; // 10% per stack
             healthPercentage = Math.min(healthPercentage, ConsumableType.HEALTH.getMaxLimit());
             data.setValue(ConsumableType.HEALTH, healthPercentage);
-            FamiliarsLib.LOGGER.debug("Migrated {} legacy health stacks to {}% health bonus", legacyHealthStacks, healthPercentage);
+            //FamiliarsLib.LOGGER.debug("Migrated {} legacy health stacks to {}% health bonus", legacyHealthStacks, healthPercentage);
         }
 
         if (legacyArmorStacks > 0) {
             int armorPoints = Math.min(legacyArmorStacks, ConsumableType.ARMOR.getMaxLimit());
             data.setValue(ConsumableType.ARMOR, armorPoints);
-            FamiliarsLib.LOGGER.debug("Migrated {} legacy armor stacks to {} armor points", legacyArmorStacks, armorPoints);
+            //FamiliarsLib.LOGGER.debug("Migrated {} legacy armor stacks to {} armor points", legacyArmorStacks, armorPoints);
         }
 
         if (legacyEnragedStacks > 0) {
             int enragedStacks = Math.min(legacyEnragedStacks, ConsumableType.ENRAGED.getMaxLimit());
             data.setValue(ConsumableType.ENRAGED, enragedStacks);
-            FamiliarsLib.LOGGER.debug("Migrated {} legacy enraged stacks", enragedStacks);
+            //FamiliarsLib.LOGGER.debug("Migrated {} legacy enraged stacks", enragedStacks);
         }
 
         if (legacyCanBlock) {
             data.setValue(ConsumableType.BLOCKING, 1);
-            FamiliarsLib.LOGGER.debug("Migrated legacy blocking ability");
+            //FamiliarsLib.LOGGER.debug("Migrated legacy blocking ability");
         }
 
         // Update both cache and entity NBT
@@ -359,8 +373,10 @@ public class FamiliarConsumableIntegration {
         float newMaxHealth = familiar.getMaxHealth();
         float restoredHealth = Math.min(currentHealth, newMaxHealth);
         familiar.setHealth(restoredHealth);
-
+/*
         FamiliarsLib.LOGGER.debug("Completed legacy data migration for familiar {}: {} (health: {}/{})",
                 familiar.getUUID(), data.toString(), familiar.getHealth(), familiar.getMaxHealth());
+
+ */
     }
 }

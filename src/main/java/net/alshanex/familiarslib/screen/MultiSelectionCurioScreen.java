@@ -124,9 +124,11 @@ public class MultiSelectionCurioScreen extends Screen {
 
                     float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
                             consumableData, baseMaxHealth);
-
+/*
                     FamiliarsLib.LOGGER.debug("Multi Selection curio: Loaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
                             id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
+
+ */
                 }
             }
         }
@@ -163,9 +165,11 @@ public class MultiSelectionCurioScreen extends Screen {
         } else {
             maxScroll = 0;
         }
-
+/*
         FamiliarsLib.LOGGER.debug("Total familiars: {}, Total rows: {}, Visible rows: {}, Max scroll: {}",
                 familiarEntries.size(), totalRows, visibleRows, maxScroll);
+
+ */
     }
 
     private void drawHeartIcon(GuiGraphics guiGraphics, int x, int y) {

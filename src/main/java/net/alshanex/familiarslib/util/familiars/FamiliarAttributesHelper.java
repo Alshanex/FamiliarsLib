@@ -224,14 +224,17 @@ public class FamiliarAttributesHelper {
     }
 
     public static void debugFamiliarAttributes(AbstractSpellCastingPet familiar) {
-        FamiliarsLib.LOGGER.debug("Familiar {} attributes:", familiar.getUUID());
+        //FamiliarsLib.LOGGER.debug("Familiar {} attributes:", familiar.getUUID());
         for (Holder<Attribute> attributeHolder : SHARED_ATTRIBUTES.keySet()) {
             AttributeInstance instance = familiar.getAttribute(attributeHolder);
             if (instance != null) {
+                /*
                 FamiliarsLib.LOGGER.debug("  {}: {} (base: {})",
                         attributeHolder.value().getDescriptionId(),
                         instance.getValue(),
                         instance.getBaseValue());
+
+                 */
             }
         }
     }
@@ -250,7 +253,7 @@ public class FamiliarAttributesHelper {
             AttributeModifier legacyHealthModifier = health.getModifier(legacyHealthModifierId);
             if (legacyHealthModifier != null) {
                 health.removeModifier(legacyHealthModifier);
-                FamiliarsLib.LOGGER.debug("Removed legacy health modifier from familiar {}", familiar.getUUID());
+                //FamiliarsLib.LOGGER.debug("Removed legacy health modifier from familiar {}", familiar.getUUID());
             }
         }
 
@@ -260,7 +263,7 @@ public class FamiliarAttributesHelper {
             AttributeModifier legacyArmorModifier = armor.getModifier(legacyArmorModifierId);
             if (legacyArmorModifier != null) {
                 armor.removeModifier(legacyArmorModifier);
-                FamiliarsLib.LOGGER.debug("Removed legacy armor modifier from familiar {}", familiar.getUUID());
+                //FamiliarsLib.LOGGER.debug("Removed legacy armor modifier from familiar {}", familiar.getUUID());
             }
         }
     }

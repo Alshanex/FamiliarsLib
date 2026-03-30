@@ -79,7 +79,7 @@ public class CurioUtils {
      */
     public static void clearSelectedMultiSelectionCurio(ItemStack curio) {
         if (curio.getItem() instanceof AbstractMultiSelectionCurio) {
-            FamiliarsLib.LOGGER.debug("Clearing selected familiars from PandoraBox ItemStack");
+            //FamiliarsLib.LOGGER.debug("Clearing selected familiars from PandoraBox ItemStack");
             AbstractMultiSelectionCurio.setSelectedFamiliars(curio, Set.of());
         }
     }
@@ -97,8 +97,11 @@ public class CurioUtils {
                 if (!selectedBefore.isEmpty()) {
                     clearSelectedMultiSelectionCurio(stack);
                     clearedCount++;
+                    /*
                     FamiliarsLib.LOGGER.debug("Cleared Multi Selection curio in inventory slot {} (had {} selected)",
                             i, selectedBefore.size());
+
+                     */
                 }
             }
         }
@@ -111,8 +114,11 @@ public class CurioUtils {
                 clearSelectedMultiSelectionCurio(carriedItem);
                 // No necesitas setCarried porque estás modificando el ItemStack directamente
                 clearedCount++;
+                /*
                 FamiliarsLib.LOGGER.debug("Cleared Multi Selection curio being carried by cursor (had {} selected)",
                         selectedBefore.size());
+
+                 */
             }
         }
 
@@ -124,8 +130,11 @@ public class CurioUtils {
                 if (!selectedBefore.isEmpty()) {
                     clearSelectedMultiSelectionCurio(handStack);
                     clearedCount++;
+                    /*
                     FamiliarsLib.LOGGER.debug("Cleared Multi Selection curio in {} hand (had {} selected)",
                             hand.name(), selectedBefore.size());
+
+                     */
                 }
             }
         }
@@ -133,11 +142,17 @@ public class CurioUtils {
         if (clearedCount > 0) {
             // Sincronizar inventario con el cliente
             player.inventoryMenu.broadcastChanges();
+            /*
             FamiliarsLib.LOGGER.debug("Found and cleared {} Multi Selection curio for player {}",
                     clearedCount, player.getName().getString());
+
+             */
         } else {
+            /*
             FamiliarsLib.LOGGER.debug("No Multi Selection curio with selections found for player {}",
                     player.getName().getString());
+
+             */
         }
     }
 
@@ -150,15 +165,17 @@ public class CurioUtils {
         }
 
         Set<UUID> selectedFamiliars = AbstractMultiSelectionCurio.getSelectedFamiliars(unequippedBox);
-
+/*
         FamiliarsLib.LOGGER.debug("Player {} unequipped Multi Selection curio with {} selected familiars - searching all locations",
                 player.getName().getString(), selectedFamiliars.size());
-
+*/
         // Buscar y limpiar TODAS las Multi Selection curio del jugador (inventario, cursor, manos)
         findAndClearAllMultiSelectionCurio(player);
-
+/*
         FamiliarsLib.LOGGER.debug("Completed Multi Selection curio cleanup for player {}",
                 player.getName().getString());
+
+ */
     }
 
     /**
@@ -203,8 +220,11 @@ public class CurioUtils {
         }
 
         if (updatedEquipped) {
+            /*
             FamiliarsLib.LOGGER.debug("Updated Multi Selection curio with {} selected familiars for player {}",
                     selectedFamiliars.size(), serverPlayer.getName().getString());
+
+             */
         }
     }
 }

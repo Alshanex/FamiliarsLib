@@ -63,7 +63,7 @@ public class BedCleanupHelper {
         ).isEmpty();
 
         if (!familiarFoundUsingThisBed) {
-            FamiliarsLib.LOGGER.debug("Safety check: Unclaiming abandoned bed at {}", bedPos);
+            //FamiliarsLib.LOGGER.debug("Safety check: Unclaiming abandoned bed at {}", bedPos);
             bedEntity.setBedTaken(false);
         }
     }

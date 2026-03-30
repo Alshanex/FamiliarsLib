@@ -176,9 +176,11 @@ public class FamiliarSelectionScreen extends Screen {
 
                     float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
                             consumableData, baseMaxHealth);
-
+/*
                     FamiliarsLib.LOGGER.debug("FamiliarSelection: Loaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
                             id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
+
+ */
                 }
             }
         }
@@ -211,12 +213,12 @@ public class FamiliarSelectionScreen extends Screen {
 
     public void reloadFamiliarData() {
         try {
-            FamiliarsLib.LOGGER.debug("=== FamiliarSelectionScreen.reloadFamiliarData() START ===");
+            //FamiliarsLib.LOGGER.debug("=== FamiliarSelectionScreen.reloadFamiliarData() START ===");
 
             UUID previousSelected = selectedFamiliarId;
             int previousCount = familiarEntries.size();
 
-            FamiliarsLib.LOGGER.debug("Previous state - Count: {}, Selected: {}", previousCount, previousSelected);
+            //FamiliarsLib.LOGGER.debug("Previous state - Count: {}, Selected: {}", previousCount, previousSelected);
 
             familiarEntries.clear();
 
@@ -234,10 +236,10 @@ public class FamiliarSelectionScreen extends Screen {
             Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
             UUID currentSelected = familiarData.getSelectedFamiliarId();
 
-            FamiliarsLib.LOGGER.debug("Current data - Familiar count: {}, Selected: {}", familiars.size(), currentSelected);
+            //FamiliarsLib.LOGGER.debug("Current data - Familiar count: {}, Selected: {}", familiars.size(), currentSelected);
 
             if (familiars.isEmpty()) {
-                FamiliarsLib.LOGGER.debug("No familiars found, closing screen");
+                //FamiliarsLib.LOGGER.debug("No familiars found, closing screen");
                 onClose();
                 return;
             }
@@ -246,7 +248,7 @@ public class FamiliarSelectionScreen extends Screen {
                 UUID id = entry.getKey();
                 CompoundTag nbt = entry.getValue();
 
-                FamiliarsLib.LOGGER.debug("Processing familiar: {} with saved health: {}", id, nbt.getFloat("currentHealth"));
+                //FamiliarsLib.LOGGER.debug("Processing familiar: {} with saved health: {}", id, nbt.getFloat("currentHealth"));
 
                 String entityTypeString = nbt.getString("id");
                 EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
@@ -325,9 +327,10 @@ public class FamiliarSelectionScreen extends Screen {
 
                         float maxHealthWithModifiers = ConsumableUtils.calculateMaxHealthWithModifiers(
                                 consumableData, baseMaxHealth);
-
+                        /*
                         FamiliarsLib.LOGGER.debug("Reloaded familiar {} - Health: {}/{}, Armor: {}, Enraged: {}, Blocking: {}",
                                 id, displayHealth, maxHealthWithModifiers, armor, enraged, canBlock);
+                        */
                     }
                 } else {
                     FamiliarsLib.LOGGER.warn("Unknown entity type for familiar {}: {}", id, entityTypeString);
@@ -353,11 +356,11 @@ public class FamiliarSelectionScreen extends Screen {
             scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
 
             updateReleaseButtonVisibility();
-
+/*
             FamiliarsLib.LOGGER.debug("Reload completed - New count: {}, New selected: {}, Max scroll: {}",
                     familiarEntries.size(), selectedFamiliarId, maxScroll);
-
-            FamiliarsLib.LOGGER.debug("=== FamiliarSelectionScreen.reloadFamiliarData() END ===");
+*/
+            //FamiliarsLib.LOGGER.debug("=== FamiliarSelectionScreen.reloadFamiliarData() END ===");
 
         } catch (Exception e) {
             FamiliarsLib.LOGGER.error("Error reloading familiar data in FamiliarSelectionScreen: ", e);

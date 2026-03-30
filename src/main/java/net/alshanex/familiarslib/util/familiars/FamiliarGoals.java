@@ -96,10 +96,13 @@ public class FamiliarGoals {
         @Override
         public boolean canUse() {
             if (!pet.level().isClientSide && pet.tickCount % 100 == 0) {
+                /*
                 FamiliarsLib.LOGGER.debug("FindAndUsePetBedGoal check - Pet: " + pet.getUUID() +
                         ", Sitting: " + pet.getIsSitting() +
                         ", Health: " + pet.getHealth() + "/" + pet.getMaxHealth() +
                         ", Cooldown: " + cooldownTicks);
+
+                 */
             }
 
             if (pet.getIsSitting()) {
@@ -125,16 +128,19 @@ public class FamiliarGoals {
                     if (!petBed.isBedTaken()) {
                         petBed.setBedTaken(true);
                         hasClaimedBed = true;
-                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " immediately claimed bed at " + targetBedPos);
+                        //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " immediately claimed bed at " + targetBedPos);
 
                         exactSleepPosition = petBed.getSleepPosition();
                         hasSnappedToBed = false;
+                        /*
                         FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " found available bed at " + targetBedPos +
                                 ", exact sleep position: " + exactSleepPosition);
+
+                         */
                         return true;
                     } else {
                         // Bed was taken between finding it and trying to claim it
-                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " failed to claim bed at " + targetBedPos + " - already taken");
+                        //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " failed to claim bed at " + targetBedPos + " - already taken");
                     }
                 }
             }
@@ -160,7 +166,7 @@ public class FamiliarGoals {
         @Override
         public void start() {
             if (exactSleepPosition != null) {
-                FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " starting to move to exact sleep position: " + exactSleepPosition);
+                //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " starting to move to exact sleep position: " + exactSleepPosition);
                 pet.getNavigation().moveTo(exactSleepPosition.x, exactSleepPosition.y, exactSleepPosition.z, 1.0);
             }
             hasSnappedToBed = false;
@@ -180,7 +186,7 @@ public class FamiliarGoals {
             // Snap to bed position when very close
             if (distanceToSleepPos <= 1.5 && !hasSnappedToBed && hasClaimedBed) {
                 if (!pet.level().isClientSide) {
-                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " within snap range, teleporting to exact position");
+                    //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " within snap range, teleporting to exact position");
 
                     pet.getNavigation().stop();
 
@@ -231,7 +237,7 @@ public class FamiliarGoals {
             try {
                 if (pet.getIsSitting()) {
                     pet.setSitting(false);
-                    FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopped sitting when bed goal ended");
+                    //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopped sitting when bed goal ended");
                 }
 
                 // Move pet one block above the bed when they finish sleeping
@@ -250,13 +256,13 @@ public class FamiliarGoals {
 
                     if (isSafeToExit) {
                         pet.setPos(exitPosition.x, exitPosition.y, exitPosition.z);
-                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " moved to exit position: " + exitPosition);
+                        //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " moved to exit position: " + exitPosition);
                     } else {
                         // If one block above isn't safe, try to find a safe position nearby
                         Vec3 safeExitPosition = findSafeExitPosition(exactSleepPosition);
                         if (safeExitPosition != null) {
                             pet.setPos(safeExitPosition.x, safeExitPosition.y, safeExitPosition.z);
-                            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " moved to safe exit position: " + safeExitPosition);
+                            //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " moved to safe exit position: " + safeExitPosition);
                         }
                     }
                 }

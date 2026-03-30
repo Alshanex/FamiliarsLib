@@ -38,9 +38,10 @@ public class ServerEvents {
 
         // Solo procesar si se desequipó una Multi Selection curio
         if (!fromStack.isEmpty() && fromStack.getItem() instanceof AbstractMultiSelectionCurio) {
+            /*
             FamiliarsLib.LOGGER.debug("Detected Multi Selection curio unequip for player {}",
                     serverPlayer.getName().getString());
-
+*/
             try {
                 CurioUtils.handleMultiSelectionCurioUnequip(serverPlayer, fromStack);
             } catch (Exception e) {
