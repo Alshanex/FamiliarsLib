@@ -40,8 +40,6 @@ public abstract class AbstractFlyingMeleeSpellCastingPet extends AbstractFlyingS
     @Override
     protected void registerGoals() {
         super.registerGoals();
-        this.goalSelector.removeAllGoals(goal -> goal instanceof FlyingRandomStrollGoal);
-        this.goalSelector.addGoal(10, new VexStyleRandomMoveGoal(this));
     }
 
     @Override
@@ -195,70 +193,6 @@ public abstract class AbstractFlyingMeleeSpellCastingPet extends AbstractFlyingS
                         entity.setYRot(-((float) Mth.atan2(dx, dz)) * (180F / (float) Math.PI));
                     }
                     entity.yBodyRot = entity.getYRot();
-                }
-            }
-        }
-    }
-
-    /**
-     * When idle, the entity floats randomly around its owner's position.
-     * Falls back to its own position if the owner is not available.
-     */
-    public static class VexStyleRandomMoveGoal extends Goal {
-        private final AbstractFlyingMeleeSpellCastingPet mob;
-
-        public VexStyleRandomMoveGoal(AbstractFlyingMeleeSpellCastingPet mob) {
-            this.mob = mob;
-            this.setFlags(EnumSet.of(Flag.MOVE));
-        }
-
-        @Override
-        public boolean canUse() {
-            if (mob.getIsSitting() || mob.movementDisabled) {
-                return false;
-            }
-            return !mob.getMoveControl().hasWanted()
-                    && mob.getRandom().nextInt(reducedTickDelay(7)) == 0;
-        }
-
-        @Override
-        public boolean canContinueToUse() {
-            return false;
-        }
-
-        @Override
-        public void tick() {
-            // Use the owner's position as the center, fall back to own position
-            BlockPos origin;
-            LivingEntity owner = mob.getSummoner();
-            if (owner != null) {
-                origin = owner.blockPosition();
-            } else {
-                origin = mob.blockPosition();
-            }
-
-            for (int i = 0; i < 3; ++i) {
-                BlockPos target = origin.offset(
-                        mob.getRandom().nextInt(15) - 7,
-                        mob.getRandom().nextInt(11) - 5,
-                        mob.getRandom().nextInt(15) - 7
-                );
-                if (mob.level().isEmptyBlock(target)) {
-                    mob.getMoveControl().setWantedPosition(
-                            target.getX() + 0.5,
-                            target.getY() + 0.5,
-                            target.getZ() + 0.5,
-                            0.25
-                    );
-                    if (mob.getTarget() == null) {
-                        mob.getLookControl().setLookAt(
-                                target.getX() + 0.5,
-                                target.getY() + 0.5,
-                                target.getZ() + 0.5,
-                                180.0F, 20.0F
-                        );
-                    }
-                    break;
                 }
             }
         }

@@ -1984,28 +1984,44 @@ public class FamiliarGoals {
 
     public static class FlyingWizardAttackGoal extends WizardAttackGoal {
 
-        // Flight configuration
-        protected float preferredHeight = 4.0F;
-        protected float optimalCombatRange = 12.0F;
-        protected float minCombatRange = 6.0F;
-        protected float maxCombatRange = 20.0F;
+        // ==================== CONFIGURATION ====================
 
-        // Movement state
-        protected MovementPattern currentPattern = MovementPattern.ORBIT;
-        protected int patternTicks = 0;
-        protected int patternDuration = 100;
-        protected double orbitAngle = 0.0;
-        protected boolean orbitClockwise = true;
+        /** Preferred height above the target */
+        private float preferredHeight = 4.0f;
 
-        public enum MovementPattern {
-            ORBIT,      // Circle around target
-            STRAFE,     // Side-to-side movement
-            APPROACH,   // Move closer to target
-            RETREAT,    // Move away from target
-            DIVE,       // Quick descent toward target
-            ASCEND,     // Gain altitude
-            HOVER       // Hold position (during casting)
-        }
+        /** Ideal distance to orbit at while casting */
+        private float optimalRange = 10.0f;
+
+        /** Minimum safe distance — entity retreats urgently below this */
+        private float minSafeRange = 5.0f;
+
+        /** Maximum combat range — entity approaches if farther than this */
+        private float maxCombatRange = 20.0f;
+
+        // ==================== THREAT AWARENESS ====================
+
+        /** Radius to scan for hostile mobs targeting this entity */
+        private float threatAwarenessRadius = 14.0f;
+
+        /** Cached threat center — recalculated periodically */
+        @Nullable
+        private Vec3 cachedThreatCenter = null;
+
+        /** Tick counter for periodic threat scans */
+        private int threatScanTimer = 0;
+
+        // ==================== MOVEMENT STATE ====================
+
+        /** Orbit angle for smooth circular movement */
+        private double orbitAngle = 0.0;
+
+        /** Orbit direction — flips periodically for unpredictability */
+        private boolean orbitClockwise = true;
+
+        /** Timer for periodic orbit direction changes */
+        private int orbitSwitchTimer = 0;
+
+        // ==================== CONSTRUCTOR ====================
 
         public FlyingWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double speedModifier, int attackInterval) {
             this(abstractSpellCastingMob, speedModifier, attackInterval, attackInterval);
@@ -2014,10 +2030,10 @@ public class FamiliarGoals {
         public FlyingWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double speedModifier, int attackIntervalMin, int attackIntervalMax) {
             super(abstractSpellCastingMob, speedModifier, attackIntervalMin, attackIntervalMax);
             this.isFlying = true;
-            this.allowFleeing = false; // We handle our own retreat logic
+            this.allowFleeing = false; // We handle retreat ourselves
         }
 
-        // ==================== CONFIGURATION ====================
+        // ==================== BUILDER METHODS ====================
 
         public FlyingWizardAttackGoal setPreferredHeight(float height) {
             this.preferredHeight = height;
@@ -2025,315 +2041,294 @@ public class FamiliarGoals {
         }
 
         public FlyingWizardAttackGoal setCombatRanges(float min, float optimal, float max) {
-            this.minCombatRange = min;
-            this.optimalCombatRange = optimal;
+            this.minSafeRange = min;
+            this.optimalRange = optimal;
             this.maxCombatRange = max;
             this.spellcastingRange = max;
             this.spellcastingRangeSqr = max * max;
             return this;
         }
 
-        // ==================== LIFECYCLE OVERRIDES ====================
+        public FlyingWizardAttackGoal setThreatAwarenessRadius(float radius) {
+            this.threatAwarenessRadius = radius;
+            return this;
+        }
+
+        // ==================== LIFECYCLE ====================
 
         @Override
         public void start() {
             super.start();
             this.orbitAngle = mob.getRandom().nextDouble() * Math.PI * 2;
             this.orbitClockwise = mob.getRandom().nextBoolean();
-            selectNewPattern();
         }
 
         @Override
         public void stop() {
             super.stop();
-            this.currentPattern = MovementPattern.HOVER;
-            this.patternTicks = 0;
+            this.cachedThreatCenter = null;
         }
 
-        // ==================== MAIN MOVEMENT OVERRIDE ====================
+        // ==================== MAIN TICK ====================
+
+        @Override
+        public void tick() {
+            // Periodic threat scan + retargeting
+            if (++threatScanTimer >= 5) {
+                threatScanTimer = 0;
+                updateThreatAwareness();
+            }
+
+            // Periodic orbit direction switch
+            if (++orbitSwitchTimer > 60) {
+                if (mob.getRandom().nextFloat() < 0.15f) {
+                    orbitClockwise = !orbitClockwise;
+                    orbitSwitchTimer = 0;
+                }
+            }
+
+            super.tick();
+        }
+
+        // ==================== MOVEMENT OVERRIDE ====================
 
         @Override
         protected void doMovement(double distanceSquared) {
-            if (target == null) {
+            if (target == null || target.isDeadOrDying()) {
+                mob.getNavigation().stop();
                 return;
             }
 
-            // Always look at target
-            mob.lookAt(target, 30, 30);
+            mob.getLookControl().setLookAt(target, 30, 30);
 
-            // Handle pattern transitions
-            patternTicks++;
-            if (patternTicks >= patternDuration) {
-                selectNewPattern();
-            }
-
-            // Execute the current movement pattern
             double distance = Math.sqrt(distanceSquared);
-            executeMovement(distance);
-        }
+            double nearestThreatDistSqr = getNearestThreatDistSqr();
+            double nearestThreatDist = Math.sqrt(nearestThreatDistSqr);
+            double effectiveDist = Math.min(distance, nearestThreatDist);
 
-        // ==================== PATTERN SELECTION ====================
-
-        protected void selectNewPattern() {
-            patternTicks = 0;
-
-            if (target == null) {
-                currentPattern = MovementPattern.HOVER;
-                patternDuration = 60;
-                return;
-            }
-
-            double distance = mob.distanceTo(target);
-            float healthPercent = mob.getHealth() / mob.getMaxHealth();
-            boolean isCasting = spellCastingMob.isCasting();
-            boolean isDrinking = spellCastingMob.isDrinkingPotion();
-
-            // While casting or drinking, prefer stable positioning
-            if (isCasting || isDrinking) {
-                if (distance < minCombatRange) {
-                    currentPattern = MovementPattern.RETREAT;
-                    patternDuration = 40;
-                } else {
-                    currentPattern = mob.getRandom().nextFloat() < 0.7F ? MovementPattern.HOVER : MovementPattern.ORBIT;
-                    patternDuration = 60 + mob.getRandom().nextInt(40);
+            if (effectiveDist < minSafeRange) {
+                // URGENT RETREAT — full speed, never slowed by casting
+                // Cancel any active cast so we move at full speed
+                if (spellCastingMob.isCasting()) {
+                    spellCastingMob.cancelCast();
                 }
-                return;
-            }
-
-            // Dynamic pattern selection based on combat state
-            float roll = mob.getRandom().nextFloat();
-
-            if (!hasLineOfSight) {
-                // No line of sight - approach to regain
-                currentPattern = MovementPattern.APPROACH;
-                patternDuration = 80;
-            } else if (distance > maxCombatRange) {
-                // Too far - approach
-                currentPattern = MovementPattern.APPROACH;
-                patternDuration = 60 + mob.getRandom().nextInt(40);
-            } else if (distance < minCombatRange) {
-                // Too close - retreat or ascend
-                currentPattern = roll < 0.6F ? MovementPattern.RETREAT : MovementPattern.ASCEND;
-                patternDuration = 40 + mob.getRandom().nextInt(30);
-            } else if (healthPercent < 0.3F && roll < 0.4F) {
-                // Low health - be defensive
-                currentPattern = MovementPattern.RETREAT;
-                patternDuration = 60;
-            } else if (roll < 0.5F) {
-                // Most common - orbit
-                currentPattern = MovementPattern.ORBIT;
-                patternDuration = 80 + mob.getRandom().nextInt(60);
-                // Occasionally switch orbit direction
-                if (mob.getRandom().nextFloat() < 0.3F) {
-                    orbitClockwise = !orbitClockwise;
-                }
-            } else if (roll < 0.7F) {
-                // Strafe
-                currentPattern = MovementPattern.STRAFE;
-                patternDuration = 40 + mob.getRandom().nextInt(30);
-            } else if (roll < 0.85F) {
-                // Height changes
-                double heightDiff = mob.getY() - target.getY();
-                if (heightDiff < preferredHeight) {
-                    currentPattern = MovementPattern.ASCEND;
-                } else {
-                    currentPattern = MovementPattern.DIVE;
-                }
-                patternDuration = 30 + mob.getRandom().nextInt(20);
+                doRetreatMovement(speedModifier * 1.5);
+            } else if (effectiveDist < optimalRange * 0.8) {
+                // Threats creeping in — retreat at normal speed
+                double retreatSpeed = spellCastingMob.isCasting() ? speedModifier * 0.8 : speedModifier * 1.2;
+                doRetreatMovement(retreatSpeed);
+            } else if (distance > maxCombatRange || !hasLineOfSight) {
+                // TOO FAR or no LOS — approach
+                double approachSpeed = spellCastingMob.isCasting() ? speedModifier * 0.5 : speedModifier * 1.2;
+                doApproachMovement(approachSpeed);
             } else {
-                // Brief hover
-                currentPattern = MovementPattern.HOVER;
-                patternDuration = 30 + mob.getRandom().nextInt(30);
+                // SAFE RANGE — orbit
+                double orbitSpeed = spellCastingMob.isCasting() ? speedModifier * 0.5 : speedModifier;
+                doOrbitMovement(distance, orbitSpeed);
             }
         }
 
-        // ==================== MOVEMENT EXECUTION ====================
+        /**
+         * Retreat from the threat centroid (all nearby hostiles), gaining altitude.
+         */
+        private void doRetreatMovement(double speed) {
+            Vec3 fleeFrom = cachedThreatCenter != null ? cachedThreatCenter : target.position();
 
-        protected void executeMovement(double distance) {
-            double speed = getFlightSpeed();
-            Vec3 targetPos = target.position();
-            Vec3 mobPos = mob.position();
-
-            switch (currentPattern) {
-                case ORBIT -> executeOrbit(targetPos, mobPos, speed);
-                case STRAFE -> executeStrafe(targetPos, mobPos, speed);
-                case APPROACH -> executeApproach(targetPos, mobPos, speed);
-                case RETREAT -> executeRetreat(targetPos, mobPos, speed);
-                case DIVE -> executeDive(targetPos, mobPos, speed);
-                case ASCEND -> executeAscend(targetPos, mobPos, speed);
-                case HOVER -> executeHover(targetPos, mobPos);
+            Vec3 awayFromThreats = mob.position().subtract(fleeFrom);
+            double dist = awayFromThreats.horizontalDistance();
+            if (dist < 0.01) {
+                awayFromThreats = new Vec3(1, 0, 0);
             }
+            Vec3 awayNorm = awayFromThreats.normalize();
+
+            // Lateral offset for unpredictable retreat
+            Vec3 lateral = new Vec3(-awayNorm.z, 0, awayNorm.x).scale(getOrbitSide());
+            Vec3 retreatPos = mob.position()
+                    .add(awayNorm.scale(optimalRange * 0.7))
+                    .add(lateral.scale(optimalRange * 0.3));
+
+            // Gain altitude while retreating
+            double targetY = Math.max(retreatPos.y, target.getY() + preferredHeight + 2);
+
+            mob.getMoveControl().setWantedPosition(retreatPos.x, targetY, retreatPos.z, speed);
         }
 
-        protected double getFlightSpeed() {
-            double baseSpeed = speedModifier;
+        /**
+         * Approach the target to get within casting range, maintaining height.
+         */
+        private void doApproachMovement(double speed) {
+            Vec3 toTarget = target.position().subtract(mob.position()).normalize();
+            Vec3 approachPos = target.position().subtract(toTarget.scale(optimalRange * 0.8));
+            double targetY = target.getY() + preferredHeight;
 
-            if (spellCastingMob.isCasting()) {
-                return baseSpeed * 0.5;
-            }
-
-            if (spellCastingMob.isDrinkingPotion()) {
-                return baseSpeed * 0.3;
-            }
-
-            return baseSpeed;
+            mob.getMoveControl().setWantedPosition(approachPos.x, targetY, approachPos.z, speed);
         }
 
-        protected void executeOrbit(Vec3 targetPos, Vec3 mobPos, double speed) {
-            double orbitRadius = optimalCombatRange;
-            double orbitSpeed = 0.03 * (orbitClockwise ? 1 : -1);
+        /**
+         * Orbit around the target at optimal range.
+         * Actively adjusts distance every tick — if enemies creep closer, biases outward.
+         * Produces smooth circular motion via incrementing orbit angle.
+         */
+        private void doOrbitMovement(double currentDistance, double speed) {
+            double orbitSpeed = 0.04 * (orbitClockwise ? 1 : -1);
+
+            // Faster orbit when not casting for harder-to-hit movement
+            if (!spellCastingMob.isCasting()) {
+                orbitSpeed *= 1.5;
+            }
+
             orbitAngle += orbitSpeed;
 
-            // Target position on orbit circle with vertical bobbing
-            double targetX = targetPos.x + Math.cos(orbitAngle) * orbitRadius;
-            double targetZ = targetPos.z + Math.sin(orbitAngle) * orbitRadius;
-            double targetY = targetPos.y + preferredHeight + Math.sin(orbitAngle * 2) * 1.5;
-
-            // Add randomness for natural feel
-            if (mob.getRandom().nextInt(20) == 0) {
-                targetX += (mob.getRandom().nextDouble() - 0.5) * 2;
-                targetZ += (mob.getRandom().nextDouble() - 0.5) * 2;
+            // Determine the orbit radius — stay at optimal range, push out if threats are close
+            double orbitRadius = optimalRange;
+            double nearestThreatDist = Math.sqrt(getNearestThreatDistSqr());
+            if (nearestThreatDist < optimalRange) {
+                // Threats are inside our comfort zone — expand orbit outward
+                orbitRadius = optimalRange + (optimalRange - nearestThreatDist) * 0.5;
             }
 
-            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed);
+            // Compute orbit position around the target
+            double targetX = target.getX() + Math.cos(orbitAngle) * orbitRadius;
+            double targetZ = target.getZ() + Math.sin(orbitAngle) * orbitRadius;
+
+            // Vertical bobbing for natural flight feel
+            double verticalBob = Math.sin(orbitAngle * 2) * 1.0;
+            double targetY = target.getY() + preferredHeight + verticalBob;
+
+            // Casting speed: slower orbit for stable aim
+            double orbitMoveSpeed = spellCastingMob.isCasting() ? speed * 0.5 : speed;
+
+            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, orbitMoveSpeed);
         }
 
-        protected void executeStrafe(Vec3 targetPos, Vec3 mobPos, double speed) {
-            Vec3 toTarget = targetPos.subtract(mobPos).normalize();
-            Vec3 strafeDir = new Vec3(-toTarget.z, 0, toTarget.x); // Perpendicular
+        // ==================== ATTACK LOGIC ====================
 
-            if (!orbitClockwise) {
-                strafeDir = strafeDir.scale(-1);
+        @Override
+        protected void handleAttackLogic(double distanceSquared) {
+            double nearestThreatDistSqr = getNearestThreatDistSqr();
+            boolean threatsAreClose = nearestThreatDistSqr < optimalRange * optimalRange;
+            boolean threatsAreDangerous = nearestThreatDistSqr < minSafeRange * minSafeRange;
+
+            // SURVIVAL FIRST: if any threat is within minSafeRange, cancel any active cast
+            // and do NOT start new ones. The entity's only job is to retreat.
+            if (threatsAreDangerous) {
+                if (spellCastingMob.isCasting()) {
+                    spellCastingMob.cancelCast();
+                }
+                // Reset spell timer so it doesn't fire the instant we're safe
+                spellAttackDelay = 10;
+                return;
             }
 
-            // Maintain distance while strafing
-            double currentDist = mobPos.distanceTo(targetPos);
-            Vec3 adjustedDir = strafeDir;
-
-            if (currentDist < minCombatRange) {
-                adjustedDir = adjustedDir.subtract(toTarget.scale(0.5));
-            } else if (currentDist > maxCombatRange) {
-                adjustedDir = adjustedDir.add(toTarget.scale(0.5));
+            // CAUTION: if threats are inside optimal range but not yet dangerous,
+            // allow ongoing casts to finish but don't start new ones.
+            if (threatsAreClose) {
+                if (spellCastingMob.isCasting()) {
+                    // Let the current cast finish — but cancel if it's a long cast
+                    var spellData = MagicData.getPlayerMagicData(mob).getCastingSpell();
+                    if (spellData != null && spellData.getSpell().getCastTime(spellData.getLevel()) > 30) {
+                        spellCastingMob.cancelCast();
+                    }
+                    // Also cancel if target died
+                    if (target != null && target.isDeadOrDying()) {
+                        spellCastingMob.cancelCast();
+                    }
+                }
+                // Don't start new casts — keep the timer frozen
+                if (spellAttackDelay <= 1) {
+                    spellAttackDelay = 5;
+                }
+                return;
             }
 
-            adjustedDir = adjustedDir.normalize();
-
-            double targetX = mobPos.x + adjustedDir.x * 6;
-            double targetZ = mobPos.z + adjustedDir.z * 6;
-            double targetY = targetPos.y + preferredHeight;
-
-            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.2);
+            // SAFE RANGE: let the parent handle normal spell casting
+            super.handleAttackLogic(distanceSquared);
         }
 
-        protected void executeApproach(Vec3 targetPos, Vec3 mobPos, double speed) {
-            Vec3 toTarget = targetPos.subtract(mobPos);
-            double dist = toTarget.horizontalDistance();
+        // ==================== SPELL WEIGHTS ====================
 
-            Vec3 direction = toTarget.normalize();
-            double desiredDist = optimalCombatRange * 0.8;
+        // Flying casters favor attack spells heavily and use movement/defense
+        // more than support since they rely on kiting.
 
-            double targetX, targetZ;
-            if (dist > desiredDist) {
-                targetX = targetPos.x - direction.x * desiredDist;
-                targetZ = targetPos.z - direction.z * desiredDist;
+        @Override
+        protected int getDefenseWeight() {
+            // Slightly reduced — they avoid damage by distance, not shielding
+            return (int) (super.getDefenseWeight() * 0.7f);
+        }
+
+        @Override
+        protected int getMovementWeight() {
+            // Increased — repositioning is key for a flying caster
+            return (int) (super.getMovementWeight() * 1.3f);
+        }
+
+        // ==================== THREAT AWARENESS ====================
+
+        /**
+         * Scans for nearby hostiles targeting this entity,
+         * updates the cached threat center, and handles reactive retargeting.
+         */
+        private void updateThreatAwareness() {
+            List<LivingEntity> threats = getNearbyThreats();
+
+            if (!threats.isEmpty()) {
+                Vec3 center = Vec3.ZERO;
+                for (LivingEntity threat : threats) {
+                    center = center.add(threat.position());
+                }
+                cachedThreatCenter = center.scale(1.0 / threats.size());
+            } else if (target != null) {
+                cachedThreatCenter = target.position();
             } else {
-                targetX = mobPos.x;
-                targetZ = mobPos.z;
+                cachedThreatCenter = null;
             }
 
-            double targetY = targetPos.y + preferredHeight;
-
-            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.3);
-        }
-
-        protected void executeRetreat(Vec3 targetPos, Vec3 mobPos, double speed) {
-            Vec3 awayFromTarget = mobPos.subtract(targetPos).normalize();
-
-            double retreatDist = 8.0;
-            double targetX = mobPos.x + awayFromTarget.x * retreatDist;
-            double targetZ = mobPos.z + awayFromTarget.z * retreatDist;
-            double targetY = mobPos.y + 2.0; // Gain height while retreating
-
-            // Add sideways movement for unpredictability
-            double sideOffset = (mob.getRandom().nextDouble() - 0.5) * 4;
-            targetX += -awayFromTarget.z * sideOffset;
-            targetZ += awayFromTarget.x * sideOffset;
-
-            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.4);
-        }
-
-        protected void executeDive(Vec3 targetPos, Vec3 mobPos, double speed) {
-            Vec3 toTarget = targetPos.subtract(mobPos).normalize();
-
-            double targetX = targetPos.x - toTarget.x * optimalCombatRange * 0.7;
-            double targetZ = targetPos.z - toTarget.z * optimalCombatRange * 0.7;
-            double targetY = targetPos.y + 2.0; // Stay above target
-
-            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed * 1.5);
-        }
-
-        protected void executeAscend(Vec3 targetPos, Vec3 mobPos, double speed) {
-            double horizontalDist = mobPos.subtract(targetPos).horizontalDistance();
-
-            double targetX = mobPos.x;
-            double targetZ = mobPos.z;
-
-            // If too close, also move away horizontally
-            if (horizontalDist < optimalCombatRange) {
-                Vec3 away = mobPos.subtract(targetPos).normalize();
-                targetX = mobPos.x + away.x * 4;
-                targetZ = mobPos.z + away.z * 4;
+            // Reactive retargeting: switch to a closer attacker
+            LivingEntity lastAttacker = mob.getLastHurtByMob();
+            if (lastAttacker != null && lastAttacker.isAlive() && lastAttacker != target
+                    && mob.getLastHurtByMobTimestamp() > mob.tickCount - 20) {
+                if (target == null || mob.distanceToSqr(lastAttacker) < mob.distanceToSqr(target)) {
+                    mob.setTarget(lastAttacker);
+                }
             }
-
-            double targetY = mobPos.y + 6.0;
-
-            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, speed);
         }
 
-        protected void executeHover(Vec3 targetPos, Vec3 mobPos) {
-            double currentDist = mobPos.distanceTo(targetPos);
+        /**
+         * Returns all living entities within threat awareness radius that are targeting this entity.
+         */
+        private List<LivingEntity> getNearbyThreats() {
+            AABB scanBox = mob.getBoundingBox().inflate(threatAwarenessRadius);
+            return mob.level().getEntitiesOfClass(LivingEntity.class, scanBox, entity -> {
+                if (entity == mob || !entity.isAlive()) return false;
+                if (entity instanceof Mob mobEntity && mobEntity.getTarget() == mob) return true;
+                return entity == mob.getLastHurtByMob() && mob.getLastHurtByMobTimestamp() > mob.tickCount - 40;
+            });
+        }
 
-            double targetX = mobPos.x;
-            double targetZ = mobPos.z;
-            double targetY = targetPos.y + preferredHeight;
-
-            // Gentle adjustment toward optimal range
-            if (currentDist < minCombatRange - 1) {
-                Vec3 away = mobPos.subtract(targetPos).normalize();
-                targetX = mobPos.x + away.x * 2;
-                targetZ = mobPos.z + away.z * 2;
-            } else if (currentDist > maxCombatRange + 2) {
-                Vec3 toward = targetPos.subtract(mobPos).normalize();
-                targetX = mobPos.x + toward.x * 2;
-                targetZ = mobPos.z + toward.z * 2;
+        /**
+         * Returns the squared distance to the nearest threat, or Double.MAX_VALUE if no threats.
+         */
+        private double getNearestThreatDistSqr() {
+            List<LivingEntity> threats = getNearbyThreats();
+            double nearest = Double.MAX_VALUE;
+            for (LivingEntity threat : threats) {
+                double distSqr = mob.distanceToSqr(threat);
+                if (distSqr < nearest) {
+                    nearest = distSqr;
+                }
             }
-
-            // Small bobbing motion
-            targetY += Math.sin(mob.tickCount * 0.08) * 0.3;
-
-            mob.getMoveControl().setWantedPosition(targetX, targetY, targetZ, 0.5);
+            return nearest;
         }
 
-        // ==================== OVERRIDE STRAFE MULTIPLIER ====================
+        // ==================== HELPERS ====================
+
+        private float getOrbitSide() {
+            return orbitClockwise ? 1f : -1f;
+        }
 
         @Override
         public float getStrafeMultiplier() {
-            // Flying entities don't use ground strafing
-            return 0.0F;
-        }
-
-        // ==================== UTILITY FOR PATTERN CHANGES ON CAST ====================
-
-        @Override
-        protected void doSpellAction() {
-            super.doSpellAction();
-
-            // Switch to stable pattern when starting to cast
-            if (spellCastingMob.isCasting() || spellCastingMob.isDrinkingPotion()) {
-                currentPattern = mob.getRandom().nextFloat() < 0.7F ? MovementPattern.HOVER : MovementPattern.ORBIT;
-                patternTicks = 0;
-                patternDuration = 80;
-            }
+            return 0.0F; // No ground strafing — all movement via setWantedPosition
         }
     }
 
