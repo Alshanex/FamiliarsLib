@@ -2481,7 +2481,7 @@ public class FamiliarGoals {
 
     public static class FlyingSkirmisherAttackGoal<T extends PathfinderMob & IAnimatedAttacker & IMagicEntity> extends GenericAnimatedWarlockAttackGoal<T> {
 
-        // COMBAT PHASES
+        // ==================== COMBAT PHASES ====================
 
         protected enum CombatPhase {
             /** Brief breathing window at range — re-engages quickly, rarely casts */
@@ -2494,7 +2494,7 @@ public class FamiliarGoals {
 
         protected CombatPhase combatPhase = CombatPhase.KEEP_DISTANCE;
 
-        // CONFIGURATION
+        // ==================== CONFIGURATION ====================
 
         /** Ideal distance to maintain during KEEP_DISTANCE phase */
         private float preferredDistance = 8.0f;
@@ -2520,16 +2520,16 @@ public class FamiliarGoals {
         /** Speed multiplier when retreating during DISENGAGE */
         private float disengageSpeedMultiplier = 1.3f;
 
-        // GAP CLOSER SPELL
+        // ==================== GAP CLOSER SPELL ====================
 
         @Nullable
         private AbstractSpell gapCloserSpell;
         private int gapCloserSpellLevel;
         private double gapCloserDistance = 5.0;
         private int gapCloserCooldown = 0;
-        private static final int GAP_CLOSER_COOLDOWN_TICKS = 60;
+        private static final int GAP_CLOSER_COOLDOWN_TICKS = 60; // Short cooldown — use eagerly every engage
 
-        // STATE TRACKING
+        // ==================== STATE TRACKING ====================
 
         private int engageCooldown = 0;
         private int phaseTimer = 0;
@@ -2542,7 +2542,7 @@ public class FamiliarGoals {
         /** Chance per KEEP_DISTANCE tick to cast a spell instead of re-engaging (very low) */
         private float spellCastChance = 0.08f;
 
-        // THREAT AWARENESS
+        // ==================== THREAT AWARENESS ====================
 
         /** Radius to scan for hostile mobs targeting this entity */
         private float threatAwarenessRadius = 12.0f;
@@ -2556,13 +2556,15 @@ public class FamiliarGoals {
         /** Tick counter for periodic threat scans (every 5 ticks) */
         private int threatScanTimer = 0;
 
-
+        // ==================== CONSTRUCTOR ====================
 
         public FlyingSkirmisherAttackGoal(T mob, float speedModifier, int attackIntervalMin, int attackIntervalMax) {
             super(mob, speedModifier, attackIntervalMin, attackIntervalMax);
             // Skirmishers are melee-first fighters
             this.wantsToMelee = true;
         }
+
+        // ==================== BUILDER METHODS ====================
 
         public FlyingSkirmisherAttackGoal<T> setPreferredDistance(float distance) {
             this.preferredDistance = distance;
@@ -2635,6 +2637,8 @@ public class FamiliarGoals {
             return this;
         }
 
+        // ==================== LIFECYCLE ====================
+
         @Override
         public void start() {
             super.start();
@@ -2643,6 +2647,11 @@ public class FamiliarGoals {
             engageCooldown = 0;
             phaseTimer = 0;
             combosLandedThisEngage = 0;
+            wantsToMelee = true;
+            meleeAttackDelay = 1; // Attack immediately on arrival
+            if (nextAttack == null && !moveList.isEmpty()) {
+                nextAttack = getNextAttack(0);
+            }
         }
 
         @Override
@@ -2652,6 +2661,8 @@ public class FamiliarGoals {
             phaseTimer = 0;
             combosLandedThisEngage = 0;
         }
+
+        // ==================== MAIN TICK ====================
 
         @Override
         public void tick() {
@@ -2677,13 +2688,19 @@ public class FamiliarGoals {
                 updateThreatAwareness();
             }
 
-            // Phase-specific logic runs before super.tick() so that wantsToMelee is set correctly for the parent's handleAttackLogic
+            // Phase-specific logic runs before super.tick() so that wantsToMelee
+            // is set correctly for the parent's handleAttackLogic
             updateCombatPhase();
 
             super.tick();
+
+            // Re-assert wantsToMelee after super.tick() — the parent's WarlockAttackGoal.tick()
+            // periodically flips wantsToMelee based on meleeBias(), which would override our
+            // phase-based decision. We always control this ourselves.
+            wantsToMelee = (combatPhase == CombatPhase.ENGAGE);
         }
 
-        // PHASE STATE MACHINE
+        // ==================== PHASE STATE MACHINE ====================
 
         private void updateCombatPhase() {
             LivingEntity target = mob.getTarget();
@@ -2703,6 +2720,7 @@ public class FamiliarGoals {
         private void tickKeepDistance(double distSqr) {
             // KEEP_DISTANCE is a brief breathing window — the entity re-engages quickly.
             // Spells are cast only rarely during this phase.
+            // Movement always runs (handled by doKeepDistanceMovement via doMovement).
             wantsToMelee = false;
 
             if (engageCooldown > 0) {
@@ -2792,6 +2810,10 @@ public class FamiliarGoals {
                 case ENGAGE -> {
                     combosLandedThisEngage = 0;
                     wantsToMelee = true;
+                    meleeAttackDelay = 1; // Attack immediately on arrival
+                    if (nextAttack == null && !moveList.isEmpty()) {
+                        nextAttack = getNextAttack(0);
+                    }
                 }
                 case DISENGAGE -> {
                     wantsToMelee = false;
@@ -2803,7 +2825,7 @@ public class FamiliarGoals {
             }
         }
 
-        // MOVEMENT OVERRIDE
+        // ==================== MOVEMENT OVERRIDE ====================
 
         @Override
         protected void doMovement(double distanceSquared) {
@@ -2934,7 +2956,7 @@ public class FamiliarGoals {
             );
         }
 
-        // ATTACK LOGIC OVERRIDE
+        // ==================== ATTACK LOGIC OVERRIDE ====================
 
         @Override
         protected void handleAttackLogic(double distanceSquared) {
@@ -2950,8 +2972,14 @@ public class FamiliarGoals {
 
                     mob.getLookControl().setLookAt(target);
 
+                    // Ensure nextAttack is always populated when we need it
+                    if (nextAttack == null && !moveList.isEmpty()) {
+                        nextAttack = getNextAttack((float) distanceSquared);
+                    }
+
                     if (meleeAnimTimer > 0 && currentAttack != null) {
                         // Currently in a melee animation — process hit frames directly.
+                        // We handle this ourselves to avoid the parent chain triggering spell logic.
                         forceFaceTarget();
                         meleeAnimTimer--;
                         if (currentAttack.isHitFrame(meleeAnimTimer)) {
@@ -2963,18 +2991,29 @@ public class FamiliarGoals {
                             stopMeleeAction();
                         }
                     } else if (meleeAnimTimer == 0) {
-                        // Melee animation just finished — reset and pick next attack
+                        // Melee animation just finished — pick next attack and strike again
+                        // immediately. Skirmishers don't idle between swings — they chain
+                        // their combos fast and then disengage.
                         nextAttack = getNextAttack((float) distanceSquared);
-                        resetMeleeAttackInterval(distanceSquared);
                         meleeAnimTimer = -1;
-                    } else if (distanceSquared <= strictRangeSqr && !mob.isCasting()) {
-                        // In range, not animating, not casting — handle melee attack delay
+                        meleeAttackDelay = 1; // Attack on the very next tick if still in range
+                    } else if (distanceSquared <= strictRangeSqr) {
+                        // In melee range — cancel any active cast (e.g. gap closer that already
+                        // got us here) and attack. We never let casting block melee during ENGAGE.
+                        if (spellCastingMob.isCasting()) {
+                            spellCastingMob.cancelCast();
+                        }
                         if (--meleeAttackDelay <= 0) {
-                            doMeleeAction();
+                            if (nextAttack != null) {
+                                doMeleeAction();
+                            } else {
+                                // No attacks available — disengage rather than standing still
+                                transitionTo(CombatPhase.DISENGAGE);
+                            }
                         }
                     } else {
-                        // Still closing distance — prime the attack delay so we strike on arrival
-                        meleeAttackDelay = Math.min(meleeAttackDelay, 2);
+                        // Still closing distance — set delay to 1 so we attack instantly on arrival
+                        meleeAttackDelay = 1;
                     }
                 }
                 case DISENGAGE -> {
@@ -2985,6 +3024,7 @@ public class FamiliarGoals {
 
         /**
          * Handles ranged spell casting during KEEP_DISTANCE phase.
+         * Uses the parent's spell selection system.
          */
         private void handleSpellCasting(double distanceSquared) {
             if (seeTime < -50) {
@@ -3007,14 +3047,15 @@ public class FamiliarGoals {
             }
         }
 
-        // COMBO TRACKING
+        // ==================== COMBO TRACKING ====================
 
         @Override
         protected boolean handleDamaging(LivingEntity target, AttackKeyframe attackData) {
             boolean hit = super.handleDamaging(target, attackData);
             if (hit && combatPhase == CombatPhase.ENGAGE) {
                 // Count this as a successful hit toward our combo limit
-                // Only increment when a full attack finishes (single-hit attacks) or on the last hit of a multi-hit combo
+                // Only increment when a full attack finishes (single-hit attacks)
+                // or on the last hit of a multi-hit combo
                 if (currentAttack != null && currentAttack.isSingleHit()) {
                     combosLandedThisEngage++;
                 }
@@ -3031,7 +3072,7 @@ public class FamiliarGoals {
             }
         }
 
-        // GAP CLOSER SPELL
+        // ==================== GAP CLOSER SPELL ====================
 
         private boolean shouldCastGapCloserSpell(double distSqr) {
             if (gapCloserSpell == null || combatPhase != CombatPhase.ENGAGE) {
@@ -3049,8 +3090,12 @@ public class FamiliarGoals {
                 return false;
             }
 
-            // Use gap closer whenever we're far enough — no per-engage limit
-            return distSqr > gapCloserDistance * gapCloserDistance;
+            // Only use gap closer when meaningfully far away — not when we're about to
+            // arrive in melee range anyway. Must be farther than both gapCloserDistance
+            // and melee range to avoid wasting the cast.
+            float meleeRange = meleeRange();
+            double minDistSqr = Math.max(gapCloserDistance * gapCloserDistance, meleeRange * meleeRange * 2.25);
+            return distSqr > minDistSqr;
         }
 
         private void castGapCloserSpell() {
@@ -3062,7 +3107,7 @@ public class FamiliarGoals {
             gapCloserCooldown = GAP_CLOSER_COOLDOWN_TICKS;
         }
 
-        // THREAT AWARENESS
+        // ==================== THREAT AWARENESS ====================
 
         /**
          * Periodically scans for nearby hostile mobs targeting this entity.
@@ -3129,7 +3174,7 @@ public class FamiliarGoals {
             return nearest;
         }
 
-        // HELPERS
+        // ==================== HELPERS ====================
 
         private float getStrafeSide() {
             return strafingClockwise ? 1f : -1f;
@@ -3156,10 +3201,12 @@ public class FamiliarGoals {
                     : super.movementSpeed();
         }
 
-        // SPELL WEIGHT OVERRIDES
+        // ==================== SPELL WEIGHT OVERRIDES ====================
 
-        // This is a melee-first skirmisher. Spells are cast very rarely, only during the brief KEEP_DISTANCE breathing window, and even
-        // then with heavily reduced weights. The entity overwhelmingly prefers the engage/disengage loop.
+        // This is a melee-first skirmisher. Spells are cast very rarely,
+        // only during the brief KEEP_DISTANCE breathing window, and even
+        // then with heavily reduced weights. The entity overwhelmingly
+        // prefers the engage/disengage loop.
 
         @Override
         protected int getAttackWeight() {
@@ -3197,7 +3244,7 @@ public class FamiliarGoals {
             return (int) (super.getSupportWeight() * 0.1f);
         }
 
-        // ACCESSORS
+        // ==================== ACCESSORS ====================
 
         public CombatPhase getCombatPhase() {
             return combatPhase;
