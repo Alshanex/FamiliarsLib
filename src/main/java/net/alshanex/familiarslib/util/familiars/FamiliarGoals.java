@@ -12,6 +12,7 @@ import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import io.redspace.ironsspellbooks.entity.mobs.IAnimatedAttacker;
 import io.redspace.ironsspellbooks.entity.mobs.SummonedSkeleton;
 import io.redspace.ironsspellbooks.entity.mobs.goals.WizardAttackGoal;
+import io.redspace.ironsspellbooks.entity.mobs.goals.melee.AttackKeyframe;
 import io.redspace.ironsspellbooks.entity.mobs.wizards.GenericAnimatedWarlockAttackGoal;
 import io.redspace.ironsspellbooks.particle.BlastwaveParticleOptions;
 import io.redspace.ironsspellbooks.registries.MobEffectRegistry;
@@ -2475,6 +2476,748 @@ public class FamiliarGoals {
 
         public boolean hasAttemptedGapClose() {
             return hasAttemptedGapClose;
+        }
+    }
+
+    public static class FlyingSkirmisherAttackGoal<T extends PathfinderMob & IAnimatedAttacker & IMagicEntity> extends GenericAnimatedWarlockAttackGoal<T> {
+
+        // COMBAT PHASES
+
+        protected enum CombatPhase {
+            /** Brief breathing window at range — re-engages quickly, rarely casts */
+            KEEP_DISTANCE,
+            /** Primary phase: dashing in to deliver melee combo */
+            ENGAGE,
+            /** Pulling back after melee to regain distance */
+            DISENGAGE
+        }
+
+        protected CombatPhase combatPhase = CombatPhase.KEEP_DISTANCE;
+
+        // CONFIGURATION
+
+        /** Ideal distance to maintain during KEEP_DISTANCE phase */
+        private float preferredDistance = 8.0f;
+
+        /** How close the entity needs to get before melee attacks trigger during ENGAGE */
+        private float engageThreshold = 3.0f;
+
+        /** How far away the entity tries to retreat during DISENGAGE */
+        private float disengageDistance = 10.0f;
+
+        /** Ticks spent in KEEP_DISTANCE before re-engaging (brief window) */
+        private int engageCooldownMax = 30;
+
+        /** Max ticks spent in ENGAGE before forcing a disengage (prevents getting stuck) */
+        private int maxEngageTicks = 60;
+
+        /** Max ticks spent in DISENGAGE before transitioning (to ENGAGE or KEEP_DISTANCE) */
+        private int maxDisengageTicks = 40;
+
+        /** Speed multiplier when dashing in during ENGAGE */
+        private float engageSpeedMultiplier = 1.6f;
+
+        /** Speed multiplier when retreating during DISENGAGE */
+        private float disengageSpeedMultiplier = 1.3f;
+
+        // GAP CLOSER SPELL
+
+        @Nullable
+        private AbstractSpell gapCloserSpell;
+        private int gapCloserSpellLevel;
+        private double gapCloserDistance = 5.0;
+        private int gapCloserCooldown = 0;
+        private static final int GAP_CLOSER_COOLDOWN_TICKS = 60;
+
+        // STATE TRACKING
+
+        private int engageCooldown = 0;
+        private int phaseTimer = 0;
+        private int combosLandedThisEngage = 0;
+        private int maxCombosPerEngage = 2;
+
+        @Nullable
+        private LivingEntity lastTarget = null;
+
+        /** Chance per KEEP_DISTANCE tick to cast a spell instead of re-engaging (very low) */
+        private float spellCastChance = 0.08f;
+
+        // THREAT AWARENESS
+
+        /** Radius to scan for hostile mobs targeting this entity */
+        private float threatAwarenessRadius = 12.0f;
+
+        /** How many nearby threats trigger an emergency disengage during ENGAGE */
+        private int crowdedThreshold = 3;
+
+        /** Cached threat center — recalculated periodically, not every tick */
+        private Vec3 cachedThreatCenter = null;
+
+        /** Tick counter for periodic threat scans (every 5 ticks) */
+        private int threatScanTimer = 0;
+
+
+
+        public FlyingSkirmisherAttackGoal(T mob, float speedModifier, int attackIntervalMin, int attackIntervalMax) {
+            super(mob, speedModifier, attackIntervalMin, attackIntervalMax);
+            // Skirmishers are melee-first fighters
+            this.wantsToMelee = true;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setPreferredDistance(float distance) {
+            this.preferredDistance = distance;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setEngageThreshold(float threshold) {
+            this.engageThreshold = threshold;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setDisengageDistance(float distance) {
+            this.disengageDistance = distance;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setEngageCooldown(int ticks) {
+            this.engageCooldownMax = ticks;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setMaxEngageTicks(int ticks) {
+            this.maxEngageTicks = ticks;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setMaxDisengageTicks(int ticks) {
+            this.maxDisengageTicks = ticks;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setEngageSpeedMultiplier(float multiplier) {
+            this.engageSpeedMultiplier = multiplier;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setDisengageSpeedMultiplier(float multiplier) {
+            this.disengageSpeedMultiplier = multiplier;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setMaxCombosPerEngage(int maxCombos) {
+            this.maxCombosPerEngage = maxCombos;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setGapCloserSpell(@Nullable AbstractSpell spell, int level) {
+            this.gapCloserSpell = spell;
+            this.gapCloserSpellLevel = level;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setGapCloserDistance(double distance) {
+            this.gapCloserDistance = distance;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setSpellCastChance(float chance) {
+            this.spellCastChance = chance;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setThreatAwarenessRadius(float radius) {
+            this.threatAwarenessRadius = radius;
+            return this;
+        }
+
+        public FlyingSkirmisherAttackGoal<T> setCrowdedThreshold(int threshold) {
+            this.crowdedThreshold = threshold;
+            return this;
+        }
+
+        @Override
+        public void start() {
+            super.start();
+            // Start fighting immediately — dash in on first contact
+            combatPhase = CombatPhase.ENGAGE;
+            engageCooldown = 0;
+            phaseTimer = 0;
+            combosLandedThisEngage = 0;
+        }
+
+        @Override
+        public void stop() {
+            super.stop();
+            combatPhase = CombatPhase.ENGAGE;
+            phaseTimer = 0;
+            combosLandedThisEngage = 0;
+        }
+
+        @Override
+        public void tick() {
+            // Check for target change — engage new target immediately
+            LivingEntity currentTarget = mob.getTarget();
+            if (currentTarget != lastTarget) {
+                lastTarget = currentTarget;
+                combatPhase = CombatPhase.ENGAGE;
+                engageCooldown = 0;
+                phaseTimer = 0;
+                combosLandedThisEngage = 0;
+            }
+
+            if (gapCloserCooldown > 0) {
+                gapCloserCooldown--;
+            }
+
+            phaseTimer++;
+
+            // Periodic threat scan — update threat center and check for retargeting
+            if (++threatScanTimer >= 5) {
+                threatScanTimer = 0;
+                updateThreatAwareness();
+            }
+
+            // Phase-specific logic runs before super.tick() so that wantsToMelee is set correctly for the parent's handleAttackLogic
+            updateCombatPhase();
+
+            super.tick();
+        }
+
+        // PHASE STATE MACHINE
+
+        private void updateCombatPhase() {
+            LivingEntity target = mob.getTarget();
+            if (target == null || !target.isAlive()) {
+                return;
+            }
+
+            double distSqr = mob.distanceToSqr(target);
+
+            switch (combatPhase) {
+                case KEEP_DISTANCE -> tickKeepDistance(distSqr);
+                case ENGAGE -> tickEngage(target, distSqr);
+                case DISENGAGE -> tickDisengage(distSqr);
+            }
+        }
+
+        private void tickKeepDistance(double distSqr) {
+            // KEEP_DISTANCE is a brief breathing window — the entity re-engages quickly.
+            // Spells are cast only rarely during this phase.
+            wantsToMelee = false;
+
+            if (engageCooldown > 0) {
+                engageCooldown--;
+                // Don't make engage/spell decisions yet, but movement still happens via doMovement
+                return;
+            }
+
+            // Once cooldown expires, decide: re-engage (most of the time) or cast a spell (rarely)
+            if (!spellCastingMob.isCasting()) {
+                if (mob.getRandom().nextFloat() < spellCastChance) {
+                    // Rare spell cast — the spell timer will handle it naturally via handleSpellCasting.
+                    // Stay in KEEP_DISTANCE for this tick, but re-engage next decision.
+                    engageCooldown = 20; // Short window to let the spell go off
+                } else {
+                    // Re-engage immediately
+                    transitionTo(CombatPhase.ENGAGE);
+                }
+            }
+        }
+
+        private void tickEngage(LivingEntity target, double distSqr) {
+            // Primary phase — dashing in and hitting
+            wantsToMelee = true;
+
+            // Use gap closer eagerly whenever available to accelerate the engage
+            if (shouldCastGapCloserSpell(distSqr)) {
+                castGapCloserSpell();
+            }
+
+            // Force disengage if we've been at it too long
+            if (phaseTimer > maxEngageTicks) {
+                transitionTo(CombatPhase.DISENGAGE);
+                return;
+            }
+
+            // Emergency disengage if too many hostiles are crowding us
+            List<LivingEntity> nearbyThreats = getNearbyThreats();
+            int closeThreatCount = 0;
+            float dangerRadius = meleeRange() * 2.5f;
+            for (LivingEntity threat : nearbyThreats) {
+                if (mob.distanceToSqr(threat) < dangerRadius * dangerRadius) {
+                    closeThreatCount++;
+                }
+            }
+            if (closeThreatCount >= crowdedThreshold && !isMeleeing()) {
+                transitionTo(CombatPhase.DISENGAGE);
+                return;
+            }
+
+            // If we've landed enough combos, pull back
+            if (combosLandedThisEngage >= maxCombosPerEngage && !isMeleeing()) {
+                transitionTo(CombatPhase.DISENGAGE);
+            }
+        }
+
+        private void tickDisengage(double distSqr) {
+            // Retreating — no melee, no casting
+            wantsToMelee = false;
+
+            // Cancel any casting while retreating for responsiveness
+            if (spellCastingMob.isCasting()) {
+                spellCastingMob.cancelCast();
+            }
+
+            // Once we're far enough away or time runs out, decide next phase
+            if (distSqr > disengageDistance * disengageDistance || phaseTimer > maxDisengageTicks) {
+                // Most of the time, go straight back to ENGAGE for another hit-and-run
+                // Occasionally pass through KEEP_DISTANCE for a brief breather / rare spell
+                if (mob.getRandom().nextFloat() < 0.8f) {
+                    transitionTo(CombatPhase.ENGAGE);
+                } else {
+                    transitionTo(CombatPhase.KEEP_DISTANCE);
+                }
+            }
+        }
+
+        private void transitionTo(CombatPhase newPhase) {
+            combatPhase = newPhase;
+            phaseTimer = 0;
+
+            switch (newPhase) {
+                case KEEP_DISTANCE -> {
+                    engageCooldown = engageCooldownMax;
+                    wantsToMelee = false;
+                }
+                case ENGAGE -> {
+                    combosLandedThisEngage = 0;
+                    wantsToMelee = true;
+                }
+                case DISENGAGE -> {
+                    wantsToMelee = false;
+                    // Stop any ongoing melee animation cleanly
+                    if (isMeleeing()) {
+                        stopMeleeAction();
+                    }
+                }
+            }
+        }
+
+        // MOVEMENT OVERRIDE
+
+        @Override
+        protected void doMovement(double distanceSquared) {
+            if (target == null || target.isDeadOrDying()) {
+                mob.getNavigation().stop();
+                return;
+            }
+
+            // Periodically switch orbit direction for unpredictability
+            if (++strafeTime > 30) {
+                if (mob.getRandom().nextDouble() < 0.12) {
+                    strafingClockwise = !strafingClockwise;
+                    strafeTime = 0;
+                }
+            }
+
+            double speed = (spellCastingMob.isCasting() ? 0.75 : 1.0) * movementSpeed();
+            mob.lookAt(target, 30, 30);
+
+            switch (combatPhase) {
+                case KEEP_DISTANCE -> doKeepDistanceMovement(distanceSquared, speed);
+                case ENGAGE -> doEngageMovement(distanceSquared, speed);
+                case DISENGAGE -> doDisengageMovement(distanceSquared, speed);
+            }
+        }
+
+        private void doKeepDistanceMovement(double distanceSquared, double speed) {
+            float preferredDistSqr = preferredDistance * preferredDistance;
+
+            // Compute flee direction from the threat center (all nearby hostiles), not just current target.
+            // This prevents standing still while non-target mobs surround and hit the entity.
+            Vec3 fleeFrom = cachedThreatCenter != null ? cachedThreatCenter : target.position();
+
+            Vec3 awayFromThreats = mob.position().subtract(fleeFrom);
+            double currentDist = awayFromThreats.horizontalDistance();
+            if (currentDist < 0.01) {
+                awayFromThreats = new Vec3(1, 0, 0);
+                currentDist = 1.0;
+            }
+            Vec3 awayNorm = awayFromThreats.normalize();
+
+            // Lateral offset for orbiting — perpendicular to the away direction
+            Vec3 lateral = new Vec3(-awayNorm.z, 0, awayNorm.x).scale(getStrafeSide());
+
+            // Use distance to the nearest threat for urgency, not just current target
+            double nearestThreatDistSqr = getNearestThreatDistSqr();
+            double effectiveDistSqr = Math.min(distanceSquared, nearestThreatDistSqr);
+
+            if (effectiveDistSqr < preferredDistSqr) {
+                // Threats are closer than preferred distance — retreat urgently
+                float urgency = 1.0f + (1.0f - (float)(effectiveDistSqr / preferredDistSqr));
+                Vec3 retreatPos = mob.position()
+                        .add(awayNorm.scale(preferredDistance * 0.7))
+                        .add(lateral.scale(preferredDistance * 0.3));
+
+                mob.getMoveControl().setWantedPosition(
+                        retreatPos.x, retreatPos.y + 2, retreatPos.z,
+                        speed * urgency
+                );
+            } else if (distanceSquared > preferredDistSqr * 2.5) {
+                // Too far from current target — move closer but not all the way
+                Vec3 toTarget = target.position().subtract(mob.position()).normalize();
+                Vec3 idealPos = target.position().subtract(toTarget.scale(preferredDistance * 1.2));
+                mob.getMoveControl().setWantedPosition(idealPos.x, idealPos.y + 2, idealPos.z, speed);
+            } else {
+                // Good distance from target — orbit but stay away from threat center
+                Vec3 orbitPos = target.position()
+                        .add(awayNorm.scale(preferredDistance))
+                        .add(lateral.scale(preferredDistance * 0.5));
+
+                if (effectiveDistSqr < preferredDistSqr * 1.2) {
+                    orbitPos = orbitPos.add(awayNorm.scale(preferredDistance * 0.3));
+                }
+
+                mob.getMoveControl().setWantedPosition(orbitPos.x, orbitPos.y + 2, orbitPos.z, speed * 0.8);
+            }
+
+            mob.getLookControl().setLookAt(target);
+        }
+
+        private void doEngageMovement(double distanceSquared, double speed) {
+            float engageSpeed = (float) speed * engageSpeedMultiplier;
+            float meleeRange = meleeRange();
+            float meleeRangeSqr = meleeRange * meleeRange;
+
+            if (isMeleeing()) {
+                // During melee animation: stay locked onto the target, don't freeze.
+                // Move toward the target at reduced speed to maintain contact during the swing.
+                mob.getMoveControl().setWantedPosition(
+                        target.getX(), target.getY() + 1, target.getZ(),
+                        engageSpeed * 0.3
+                );
+                mob.getLookControl().setLookAt(target);
+                return;
+            }
+
+            // Always move directly toward the target — no orbiting during engage.
+            // The goal is to get on top of them, hit, and pull back.
+            mob.getMoveControl().setWantedPosition(
+                    target.getX(), target.getY() + 1, target.getZ(),
+                    distanceSquared > meleeRangeSqr ? engageSpeed : engageSpeed * 0.4
+            );
+            mob.getLookControl().setLookAt(target);
+        }
+
+        private void doDisengageMovement(double distanceSquared, double speed) {
+            float retreatSpeed = (float) speed * disengageSpeedMultiplier;
+
+            // Flee from the threat center (all nearby hostiles), not just the current target.
+            Vec3 fleeFrom = cachedThreatCenter != null ? cachedThreatCenter : target.position();
+
+            Vec3 awayFromThreats = mob.position().subtract(fleeFrom);
+            double currentDist = awayFromThreats.horizontalDistance();
+            if (currentDist < 0.01) {
+                awayFromThreats = new Vec3(1, 0, 0);
+            }
+            Vec3 awayNorm = awayFromThreats.normalize();
+
+            // Add lateral offset so the retreat path isn't a straight line (harder to chase)
+            Vec3 lateral = new Vec3(-awayNorm.z, 0, awayNorm.x).scale(getStrafeSide());
+            Vec3 retreatPos = mob.position()
+                    .add(awayNorm.scale(disengageDistance * 0.6))
+                    .add(lateral.scale(disengageDistance * 0.2));
+
+            mob.getMoveControl().setWantedPosition(
+                    retreatPos.x, retreatPos.y + 3, retreatPos.z,
+                    retreatSpeed
+            );
+        }
+
+        // ATTACK LOGIC OVERRIDE
+
+        @Override
+        protected void handleAttackLogic(double distanceSquared) {
+            switch (combatPhase) {
+                case KEEP_DISTANCE -> {
+                    // Only cast spells — never melee
+                    handleSpellCasting(distanceSquared);
+                }
+                case ENGAGE -> {
+                    var meleeRange = meleeRange();
+                    float rangeMultiplier = nextAttack == null ? 1f : nextAttack.rangeMultiplier;
+                    float strictRangeSqr = meleeRange * meleeRange * rangeMultiplier * rangeMultiplier;
+
+                    mob.getLookControl().setLookAt(target);
+
+                    if (meleeAnimTimer > 0 && currentAttack != null) {
+                        // Currently in a melee animation — process hit frames directly.
+                        forceFaceTarget();
+                        meleeAnimTimer--;
+                        if (currentAttack.isHitFrame(meleeAnimTimer)) {
+                            AttackKeyframe attackData = currentAttack.getHitFrame(meleeAnimTimer);
+                            onHitFrame(attackData, meleeRange);
+                        }
+                        // Cancel swing if target escaped too far
+                        if (currentAttack.canCancel && distanceSquared > strictRangeSqr * 2.25) {
+                            stopMeleeAction();
+                        }
+                    } else if (meleeAnimTimer == 0) {
+                        // Melee animation just finished — reset and pick next attack
+                        nextAttack = getNextAttack((float) distanceSquared);
+                        resetMeleeAttackInterval(distanceSquared);
+                        meleeAnimTimer = -1;
+                    } else if (distanceSquared <= strictRangeSqr && !mob.isCasting()) {
+                        // In range, not animating, not casting — handle melee attack delay
+                        if (--meleeAttackDelay <= 0) {
+                            doMeleeAction();
+                        }
+                    } else {
+                        // Still closing distance — prime the attack delay so we strike on arrival
+                        meleeAttackDelay = Math.min(meleeAttackDelay, 2);
+                    }
+                }
+                case DISENGAGE -> {
+                    // No attacking while retreating
+                }
+            }
+        }
+
+        /**
+         * Handles ranged spell casting during KEEP_DISTANCE phase.
+         */
+        private void handleSpellCasting(double distanceSquared) {
+            if (seeTime < -50) {
+                return;
+            }
+            if (--this.spellAttackDelay == 0) {
+                resetSpellAttackTimer(distanceSquared);
+                if (!spellCastingMob.isCasting() && !spellCastingMob.isDrinkingPotion()) {
+                    doSpellAction();
+                }
+            } else if (this.spellAttackDelay < 0) {
+                resetSpellAttackTimer(distanceSquared);
+            }
+            // Handle ongoing cast cancellation
+            if (spellCastingMob.isCasting()) {
+                var spellData = MagicData.getPlayerMagicData(mob).getCastingSpell();
+                if (target.isDeadOrDying() || spellData.getSpell().shouldAIStopCasting(spellData.getLevel(), mob, target)) {
+                    spellCastingMob.cancelCast();
+                }
+            }
+        }
+
+        // COMBO TRACKING
+
+        @Override
+        protected boolean handleDamaging(LivingEntity target, AttackKeyframe attackData) {
+            boolean hit = super.handleDamaging(target, attackData);
+            if (hit && combatPhase == CombatPhase.ENGAGE) {
+                // Count this as a successful hit toward our combo limit
+                // Only increment when a full attack finishes (single-hit attacks) or on the last hit of a multi-hit combo
+                if (currentAttack != null && currentAttack.isSingleHit()) {
+                    combosLandedThisEngage++;
+                }
+            }
+            return hit;
+        }
+
+        @Override
+        protected void doMeleeAction() {
+            super.doMeleeAction();
+            // For multi-hit attacks, count the combo when initiated
+            if (currentAttack != null && !currentAttack.isSingleHit()) {
+                combosLandedThisEngage++;
+            }
+        }
+
+        // GAP CLOSER SPELL
+
+        private boolean shouldCastGapCloserSpell(double distSqr) {
+            if (gapCloserSpell == null || combatPhase != CombatPhase.ENGAGE) {
+                return false;
+            }
+            if (gapCloserCooldown > 0) {
+                return false;
+            }
+            if (mob.getTarget() == null) {
+                return false;
+            }
+
+            MagicData magicData = MagicData.getPlayerMagicData(mob);
+            if (magicData.isCasting() || isMeleeing()) {
+                return false;
+            }
+
+            // Use gap closer whenever we're far enough — no per-engage limit
+            return distSqr > gapCloserDistance * gapCloserDistance;
+        }
+
+        private void castGapCloserSpell() {
+            if (gapCloserSpell == null || mob.getTarget() == null) {
+                return;
+            }
+
+            spellCastingMob.initiateCastSpell(gapCloserSpell, gapCloserSpellLevel);
+            gapCloserCooldown = GAP_CLOSER_COOLDOWN_TICKS;
+        }
+
+        // THREAT AWARENESS
+
+        /**
+         * Periodically scans for nearby hostile mobs targeting this entity.
+         * Updates the cached threat center and handles reactive retargeting.
+         */
+        private void updateThreatAwareness() {
+            List<LivingEntity> threats = getNearbyThreats();
+
+            // Update cached threat center — the average position of all nearby threats
+            if (!threats.isEmpty()) {
+                Vec3 center = Vec3.ZERO;
+                for (LivingEntity threat : threats) {
+                    center = center.add(threat.position());
+                }
+                cachedThreatCenter = center.scale(1.0 / threats.size());
+            } else if (target != null) {
+                cachedThreatCenter = target.position();
+            } else {
+                cachedThreatCenter = null;
+            }
+
+            // Reactive retargeting: if a closer enemy just hit us, switch to them.
+            // This makes the entity prioritize immediate threats over distant ones.
+            LivingEntity lastAttacker = mob.getLastHurtByMob();
+            if (lastAttacker != null && lastAttacker.isAlive() && lastAttacker != target
+                    && mob.getLastHurtByMobTimestamp() > mob.tickCount - 20) {
+                // Only retarget if the attacker is closer than the current target
+                if (target == null || mob.distanceToSqr(lastAttacker) < mob.distanceToSqr(target)) {
+                    mob.setTarget(lastAttacker);
+                    // If we were disengaging or keeping distance, immediately engage the new threat
+                    if (combatPhase != CombatPhase.ENGAGE) {
+                        transitionTo(CombatPhase.ENGAGE);
+                    }
+                }
+            }
+        }
+
+        /**
+         * Returns all living entities within threat awareness radius that are targeting this entity.
+         */
+        private List<LivingEntity> getNearbyThreats() {
+            AABB scanBox = mob.getBoundingBox().inflate(threatAwarenessRadius);
+            return mob.level().getEntitiesOfClass(LivingEntity.class, scanBox, entity -> {
+                if (entity == mob || !entity.isAlive()) return false;
+                // Include mobs that are targeting us
+                if (entity instanceof Mob mobEntity && mobEntity.getTarget() == mob) return true;
+                // Also include anyone who recently hit us
+                return entity == mob.getLastHurtByMob() && mob.getLastHurtByMobTimestamp() > mob.tickCount - 40;
+            });
+        }
+
+        /**
+         * Returns the squared distance to the nearest threat, or Double.MAX_VALUE if no threats.
+         */
+        private double getNearestThreatDistSqr() {
+            List<LivingEntity> threats = getNearbyThreats();
+            double nearest = Double.MAX_VALUE;
+            for (LivingEntity threat : threats) {
+                double distSqr = mob.distanceToSqr(threat);
+                if (distSqr < nearest) {
+                    nearest = distSqr;
+                }
+            }
+            return nearest;
+        }
+
+        // HELPERS
+
+        private float getStrafeSide() {
+            return strafingClockwise ? 1f : -1f;
+        }
+
+        /**
+         * Snap the entity's rotation to face the target.
+         * Replaces the parent's private forceFaceTarget for use during melee animations.
+         */
+        private void forceFaceTarget() {
+            if (target == null) return;
+            double dx = target.getX() - mob.getX();
+            double dz = target.getZ() - mob.getZ();
+            float yRot = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+            mob.setYBodyRot(yRot);
+            mob.setYHeadRot(yRot);
+            mob.setYRot(yRot);
+        }
+
+        @Override
+        protected double movementSpeed() {
+            return wantsToMelee
+                    ? meleeMoveSpeedModifier * mob.getAttributeValue(Attributes.MOVEMENT_SPEED) * 2
+                    : super.movementSpeed();
+        }
+
+        // SPELL WEIGHT OVERRIDES
+
+        // This is a melee-first skirmisher. Spells are cast very rarely, only during the brief KEEP_DISTANCE breathing window, and even
+        // then with heavily reduced weights. The entity overwhelmingly prefers the engage/disengage loop.
+
+        @Override
+        protected int getAttackWeight() {
+            if (combatPhase != CombatPhase.KEEP_DISTANCE) {
+                return 0;
+            }
+            // Heavily reduced — melee is the primary damage source
+            return (int) (super.getAttackWeight() * 0.15f);
+        }
+
+        @Override
+        protected int getDefenseWeight() {
+            if (combatPhase != CombatPhase.KEEP_DISTANCE) {
+                return 0;
+            }
+            // Very low — the entity avoids damage by disengaging, not shielding
+            return (int) (super.getDefenseWeight() * 0.1f);
+        }
+
+        @Override
+        protected int getMovementWeight() {
+            if (combatPhase != CombatPhase.KEEP_DISTANCE) {
+                return 0;
+            }
+            // Slightly less reduced — repositioning spells complement the style
+            return (int) (super.getMovementWeight() * 0.25f);
+        }
+
+        @Override
+        protected int getSupportWeight() {
+            if (combatPhase != CombatPhase.KEEP_DISTANCE) {
+                return 0;
+            }
+            // Very low — brief windows don't lend themselves to buffing
+            return (int) (super.getSupportWeight() * 0.1f);
+        }
+
+        // ACCESSORS
+
+        public CombatPhase getCombatPhase() {
+            return combatPhase;
+        }
+
+        @Nullable
+        public AbstractSpell getGapCloserSpell() {
+            return gapCloserSpell;
+        }
+
+        public double getGapCloserDistance() {
+            return gapCloserDistance;
+        }
+
+        public int getGapCloserCooldown() {
+            return gapCloserCooldown;
+        }
+
+        public int getCombosLandedThisEngage() {
+            return combosLandedThisEngage;
         }
     }
 }
