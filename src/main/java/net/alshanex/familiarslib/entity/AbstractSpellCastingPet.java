@@ -1268,7 +1268,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     }
 
     protected PlayState sleepPredicate(AnimationState event) {
-        boolean shouldPlaySleepAnimation = getIsSitting() && isOnBed();
+        boolean shouldPlaySleepAnimation = (getIsSitting() && isOnBed()) || isStunned();
 
         if (shouldPlaySleepAnimation) {
             event.getController().setAnimation(sleep);
@@ -1404,7 +1404,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     }
 
     public boolean isAnimating() {
-        boolean isSleeping = getIsSitting() && isOnBed();
+        boolean isSleeping = (getIsSitting() && isOnBed()) || isStunned();
 
         return isCasting()
                 || (animationControllerLongCast.getAnimationState() != AnimationController.State.STOPPED)
