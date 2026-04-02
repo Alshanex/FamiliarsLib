@@ -347,7 +347,7 @@ public class FamiliarGoals {
                     BlockEntity be = pet.level().getBlockEntity(targetBedPos);
                     if (be instanceof AbstractFamiliarBedBlockEntity petBed && petBed.isBedTaken()) {
                         petBed.setBedTaken(false);
-                        FamiliarsLib.LOGGER.debug("Force-released bed at {} for pet {}", targetBedPos, pet.getUUID());
+                        //FamiliarsLib.LOGGER.debug("Force-released bed at {} for pet {}", targetBedPos, pet.getUUID());
                     }
                 }
             } catch (Exception e) {
@@ -372,7 +372,7 @@ public class FamiliarGoals {
         private BlockPos findAvailableBed() {
             BlockPos petPos = pet.blockPosition();
 
-            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " searching for available bed around " + petPos);
+            //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " searching for available bed around " + petPos);
 
             // Search in a radius around the pet
             int searchRange = (int) searchRadius;
@@ -392,7 +392,7 @@ public class FamiliarGoals {
                             if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
                                 // Check if bed is available (not taken)
                                 if (!petBed.isBedTaken()) {
-                                    FamiliarsLib.LOGGER.debug("Found available bed at " + checkPos);
+                                    //FamiliarsLib.LOGGER.debug("Found available bed at " + checkPos);
                                     return checkPos;
                                 }
                             }

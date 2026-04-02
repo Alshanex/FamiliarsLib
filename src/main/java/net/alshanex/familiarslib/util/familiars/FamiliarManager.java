@@ -148,13 +148,13 @@ public class FamiliarManager {
         EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
 
         if (entityType == null) {
-            FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
+            //FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
             return;
         }
 
         Entity entity = entityType.create(level);
         if (!(entity instanceof AbstractSpellCastingPet familiar)) {
-            FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
+            //FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
             return;
         }
 
@@ -184,7 +184,7 @@ public class FamiliarManager {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
         ServerLevel level = player.serverLevel();
 
-        FamiliarsLib.LOGGER.debug("Attempting to desummon familiar: {}", familiarId);
+        //FamiliarsLib.LOGGER.debug("Attempting to desummon familiar: {}", familiarId);
 
         Entity entity = level.getEntity(familiarId);
         if (entity instanceof AbstractSpellCastingPet familiar) {
@@ -211,7 +211,7 @@ public class FamiliarManager {
                 level.playSound(null, familiar.getX(), familiar.getY(), familiar.getZ(),
                         SoundEvents.BEACON_DEACTIVATE,
                         SoundSource.BLOCKS, 1.0F, 1.0F);
-                FamiliarsLib.LOGGER.debug("Familiar desummoned successfully: {}", familiarId);
+                //FamiliarsLib.LOGGER.debug("Familiar desummoned successfully: {}", familiarId);
 
                 if (familiarId.equals(familiarData.getCurrentSummonedFamiliarId())) {
                     familiarData.setCurrentSummonedFamiliarId(null);
@@ -279,9 +279,10 @@ public class FamiliarManager {
         FamiliarConsumableIntegration.saveConsumableData(familiar, nbt);
 
         FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(familiar);
+        /*
         FamiliarsLib.LOGGER.debug("Saving familiar {}: current health={}, max health={}, base max health={}, consumable data = {}",
                 familiar.getUUID(), currentHealth, familiar.getMaxHealth(), familiar.getBaseMaxHealth(), data.toString());
-
+*/
         return nbt;
     }
 
@@ -1460,6 +1461,50 @@ public class FamiliarManager {
                 familiarScreen.reloadFamiliarData();
                 FamiliarsLib.LOGGER.debug("Reloaded familiar selection screen after familiar release");
             }
+        }
+    }
+
+    /**
+     * Handles quick summon keybinds (1-10). Works like the normal summon key but targets a specific familiar by index.
+     */
+    public static void handleQuickSummon(ServerPlayer serverPlayer, int familiarIndex) {
+        PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+
+        if (familiarData.isEmpty()) {
+            serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.translatable("message.familiarslib.no_familiars").withStyle(ChatFormatting.RED)));
+            return;
+        }
+
+        // Get the familiar UUID at the given index
+        UUID familiarId = familiarData.getFamiliarIdByIndex(familiarIndex);
+
+        if (familiarId == null) {
+            serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.translatable("message.familiarslib.quick_summon_no_familiar", familiarIndex + 1).withStyle(ChatFormatting.YELLOW)));
+            return;
+        }
+
+        // Check if player is wearing a multi-selection curio
+        if (!CurioUtils.isWearingMultiSelectionCurio(serverPlayer)) {
+            handleQuickSummonSingle(serverPlayer, familiarId);
+        }
+    }
+
+    private static void handleQuickSummonSingle(ServerPlayer player, UUID familiarId) {
+        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+
+        // Set this familiar as the selected one
+        familiarData.setSelectedFamiliarId(familiarId);
+
+        ServerLevel level = player.serverLevel();
+        Entity existingEntity = level.getEntity(familiarId);
+        boolean familiarExistsInWorld = existingEntity instanceof AbstractSpellCastingPet;
+
+        if (familiarExistsInWorld) {
+            desummonFamiliar(player, familiarId);
+        } else {
+            summonFamiliar(player, familiarId);
         }
     }
 }

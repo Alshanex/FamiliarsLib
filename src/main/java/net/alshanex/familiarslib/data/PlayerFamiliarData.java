@@ -16,7 +16,7 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
     // Max limit of familiars per player
     public static final int MAX_FAMILIAR_LIMIT = 10;
 
-    private final Map<UUID, CompoundTag> tamedFamiliars = new HashMap<>();
+    private final Map<UUID, CompoundTag> tamedFamiliars = new LinkedHashMap<>();
     private UUID selectedFamiliarId = null;
     private UUID currentSummonedFamiliarId = null;
     private final Set<UUID> summonedFamiliarIds = new HashSet<>();
@@ -61,7 +61,7 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
     }
 
     public Map<UUID, CompoundTag> getAllFamiliars() {
-        return new HashMap<>(tamedFamiliars);
+        return new LinkedHashMap<>(tamedFamiliars);
     }
 
     public boolean hasFamiliar(UUID familiarId) {
@@ -118,6 +118,24 @@ public class PlayerFamiliarData implements INBTSerializable<CompoundTag> {
 
     public int getFamiliarCount() {
         return tamedFamiliars.size();
+    }
+
+    /**
+     * Gets the familiar UUID at a specific index based on insertion order.
+     * Since tamedFamiliars is a LinkedHashMap, iteration order matches insertion order.
+     */
+    public UUID getFamiliarIdByIndex(int index) {
+        if (index < 0 || index >= tamedFamiliars.size()) {
+            return null;
+        }
+        int i = 0;
+        for (UUID key : tamedFamiliars.keySet()) {
+            if (i == index) {
+                return key;
+            }
+            i++;
+        }
+        return null;
     }
 
     @Override

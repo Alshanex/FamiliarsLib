@@ -1,6 +1,8 @@
 package net.alshanex.familiarslib.event;
 
+import io.redspace.ironsspellbooks.network.casting.QuickCastPacket;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.network.QuickSummonPacket;
 import net.alshanex.familiarslib.network.RequestFamiliarSelectionPacket;
 import net.alshanex.familiarslib.network.SummonPetPackage;
 import net.neoforged.api.distmarker.Dist;
@@ -9,8 +11,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-import static net.alshanex.familiarslib.event.KeyMappings.SCREEN_KEYMAP;
-import static net.alshanex.familiarslib.event.KeyMappings.SUMMONING_KEYMAP;
+import static net.alshanex.familiarslib.event.KeyMappings.*;
 
 @EventBusSubscriber(modid = FamiliarsLib.MODID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
 public class ClientEvents {
@@ -26,6 +27,13 @@ public class ClientEvents {
         }
         while (SCREEN_KEYMAP.consume()) {
             PacketDistributor.sendToServer(new RequestFamiliarSelectionPacket());
+        }
+
+        for (int i = 0; i < QUICK_SUMMONING_MAPPINGS.size(); i++) {
+            if (QUICK_SUMMONING_MAPPINGS.get(i).consume()) {
+                PacketDistributor.sendToServer(new QuickSummonPacket(i));
+                break;
+            }
         }
     }
 }

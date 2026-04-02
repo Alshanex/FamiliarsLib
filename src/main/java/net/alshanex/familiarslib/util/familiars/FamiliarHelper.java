@@ -50,18 +50,21 @@ public class FamiliarHelper {
                 if (familiarData.tryAddTamedFamiliar(familiarId, familiarNBT)) {
                     if (familiarData.getSelectedFamiliarId() == null) {
                         familiarData.setSelectedFamiliarId(familiarId);
-                        FamiliarsLib.LOGGER.debug("Set migrated familiar {} as selected", familiarId);
+                        //FamiliarsLib.LOGGER.debug("Set migrated familiar {} as selected", familiarId);
                     }
 
                     familiarData.setCurrentSummonedFamiliarId(familiarId);
 
                     FamiliarManager.syncFamiliarDataForPlayer(player);
 
-                    FamiliarsLib.LOGGER.debug("Successfully migrated legacy familiar {} to data attachment", familiarId);
+                    //FamiliarsLib.LOGGER.debug("Successfully migrated legacy familiar {} to data attachment", familiarId);
                 } else {
+                    /*
                     FamiliarsLib.LOGGER.debug("Failed to migrate legacy familiar {} - player {} at max capacity ({}/{})",
                             familiarId, player.getName().getString(),
                             familiarData.getFamiliarCount(), PlayerFamiliarData.MAX_FAMILIAR_LIMIT);
+
+                     */
                 }
             } else {
                 if (!familiarId.equals(familiarData.getCurrentSummonedFamiliarId())) {
