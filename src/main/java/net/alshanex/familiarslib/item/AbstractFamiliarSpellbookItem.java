@@ -19,8 +19,8 @@ import java.util.List;
 public abstract class AbstractFamiliarSpellbookItem extends UniqueSpellBook {
     private static final Component DESCRIPTION = Component.translatable("item.familiarslib.familiar_spellbook.desc").withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC);
 
-    public AbstractFamiliarSpellbookItem() {
-        super(SpellDataRegistryHolder.of(), 10);
+    public AbstractFamiliarSpellbookItem(SpellDataRegistryHolder[] holder, int additionalSpells) {
+        super(holder, additionalSpells);
         withSpellbookAttributes(getSpellbookAttributes());
     }
 
