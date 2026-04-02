@@ -11,17 +11,6 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public class AttributeRegistry {
     public static final DeferredRegister<Attribute> ATTRIBUTES = DeferredRegister.create(Registries.ATTRIBUTE, FamiliarsLib.MODID);
 
-    public static final DeferredHolder<Attribute, Attribute> SOUND_MAGIC_RESIST = newResistanceAttribute("sound");
-    public static final DeferredHolder<Attribute, Attribute> SOUND_SPELL_POWER = newPowerAttribute("sound");
-
     public static final DeferredHolder<Attribute, Attribute> FAMILIAR_DAMAGE = ATTRIBUTES.register("familiar_damage", () -> (new MagicPercentAttribute("attribute.familiarslib.familiar_damage", 1.0D, -100, 100.0D).setSyncable(true)));
     public static final DeferredHolder<Attribute, Attribute> FAMILIAR_RESIST = ATTRIBUTES.register("familiar_resist", () -> (new MagicPercentAttribute("attribute.familiarslib.familiar_resist", 1.0D, -100, 100.0D).setSyncable(true)));
-
-    private static DeferredHolder<Attribute, Attribute> newResistanceAttribute(String id) {
-        return ATTRIBUTES.register(id + "_magic_resist", () -> (new MagicPercentAttribute("attribute.familiarslib." + id + "_magic_resist", 1.0D, -100, 100).setSyncable(true)));
-    }
-
-    private static DeferredHolder<Attribute, Attribute> newPowerAttribute(String id) {
-        return ATTRIBUTES.register(id + "_spell_power", () -> (new MagicPercentAttribute("attribute.familiarslib." + id + "_spell_power", 1.0D, -100, 100).setSyncable(true)));
-    }
 }

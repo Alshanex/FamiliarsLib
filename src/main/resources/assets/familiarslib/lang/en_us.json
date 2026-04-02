@@ -1,8 +1,4 @@
 {
-  "school.familiarslib.sound": "Sound",
-  "attribute.familiarslib.sound_spell_power": "Sound Spell Power",
-  "attribute.familiarslib.sound_magic_resist": "Sound Spell Resistance",
-
   "ui.familiarslib.consumable_item": "Upgrade Item",
   "ui.familiarslib.consumable_item_desc": "Right click a Familiar to use",
   "ui.familiarslib.familiar_storage_screen": "Familiar Storage",
