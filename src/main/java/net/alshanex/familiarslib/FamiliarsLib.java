@@ -38,8 +38,6 @@ public class FamiliarsLib {
 
         FParticleRegistry.register(modEventBus);
 
-        FSchoolRegistry.SCHOOLS.register(modEventBus);
-
         ComponentRegistry.COMPONENTS.register(modEventBus);
 
         // Register ourselves for server and other game events we are interested in.

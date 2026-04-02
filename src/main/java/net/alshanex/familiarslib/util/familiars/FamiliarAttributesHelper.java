@@ -67,7 +67,6 @@ public class FamiliarAttributesHelper {
         map.put(AttributeRegistry.EVOCATION_SPELL_POWER, SHARED_EVOCATION_SPELL_POWER_ID);
         map.put(AttributeRegistry.NATURE_SPELL_POWER, SHARED_NATURE_SPELL_POWER_ID);
         map.put(AttributeRegistry.ELDRITCH_SPELL_POWER, SHARED_ELDRITCH_SPELL_POWER_ID);
-        map.put(net.alshanex.familiarslib.registry.AttributeRegistry.SOUND_SPELL_POWER, SHARED_SOUND_SPELL_POWER_ID);
 
         map.put(AttributeRegistry.FIRE_MAGIC_RESIST, SHARED_FIRE_MAGIC_RESIST_ID);
         map.put(AttributeRegistry.ICE_MAGIC_RESIST, SHARED_ICE_MAGIC_RESIST_ID);
@@ -78,7 +77,6 @@ public class FamiliarAttributesHelper {
         map.put(AttributeRegistry.EVOCATION_MAGIC_RESIST, SHARED_EVOCATION_MAGIC_RESIST_ID);
         map.put(AttributeRegistry.NATURE_MAGIC_RESIST, SHARED_NATURE_MAGIC_RESIST_ID);
         map.put(AttributeRegistry.ELDRITCH_MAGIC_RESIST, SHARED_ELDRITCH_MAGIC_RESIST_ID);
-        map.put(net.alshanex.familiarslib.registry.AttributeRegistry.SOUND_MAGIC_RESIST, SHARED_SOUND_MAGIC_RESIST_ID);
 
         return map;
     }
