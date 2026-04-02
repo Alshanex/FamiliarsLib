@@ -33,6 +33,7 @@ import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.alshanex.familiarslib.util.familiars.*;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -61,6 +62,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.LookControl;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.GoalSelector;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -101,11 +103,13 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         DATA_IS_HOUSE = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
         DATA_IMPOSTOR = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
         DATA_TOTEM = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
+        DATA_STUNNED = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.BOOLEAN);
     }
 
     private static final EntityDataAccessor<Optional<UUID>> DATA_ID_OWNER_UUID;
     private static final EntityDataAccessor<Boolean> DATA_IMPOSTOR;
     private static final EntityDataAccessor<Boolean> DATA_TOTEM;
+    private static final EntityDataAccessor<Boolean> DATA_STUNNED;
 
     protected LivingEntity cachedSummoner;
 
@@ -121,6 +125,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     private boolean hasInitializedHealth = false;
 
     public BlockPos housePosition = null;
+
+    private int stunTimer = 0;
 
     protected AbstractSpellCastingPet(EntityType<? extends PathfinderMob> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
@@ -263,7 +269,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         return false;
     }
 
-    public net.minecraft.world.entity.ai.goal.GoalSelector getGoalSelector() {
+    public GoalSelector getGoalSelector() {
         return this.goalSelector;
     }
 
@@ -380,6 +386,26 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         }
     }
 
+    public boolean isStunned() {
+        return this.entityData
+                .get(DATA_STUNNED);
+    }
+
+    public void setStunned(boolean stunned, int duration) {
+        this.entityData.set(DATA_STUNNED, stunned);
+        if (stunned) {
+            this.stunTimer = duration;
+            this.setTarget(null);
+            this.getNavigation().stop();
+        } else {
+            this.stunTimer = 0;
+        }
+    }
+
+    public int getStunTimer() {
+        return this.stunTimer;
+    }
+
     public boolean hasAtteptedConsumableMigration(){
         return this.hasAttemptedConsumableMigration;
     }
@@ -459,6 +485,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     public boolean isInvulnerableTo(DamageSource source) {
         if (source.getEntity() != null && this.isAlliedTo(source.getEntity())) {
             return true;
+        } else if (isStunned()){
+            return true;
         }  else {
             return super.isInvulnerableTo(source);
         }
@@ -472,6 +500,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         pBuilder.define(DATA_IS_HOUSE, false);
         pBuilder.define(DATA_IMPOSTOR, false);
         pBuilder.define(DATA_TOTEM, false);
+        pBuilder.define(DATA_STUNNED, false);
     }
 
     @Override
@@ -510,6 +539,9 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         if (housePosition != null) {
             pCompound.putLong("housePosition", housePosition.asLong());
         }
+
+        pCompound.putBoolean("IsStunned", isStunned());
+        pCompound.putInt("StunTimer", this.stunTimer);
 
         FamiliarConsumableIntegration.saveConsumableData(this, pCompound);
     }
@@ -590,6 +622,10 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
             }
             setIsInHouse(inHouse, housePos);
         }
+
+        if(pCompound.contains("IsStunned") && pCompound.contains("StunTimer")){
+            setStunned(pCompound.getBoolean("IsStunned"), pCompound.getInt("StunTimer"));
+        }
     }
 
     //Owner getter
@@ -646,6 +682,16 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
 
         if (!level().isClientSide && getIsInHouse()) {
             FamiliarHelper.handleHouseBehavior(this);
+        }
+
+        if(level().isClientSide() && this.isStunned()){
+            spawnStunParticles(this, (ClientLevel) level());
+        }
+
+        if(!level().isClientSide){
+            if (this.isStunned()) {
+                handleStunTick();
+            }
         }
 
         //Auto-migration to the new system
@@ -736,6 +782,45 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         }
     }
 
+    private void handleStunTick() {
+        if (!isStunned()) return;
+
+        if (stunTimer > 0) {
+            stunTimer--;
+            if (stunTimer <= 0) {
+                setStunned(false, 0);
+                this.heal(this.getMaxHealth());
+            }
+        }
+    }
+
+    public static void spawnStunParticles(AbstractSpellCastingPet entity, ClientLevel level) {
+        if (entity == null || !entity.isStunned()) {
+            return;
+        }
+
+        double entityX = entity.getX();
+        double entityY = entity.getY() + entity.getBbHeight() + 0.5; // Above the head
+        double entityZ = entity.getZ();
+
+        // Create spinning stars around the head
+        long ticks = level.getGameTime();
+        float time = ticks * 0.1f;
+
+        for (int i = 0; i < 5; i++) {
+            float angle = time + (i * 2.0944f); // 120 degrees apart (2π/3)
+            float radius = 0.2f;
+
+            double starX = entityX + Mth.cos(angle) * radius;
+            double starZ = entityZ + Mth.sin(angle) * radius;
+
+            // Spawn star particles
+            level.addParticle(ParticleTypes.ELECTRIC_SPARK,
+                    starX, entityY, starZ,
+                    0.1, 0, 0.1);
+        }
+    }
+
     public static AttributeSupplier.Builder prepareAttributes() {
         return LivingEntity.createLivingAttributes()
                 .add(Attributes.ATTACK_DAMAGE, 3.0)
@@ -766,6 +851,52 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
             return false;
         }
         return super.removeWhenFarAway(distanceToClosestPlayer);
+    }
+
+    @Override
+    public boolean isImmobile() {
+        if (isOnBed() || isStunned() || getIsSitting()) {
+            return true;
+        }
+        return super.isImmobile();
+    }
+
+    @Override
+    public boolean canAttack(LivingEntity target) {
+        if (isImmobile()) {
+            return false;
+        }
+        return super.canAttack(target);
+    }
+
+    @Override
+    public void travel(Vec3 travelVector) {
+        if (isImmobile()) {
+            super.travel(Vec3.ZERO);
+            return;
+        }
+        super.travel(travelVector);
+    }
+
+    @Override
+    public boolean canBeAffected(MobEffectInstance pPotioneffect) {
+        if (isStunned()) {
+            return false;
+        }
+        return super.canBeAffected(pPotioneffect);
+    }
+
+    @Override
+    public boolean isPickable() {
+        return !isStunned() && super.isPickable();
+    }
+
+    @Override
+    public boolean canBeSeenAsEnemy() {
+        if (isStunned()) {
+            return false;
+        }
+        return super.canBeSeenAsEnemy();
     }
 
     @Override

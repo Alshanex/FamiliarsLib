@@ -106,7 +106,7 @@ public class FamiliarGoals {
                  */
             }
 
-            if (pet.getIsSitting()) {
+            if (pet.isImmobile()) {
                 return false;
             }
 
@@ -531,6 +531,7 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
+            if(this.entity.isStunned()){ return false;}
             LivingEntity owner = this.targetEntity.get();
             if(owner == null){ return false;}
             if (!entity.canExecuteGoalsInHouse()) {
@@ -607,7 +608,7 @@ public class FamiliarGoals {
 
             if (this.mob.distanceToSqr(livingentity) < (double) (this.teleportDistance * this.teleportDistance)) {
                 return false;
-            } else if (this.mob.getIsSitting()){
+            } else if (this.mob.isImmobile()){
                 return false;
             } else if (this.mob.getIsInHouse()) {
                 return false;
@@ -810,7 +811,7 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
-            if (mob.getIsSitting()) {
+            if (mob.isImmobile()) {
                 return false;
             }
 
@@ -968,6 +969,10 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
+            if (pet.isImmobile()) {
+                return false;
+            }
+
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -1123,6 +1128,10 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
+            if (pet.isImmobile()) {
+                return false;
+            }
+
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -1205,6 +1214,10 @@ public class FamiliarGoals {
 
         @Override
         public boolean canUse() {
+            if (pet.isImmobile()) {
+                return false;
+            }
+
             if (pet.getMovementDisabled()) {
                 return false;
             }
@@ -1258,6 +1271,9 @@ public class FamiliarGoals {
             LivingEntity getOwner = this.owner.get();
             if(getOwner == null){ return false;}
             if(pet.getMovementDisabled()){ return false;}
+            if (pet.isImmobile()) {
+                return false;
+            }
             if (!pet.canExecuteGoalsInHouse()) {
                 return false;
             }
@@ -1298,6 +1314,9 @@ public class FamiliarGoals {
         public boolean canUse() {
             if(this.creeper != null){ return false;}
             if(pet.getMovementDisabled()){ return false;}
+            if (pet.isImmobile()) {
+                return false;
+            }
             if (!pet.canExecuteGoalsInHouse()) {
                 return false;
             }
@@ -1360,6 +1379,9 @@ public class FamiliarGoals {
         public boolean canUse() {
             if(this.skeleton != null){ return false;}
             if(pet.getMovementDisabled()){ return false;}
+            if (pet.isImmobile()) {
+                return false;
+            }
             if (!pet.canExecuteGoalsInHouse()) {
                 return false;
             }
@@ -1426,6 +1448,9 @@ public class FamiliarGoals {
             if (!controllerEntity.canExecuteGoalsInHouse()) {
                 return false;
             }
+            if (controllerEntity.isStunned()) {
+                return false;
+            }
             return controllerEntity.isAlive() && owner.isAlive();
         }
 
@@ -1483,6 +1508,10 @@ public class FamiliarGoals {
         @Override
         public boolean canUse() {
             if (!familiar.getIsInHouse()) {
+                return false;
+            }
+
+            if (familiar.isImmobile()) {
                 return false;
             }
 
@@ -1787,8 +1816,8 @@ public class FamiliarGoals {
                 return false;
             }
 
-            // Don't help if we're sitting
-            if (familiar.getIsSitting()) {
+            // Don't help if we're immobile
+            if (familiar.isImmobile()) {
                 return false;
             }
 
@@ -2023,11 +2052,11 @@ public class FamiliarGoals {
 
         // ==================== CONSTRUCTOR ====================
 
-        public FlyingWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double speedModifier, int attackInterval) {
+        public FlyingWizardAttackGoal(AbstractSpellCastingPet abstractSpellCastingMob, double speedModifier, int attackInterval) {
             this(abstractSpellCastingMob, speedModifier, attackInterval, attackInterval);
         }
 
-        public FlyingWizardAttackGoal(IMagicEntity abstractSpellCastingMob, double speedModifier, int attackIntervalMin, int attackIntervalMax) {
+        public FlyingWizardAttackGoal(AbstractSpellCastingPet abstractSpellCastingMob, double speedModifier, int attackIntervalMin, int attackIntervalMax) {
             super(abstractSpellCastingMob, speedModifier, attackIntervalMin, attackIntervalMax);
             this.isFlying = true;
             this.allowFleeing = false; // We handle retreat ourselves
@@ -2067,6 +2096,22 @@ public class FamiliarGoals {
         public void stop() {
             super.stop();
             this.cachedThreatCenter = null;
+        }
+
+        @Override
+        public boolean canUse() {
+            if (this.mob instanceof AbstractSpellCastingPet pet && pet.isImmobile()) {
+                return false;
+            }
+            return super.canUse();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            if (this.mob instanceof AbstractSpellCastingPet pet && pet.isImmobile()) {
+                return false;
+            }
+            return super.canContinueToUse();
         }
 
         // ==================== MAIN TICK ====================
@@ -2373,6 +2418,22 @@ public class FamiliarGoals {
         }
 
         @Override
+        public boolean canUse() {
+            if (this.mob instanceof AbstractSpellCastingPet pet && pet.isImmobile()) {
+                return false;
+            }
+            return super.canUse();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            if (this.mob instanceof AbstractSpellCastingPet pet && pet.isImmobile()) {
+                return false;
+            }
+            return super.canContinueToUse();
+        }
+
+        @Override
         public void tick() {
             super.tick();
 
@@ -2655,6 +2716,22 @@ public class FamiliarGoals {
             combatPhase = CombatPhase.ENGAGE;
             phaseTimer = 0;
             combosLandedThisEngage = 0;
+        }
+
+        @Override
+        public boolean canUse() {
+            if (this.mob instanceof AbstractSpellCastingPet pet && pet.isImmobile()) {
+                return false;
+            }
+            return super.canUse();
+        }
+
+        @Override
+        public boolean canContinueToUse() {
+            if (this.mob instanceof AbstractSpellCastingPet pet && pet.isImmobile()) {
+                return false;
+            }
+            return super.canContinueToUse();
         }
 
         // ==================== MAIN TICK ====================
