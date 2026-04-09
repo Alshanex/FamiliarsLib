@@ -35,6 +35,7 @@ import net.alshanex.familiarslib.util.familiars.*;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -56,6 +57,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -1085,6 +1087,10 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     //Handles advancement trigger if needed, overriden in familiar classes
     protected void triggerAdvancement(ServerPlayer player){
 
+    }
+
+    protected @Nullable Holder<Attribute> getPreferredPowerAttribute(){
+        return null;
     }
 
     //Spawning logic and effects
