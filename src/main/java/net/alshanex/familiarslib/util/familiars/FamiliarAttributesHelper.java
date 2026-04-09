@@ -1,11 +1,15 @@
 package net.alshanex.familiarslib.util.familiars;
 
 import io.redspace.ironsspellbooks.api.registry.AttributeRegistry;
+import io.redspace.ironsspellbooks.api.registry.SchoolRegistry;
+import io.redspace.ironsspellbooks.api.spells.SchoolType;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
+import net.alshanex.familiarslib.mixin.SchoolTypeAccessor;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.core.Holder;
 import net.minecraft.resources.ResourceLocation;
@@ -25,60 +29,57 @@ import java.util.*;
  * Legacy consumable attribute methods have been removed and migrated to FamiliarConsumableSystem
  */
 public class FamiliarAttributesHelper {
-    private static final ResourceLocation SHARED_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_spell_power");
-    private static final ResourceLocation SHARED_SPELL_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_spell_resist");
 
-    private static final ResourceLocation SHARED_FIRE_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_fire_spell_power");
-    private static final ResourceLocation SHARED_ICE_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_ice_spell_power");
-    private static final ResourceLocation SHARED_LIGHTNING_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_lightning_spell_power");
-    private static final ResourceLocation SHARED_HOLY_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_holy_spell_power");
-    private static final ResourceLocation SHARED_ENDER_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_ender_spell_power");
-    private static final ResourceLocation SHARED_BLOOD_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_blood_spell_power");
-    private static final ResourceLocation SHARED_EVOCATION_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_evocation_spell_power");
-    private static final ResourceLocation SHARED_NATURE_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_nature_spell_power");
-    private static final ResourceLocation SHARED_ELDRITCH_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_eldritch_spell_power");
-    private static final ResourceLocation SHARED_SOUND_SPELL_POWER_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_sound_spell_power");
+    /**
+     * Cache of attribute holder -> modifier ResourceLocation.
+     * Built lazily on first access from the SchoolRegistry + global spell power/resist.
+     */
+    private static volatile Map<Holder<Attribute>, ResourceLocation> sharedAttributes;
 
-    private static final ResourceLocation SHARED_FIRE_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_fire_magic_resist");
-    private static final ResourceLocation SHARED_ICE_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_ice_magic_resist");
-    private static final ResourceLocation SHARED_LIGHTNING_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_lightning_magic_resist");
-    private static final ResourceLocation SHARED_HOLY_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_holy_magic_resist");
-    private static final ResourceLocation SHARED_ENDER_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_ender_magic_resist");
-    private static final ResourceLocation SHARED_BLOOD_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_blood_magic_resist");
-    private static final ResourceLocation SHARED_EVOCATION_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_evocation_magic_resist");
-    private static final ResourceLocation SHARED_NATURE_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_nature_magic_resist");
-    private static final ResourceLocation SHARED_ELDRITCH_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_eldritch_magic_resist");
-    private static final ResourceLocation SHARED_SOUND_MAGIC_RESIST_ID = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "shared_sound_magic_resist");
+    /**
+     * Lazily builds and returns the shared attributes map.
+     * Iterates over all registered SchoolTypes and extracts their power and resistance attributes, plus the global SPELL_POWER and SPELL_RESIST.
+     */
+    private static Map<Holder<Attribute>, ResourceLocation> getSharedAttributes() {
+        if (sharedAttributes == null) {
+            synchronized (FamiliarAttributesHelper.class) {
+                if (sharedAttributes == null) {
+                    sharedAttributes = buildSharedAttributesMap();
+                }
+            }
+        }
+        return sharedAttributes;
+    }
 
-    private static final Map<Holder<Attribute>, ResourceLocation> SHARED_ATTRIBUTES = createSharedAttributesMap();
+    private static Map<Holder<Attribute>, ResourceLocation> buildSharedAttributesMap() {
+        Map<Holder<Attribute>, ResourceLocation> map = new LinkedHashMap<>();
 
-    private static Map<Holder<Attribute>, ResourceLocation> createSharedAttributesMap() {
-        Map<Holder<Attribute>, ResourceLocation> map = new HashMap<>();
+        // Global spell power and resistance
+        map.put(AttributeRegistry.SPELL_POWER, modifierId("shared_spell_power"));
+        map.put(AttributeRegistry.SPELL_RESIST, modifierId("shared_spell_resist"));
 
-        map.put(AttributeRegistry.SPELL_POWER, SHARED_SPELL_POWER_ID);
-        map.put(AttributeRegistry.SPELL_RESIST, SHARED_SPELL_RESIST_ID);
+        // Dynamically discover all schools from the registry
+        for (SchoolType school : SchoolRegistry.REGISTRY) {
+            String schoolName = school.getId().getPath();
 
-        map.put(AttributeRegistry.FIRE_SPELL_POWER, SHARED_FIRE_SPELL_POWER_ID);
-        map.put(AttributeRegistry.ICE_SPELL_POWER, SHARED_ICE_SPELL_POWER_ID);
-        map.put(AttributeRegistry.LIGHTNING_SPELL_POWER, SHARED_LIGHTNING_SPELL_POWER_ID);
-        map.put(AttributeRegistry.HOLY_SPELL_POWER, SHARED_HOLY_SPELL_POWER_ID);
-        map.put(AttributeRegistry.ENDER_SPELL_POWER, SHARED_ENDER_SPELL_POWER_ID);
-        map.put(AttributeRegistry.BLOOD_SPELL_POWER, SHARED_BLOOD_SPELL_POWER_ID);
-        map.put(AttributeRegistry.EVOCATION_SPELL_POWER, SHARED_EVOCATION_SPELL_POWER_ID);
-        map.put(AttributeRegistry.NATURE_SPELL_POWER, SHARED_NATURE_SPELL_POWER_ID);
-        map.put(AttributeRegistry.ELDRITCH_SPELL_POWER, SHARED_ELDRITCH_SPELL_POWER_ID);
+            Holder<Attribute> powerAttr = ((SchoolTypeAccessor) school).getPowerAttribute();
+            Holder<Attribute> resistAttr = ((SchoolTypeAccessor) school).getResistanceAttribute();
 
-        map.put(AttributeRegistry.FIRE_MAGIC_RESIST, SHARED_FIRE_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.ICE_MAGIC_RESIST, SHARED_ICE_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.LIGHTNING_MAGIC_RESIST, SHARED_LIGHTNING_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.HOLY_MAGIC_RESIST, SHARED_HOLY_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.ENDER_MAGIC_RESIST, SHARED_ENDER_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.BLOOD_MAGIC_RESIST, SHARED_BLOOD_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.EVOCATION_MAGIC_RESIST, SHARED_EVOCATION_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.NATURE_MAGIC_RESIST, SHARED_NATURE_MAGIC_RESIST_ID);
-        map.put(AttributeRegistry.ELDRITCH_MAGIC_RESIST, SHARED_ELDRITCH_MAGIC_RESIST_ID);
+            if (powerAttr != null) {
+                map.put(powerAttr, modifierId("shared_" + schoolName + "_spell_power"));
+            }
+            if (resistAttr != null) {
+                map.put(resistAttr, modifierId("shared_" + schoolName + "_magic_resist"));
+            }
+        }
 
-        return map;
+        //FamiliarsLib.LOGGER.debug("FamiliarAttributesHelper: Registered {} shared attributes from {} schools", map.size(), SchoolRegistry.REGISTRY.size());
+
+        return Collections.unmodifiableMap(map);
+    }
+
+    private static ResourceLocation modifierId(String path) {
+        return ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, path);
     }
 
     public static void applyAttributes(AbstractSpellCastingPet familiar) {
@@ -102,7 +103,7 @@ public class FamiliarAttributesHelper {
     }
 
     public static void removeAttributes(AbstractSpellCastingPet familiar) {
-        for (Map.Entry<Holder<Attribute>, ResourceLocation> entry : SHARED_ATTRIBUTES.entrySet()) {
+        for (Map.Entry<Holder<Attribute>, ResourceLocation> entry : getSharedAttributes().entrySet()) {
             AttributeInstance attributeInstance = familiar.getAttribute(entry.getKey());
             if (attributeInstance != null) {
                 attributeInstance.removeModifier(entry.getValue());
@@ -136,7 +137,7 @@ public class FamiliarAttributesHelper {
     }
 
     private static void applySharedAttributeModifiers(AbstractSpellCastingPet familiar, ServerPlayer player, int totalFamiliars) {
-        for (Map.Entry<Holder<Attribute>, ResourceLocation> entry : SHARED_ATTRIBUTES.entrySet()) {
+        for (Map.Entry<Holder<Attribute>, ResourceLocation> entry : getSharedAttributes().entrySet()) {
             Holder<Attribute> attributeHolder = entry.getKey();
             ResourceLocation modifierLocation = entry.getValue();
 
@@ -152,7 +153,7 @@ public class FamiliarAttributesHelper {
             if (additionalValue <= 0) continue;
 
             double familiarShare = additionalValue / totalFamiliars;
-            familiarShare   = Math.round(familiarShare * 100.0) / 100.0;
+            familiarShare = Math.round(familiarShare * 100.0) / 100.0;
 
             AttributeInstance familiarAttribute = familiar.getAttribute(attributeHolder);
             if (familiarAttribute != null) {
@@ -222,8 +223,7 @@ public class FamiliarAttributesHelper {
     }
 
     public static void debugFamiliarAttributes(AbstractSpellCastingPet familiar) {
-        //FamiliarsLib.LOGGER.debug("Familiar {} attributes:", familiar.getUUID());
-        for (Holder<Attribute> attributeHolder : SHARED_ATTRIBUTES.keySet()) {
+        for (Holder<Attribute> attributeHolder : getSharedAttributes().keySet()) {
             AttributeInstance instance = familiar.getAttribute(attributeHolder);
             if (instance != null) {
                 /*
@@ -231,65 +231,54 @@ public class FamiliarAttributesHelper {
                         attributeHolder.value().getDescriptionId(),
                         instance.getValue(),
                         instance.getBaseValue());
-
-                 */
+                */
             }
         }
     }
 
     /**
-     * Removes legacy attribute modifiers from the old consumable system
-     * This should be called during migration to clean up old modifiers
+     * Removes legacy attribute modifiers from the old consumable system.
+     * This should be called during migration to clean up old modifiers.
      */
     public static void removeLegacyConsumableModifiers(AbstractSpellCastingPet familiar) {
         ResourceLocation legacyHealthModifierId = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_health_modifier");
         ResourceLocation legacyArmorModifierId = ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_armor_modifier");
 
-        // Remove legacy health modifier
         AttributeInstance health = familiar.getAttribute(Attributes.MAX_HEALTH);
         if (health != null) {
             AttributeModifier legacyHealthModifier = health.getModifier(legacyHealthModifierId);
             if (legacyHealthModifier != null) {
                 health.removeModifier(legacyHealthModifier);
-                //FamiliarsLib.LOGGER.debug("Removed legacy health modifier from familiar {}", familiar.getUUID());
             }
         }
 
-        // Remove legacy armor modifier
         AttributeInstance armor = familiar.getAttribute(Attributes.ARMOR);
         if (armor != null) {
             AttributeModifier legacyArmorModifier = armor.getModifier(legacyArmorModifierId);
             if (legacyArmorModifier != null) {
                 armor.removeModifier(legacyArmorModifier);
-                //FamiliarsLib.LOGGER.debug("Removed legacy armor modifier from familiar {}", familiar.getUUID());
             }
         }
     }
 
-    // DEPRECATED: These methods have been moved to FamiliarConsumableSystem
-    // They are kept here temporarily for compatibility but should not be used
-
     @Deprecated(forRemoval = true)
     public static void applyHealthAttribute(AbstractSpellCastingPet pet) {
         FamiliarsLib.LOGGER.warn("applyHealthAttribute is deprecated. Use FamiliarConsumableSystem instead.");
-        // Migration: Apply through consumable system
-        FamiliarConsumableSystem.ConsumableData data = net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration.getConsumableData(pet);
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(pet);
         FamiliarConsumableSystem.applyAttributeModifiers(pet, data);
     }
 
     @Deprecated(forRemoval = true)
     public static void applyArmorAttribute(AbstractSpellCastingPet pet) {
         FamiliarsLib.LOGGER.warn("applyArmorAttribute is deprecated. Use FamiliarConsumableSystem instead.");
-        // Migration: Apply through consumable system
-        FamiliarConsumableSystem.ConsumableData data = net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration.getConsumableData(pet);
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(pet);
         FamiliarConsumableSystem.applyAttributeModifiers(pet, data);
     }
 
     @Deprecated(forRemoval = true)
     public static void applyAllConsumableAttributes(AbstractSpellCastingPet pet) {
         FamiliarsLib.LOGGER.warn("applyAllConsumableAttributes is deprecated. Use FamiliarConsumableSystem instead.");
-        // Migration: Apply through consumable system
-        FamiliarConsumableSystem.ConsumableData data = net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration.getConsumableData(pet);
+        FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(pet);
         FamiliarConsumableSystem.applyAttributeModifiers(pet, data);
     }
 }

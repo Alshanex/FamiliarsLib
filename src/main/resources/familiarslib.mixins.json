@@ -6,7 +6,8 @@
   "refmap": "familiarslib.refmap.json",
   "mixins": [
     "ItemTransformMixin",
-    "FamiliarAlliedMixin"
+    "FamiliarAlliedMixin",
+    "SchoolTypeAccessor"
   ],
   "client": [
   ],
