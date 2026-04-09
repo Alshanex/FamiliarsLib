@@ -1089,7 +1089,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
 
     }
 
-    protected @Nullable Holder<Attribute> getPreferredPowerAttribute(){
+    public @Nullable Holder<Attribute> getPreferredPowerAttribute(){
         return null;
     }
 
