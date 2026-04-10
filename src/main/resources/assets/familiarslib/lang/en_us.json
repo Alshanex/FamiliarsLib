@@ -87,5 +87,8 @@
   "consumable.type.blocking": "Blocking",
 
   "curios.identifier.familiar_trinket": "Familiar Trinket",
-  "curios.modifiers.familiar_trinket": "When equipped as Familiar Trinket:"
+  "curios.modifiers.familiar_trinket": "When equipped as Familiar Trinket:",
+
+  "attribute.familiarslib.familiar_damage": "Familiar Power",
+  "attribute.familiarslib.familiar_resist": "Familiar Resist"
 }
