@@ -1076,6 +1076,9 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                         SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.5F, 2.0F);
 
                 clericSetGoal(serverPlayer);
+
+                FamiliarManager.updateSummonedFamiliarsData(serverPlayer);
+                FamiliarManager.syncFamiliarData(serverPlayer, familiarData);
             } else {
                 FamiliarHelper.spawnTamingParticles(false, this);
             }

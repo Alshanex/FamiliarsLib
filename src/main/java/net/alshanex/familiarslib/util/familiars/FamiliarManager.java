@@ -218,10 +218,10 @@ public class FamiliarManager {
                 }
                 familiarData.removeSummonedFamiliar(familiarId);
             } else {
-                FamiliarsLib.LOGGER.debug("Familiar found but doesn't belong to player: {}", familiarId);
+                //FamiliarsLib.LOGGER.debug("Familiar found but doesn't belong to player: {}", familiarId);
             }
         } else {
-            FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarId);
+            //FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarId);
             if (familiarId.equals(familiarData.getCurrentSummonedFamiliarId())) {
                 familiarData.setCurrentSummonedFamiliarId(null);
             }
@@ -237,17 +237,17 @@ public class FamiliarManager {
             UUID familiarId = familiar.getUUID();
 
             if (isFamiliarDead(familiarId)) {
-                FamiliarsLib.LOGGER.debug("Skipping update for marked dead familiar {}", familiarId);
+                //FamiliarsLib.LOGGER.debug("Skipping update for marked dead familiar {}", familiarId);
                 return;
             }
 
             if (familiar.getHealth() <= 0) {
-                FamiliarsLib.LOGGER.debug("Skipping update for dead/dying familiar {}", familiarId);
+                //FamiliarsLib.LOGGER.debug("Skipping update for dead/dying familiar {}", familiarId);
                 return;
             }
 
             if (!familiarData.hasFamiliar(familiarId)) {
-                FamiliarsLib.LOGGER.debug("Skipping update for familiar {} - not in player data (probably dead)", familiarId);
+                //FamiliarsLib.LOGGER.debug("Skipping update for familiar {} - not in player data (probably dead)", familiarId);
                 return;
             }
 
@@ -288,10 +288,10 @@ public class FamiliarManager {
 
     private static void applyHealthFromNBT(AbstractSpellCastingPet familiar, CompoundTag familiarNBT) {
         float savedHealth = familiarNBT.getFloat("currentHealth");
-
+/*
         FamiliarsLib.LOGGER.debug("Loading health for familiar {}: saved health = {}",
                 familiar.getUUID(), savedHealth);
-
+*/
         // Load consumable data (this stores the data but doesn't apply modifiers yet)
         FamiliarConsumableIntegration.loadConsumableData(familiar, familiarNBT);
 
@@ -302,16 +302,18 @@ public class FamiliarManager {
             // Get the new max health and clamp the saved health to it
             float newMaxHealth = familiar.getMaxHealth();
             float restoredHealth = Math.min(savedHealth, newMaxHealth);
-
+/*
             FamiliarsLib.LOGGER.debug("Applying health for summoned familiar {}: saved={}, newMax={}, restored={}",
                     familiar.getUUID(), savedHealth, newMaxHealth, restoredHealth);
-
+*/
             familiar.setHealth(restoredHealth);
         }
-
+/*
         FamiliarsLib.LOGGER.debug("Applied health to familiar {}: {}/{} ({}%)",
                 familiar.getUUID(), familiar.getHealth(), familiar.getMaxHealth(),
                 (familiar.getHealth()/familiar.getMaxHealth()*100));
+
+ */
     }
 
     private static Vec3 findSafeSpawnPosition(ServerPlayer player, ServerLevel level) {
@@ -535,16 +537,16 @@ public class FamiliarManager {
             UUID selectedId = familiarData.getSelectedFamiliarId();
             UUID summonedId = familiarData.getCurrentSummonedFamiliarId();
             Set<UUID> summonedIds = familiarData.getSummonedFamiliarIds();
-
+/*
             FamiliarsLib.LOGGER.debug("Syncing familiar data - Familiars: {}, Selected: {}, Summoned: {}, All Summoned: {}",
                     familiarsData.size(), selectedId, summonedId, summonedIds.size());
-
+*/
             PacketDistributor.sendToPlayer(player, new FamiliarDataPacket(familiarsData, selectedId, summonedId, summonedIds));
 
             CompoundTag syncData = familiarData.serializeNBT(player.registryAccess());
             PacketDistributor.sendToPlayer(player, new SyncFamiliarDataPacket(syncData));
 
-            FamiliarsLib.LOGGER.debug("All data synced to client successfully");
+            //FamiliarsLib.LOGGER.debug("All data synced to client successfully");
 
         } catch (Exception e) {
             FamiliarsLib.LOGGER.error("Error syncing familiar data: ", e);
@@ -576,9 +578,11 @@ public class FamiliarManager {
                     data.addSummonedFamiliar(summonedId);
                 }
             }
-
+/*
             FamiliarsLib.LOGGER.debug("Client received familiar data - Count: {}, Selected: {}, Summoned: {}, All Summoned: {}",
                     familiars.size(), selectedFamiliarId, currentSummonedFamiliarId, summonedFamiliarIds != null ? summonedFamiliarIds.size() : 0);
+
+ */
         }
     }
 
@@ -610,15 +614,15 @@ public class FamiliarManager {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
         CompoundTag familiarNBT = familiarData.getFamiliarData(familiarId);
 
-        FamiliarsLib.LOGGER.debug("Attempting to summon specific familiar: {} at position {}", familiarId, positionIndex);
+        //FamiliarsLib.LOGGER.debug("Attempting to summon specific familiar: {} at position {}", familiarId, positionIndex);
 
         if (familiarNBT == null) {
-            FamiliarsLib.LOGGER.debug("No NBT data found for familiar: {}", familiarId);
+            //FamiliarsLib.LOGGER.debug("No NBT data found for familiar: {}", familiarId);
             return;
         }
 
         if (familiarData.isFamiliarSummoned(familiarId)) {
-            FamiliarsLib.LOGGER.debug("Familiar {} is already summoned", familiarId);
+            //FamiliarsLib.LOGGER.debug("Familiar {} is already summoned", familiarId);
             return;
         }
 
@@ -626,14 +630,14 @@ public class FamiliarManager {
         EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
 
         if (entityType == null) {
-            FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
+            //FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
             return;
         }
 
         ServerLevel level = player.serverLevel();
         Entity entity = entityType.create(level);
         if (!(entity instanceof AbstractSpellCastingPet familiar)) {
-            FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
+            //FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
             return;
         }
 
@@ -712,7 +716,7 @@ public class FamiliarManager {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
         ServerLevel level = player.serverLevel();
 
-        FamiliarsLib.LOGGER.debug("Attempting to desummon specific familiar: {}", familiarId);
+        //FamiliarsLib.LOGGER.debug("Attempting to desummon specific familiar: {}", familiarId);
 
         Entity entity = level.getEntity(familiarId);
         if (entity instanceof AbstractSpellCastingPet familiar) {
@@ -741,12 +745,12 @@ public class FamiliarManager {
 
                 familiarData.removeSummonedFamiliar(familiarId);
 
-                FamiliarsLib.LOGGER.debug("Specific familiar desummoned successfully: {}", familiarId);
+                //FamiliarsLib.LOGGER.debug("Specific familiar desummoned successfully: {}", familiarId);
             } else {
-                FamiliarsLib.LOGGER.debug("Familiar found but doesn't belong to player: {}", familiarId);
+                //FamiliarsLib.LOGGER.debug("Familiar found but doesn't belong to player: {}", familiarId);
             }
         } else {
-            FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarId);
+            //FamiliarsLib.LOGGER.debug("Familiar not found in world: {}", familiarId);
             familiarData.removeSummonedFamiliar(familiarId);
         }
 
@@ -794,7 +798,7 @@ public class FamiliarManager {
                         updateFamiliarData(familiar);
                         actualSummonedFamiliars.add(familiarId);
                         updatedCount++;
-                        FamiliarsLib.LOGGER.debug("Updated data for summoned familiar {}", familiarId);
+                        //FamiliarsLib.LOGGER.debug("Updated data for summoned familiar {}", familiarId);
                     }
                 }
             }
@@ -805,7 +809,7 @@ public class FamiliarManager {
             }
 
             if (updatedCount > 0) {
-                FamiliarsLib.LOGGER.debug("Updated data for {} summoned familiars before opening screen", updatedCount);
+                //FamiliarsLib.LOGGER.debug("Updated data for {} summoned familiars before opening screen", updatedCount);
             }
 
         } catch (Exception e) {
@@ -817,9 +821,11 @@ public class FamiliarManager {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
 
         familiarData.clearAllSummoned();
-
+/*
         FamiliarsLib.LOGGER.debug("Cleared summoned familiars for player {} on dimension change",
                 player.getName().getString());
+
+ */
     }
 
     public static Set<UUID> getSummonedFamiliarIds(ServerPlayer player) {
@@ -955,10 +961,10 @@ public class FamiliarManager {
                 storageEntity.setClientStoreMode(storeMode);
                 storageEntity.setClientCanFamiliarsUseGoals(canFamiliarsUseGoals);
                 storageEntity.setClientMaxDistance(maxDistance);
-
+/*
                 FamiliarsLib.LOGGER.debug("Received storage update for position {} with {} stored familiars, mode: {}, goals: {}, distance: {}",
                         blockPos, storedFamiliars.size(), storeMode ? "Store" : "Wander", canFamiliarsUseGoals, maxDistance);
-
+*/
                 if (minecraft.screen instanceof FamiliarStorageScreen storageScreen) {
                     storageScreen.reloadFamiliarData();
                 }
@@ -995,7 +1001,7 @@ public class FamiliarManager {
         storageEntity.setChanged();
         storageEntity.syncToClient();
 
-        FamiliarsLib.LOGGER.debug("Stored familiar {} in house at {}", familiarId, storagePos);
+        //FamiliarsLib.LOGGER.debug("Stored familiar {} in house at {}", familiarId, storagePos);
         return true;
     }
 
@@ -1031,14 +1037,14 @@ public class FamiliarManager {
             if (entity instanceof AbstractSpellCastingPet familiar) {
                 familiar.setIsInHouse(false, null);
                 familiar.remove(Entity.RemovalReason.DISCARDED);
-                FamiliarsLib.LOGGER.debug("Removed familiar {} from world as it was retrieved", familiarId);
+                //FamiliarsLib.LOGGER.debug("Removed familiar {} from world as it was retrieved", familiarId);
             }
         }
 
         storageEntity.setChanged();
         storageEntity.syncToClient();
 
-        FamiliarsLib.LOGGER.debug("Retrieved familiar {} from house at {}", familiarId, storagePos);
+        //FamiliarsLib.LOGGER.debug("Retrieved familiar {} from house at {}", familiarId, storagePos);
         return true;
     }
 
@@ -1083,10 +1089,10 @@ public class FamiliarManager {
 
         storageEntity.setCanFamiliarsUseGoals(canFamiliarsUseGoals);
         storageEntity.setMaxDistance(maxDistance);
-
+/*
         FamiliarsLib.LOGGER.debug("Updated storage settings for player {}: goals={}, distance={}",
                 player.getName().getString(), canFamiliarsUseGoals, maxDistance);
-
+*/
         // Sync to client
         Map<UUID, CompoundTag> storedData = storageEntity.getStoredFamiliars();
         PacketDistributor.sendToPlayer(player, new UpdateFamiliarStoragePacket(blockPos, storedData,
@@ -1114,10 +1120,10 @@ public class FamiliarManager {
 
     public static void handleFamiliarDeath(AbstractSpellCastingPet familiar, ServerPlayer player) {
         UUID familiarId = familiar.getUUID();
-
+/*
         FamiliarsLib.LOGGER.debug("Handling familiar death for familiar {} owned by player {}",
                 familiarId, player.getName().getString());
-
+*/
         try {
             PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
 
@@ -1144,11 +1150,14 @@ public class FamiliarManager {
                 if (!availableFamiliars.isEmpty()) {
                     newSelectedFamiliarId = availableFamiliars.keySet().iterator().next();
                     familiarData.setSelectedFamiliarId(newSelectedFamiliarId);
+                    /*
                     FamiliarsLib.LOGGER.debug("Selected new familiar {} after death of {}",
                             newSelectedFamiliarId, familiarId);
+
+                     */
                 } else {
                     familiarData.setSelectedFamiliarId(null);
-                    FamiliarsLib.LOGGER.debug("No familiars available, cleared selection after death of {}", familiarId);
+                    //FamiliarsLib.LOGGER.debug("No familiars available, cleared selection after death of {}", familiarId);
                 }
             }
 
@@ -1167,9 +1176,11 @@ public class FamiliarManager {
                     currentSummonedFamiliarId,
                     familiarSyncData
             ));
-
+/*
             FamiliarsLib.LOGGER.debug("Successfully processed death of familiar {} for player {}. {} familiars remaining.",
                     familiarId, player.getName().getString(), remainingFamiliars.size());
+
+ */
 
         } catch (Exception e) {
             FamiliarsLib.LOGGER.error("Error handling familiar death for familiar {} and player {}: ",
@@ -1193,10 +1204,10 @@ public class FamiliarManager {
 
                     // Actualizar la Multi Selection curio
                     AbstractMultiSelectionCurio.setSelectedFamiliars(curio, updatedSelection);
-
+/*
                     FamiliarsLib.LOGGER.debug("Removed dead familiar {} from equipped Multi Selection curio for player {}. {} familiars remaining in selection.",
                             deadFamiliarId, player.getName().getString(), updatedSelection.size());
-
+*/
                     return;
                 }
             }
@@ -1213,9 +1224,11 @@ public class FamiliarManager {
                         updatedSelection.remove(deadFamiliarId);
 
                         AbstractMultiSelectionCurio.setSelectedFamiliars(handItem, updatedSelection);
-
+/*
                         FamiliarsLib.LOGGER.debug("Removed dead familiar {} from held Multi Selection curio for player {}. {} familiars remaining in selection.",
                                 deadFamiliarId, player.getName().getString(), updatedSelection.size());
+
+ */
                         break;
                     }
                 }
@@ -1232,7 +1245,7 @@ public class FamiliarManager {
                                                  UUID currentSummonedFamiliarId, CompoundTag familiarData){
         Player player = Minecraft.getInstance().player;
         if (player != null) {
-            FamiliarsLib.LOGGER.debug("Client received familiar death packet for familiar: {}", deadFamiliarId);
+            //FamiliarsLib.LOGGER.debug("Client received familiar death packet for familiar: {}", deadFamiliarId);
 
             // Actualizar datos del jugador
             PlayerFamiliarData playerFamiliarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
@@ -1241,15 +1254,15 @@ public class FamiliarManager {
             boolean wasRemoved = playerFamiliarData.hasFamiliar(deadFamiliarId);
             if (wasRemoved) {
                 playerFamiliarData.removeTamedFamiliar(deadFamiliarId);
-                FamiliarsLib.LOGGER.debug("Removed dead familiar {} from client data", deadFamiliarId);
+                //FamiliarsLib.LOGGER.debug("Removed dead familiar {} from client data", deadFamiliarId);
             }
 
             // Deserializar todos los datos actualizados
             playerFamiliarData.deserializeNBT(player.registryAccess(), familiarData);
-
+/*
             FamiliarsLib.LOGGER.debug("Updated client data - Remaining familiars: {}, New selected: {}, Current summoned: {}",
                     remainingFamiliars.size(), newSelectedFamiliarId, currentSummonedFamiliarId);
-
+*/
             // Actualizar pantallas inmediatamente
             cleanFamiliarFromMultiSelectionCurioClient(player, deadFamiliarId);
             updateScreensAfterDeath(deadFamiliarId);
@@ -1261,7 +1274,7 @@ public class FamiliarManager {
         try {
             // Actualizar pantalla de selección de familiares si está abierta
             if (Minecraft.getInstance().screen instanceof FamiliarSelectionScreen familiarScreen) {
-                FamiliarsLib.LOGGER.debug("Updating FamiliarSelectionScreen after familiar death: {}", deadFamiliarId);
+                //FamiliarsLib.LOGGER.debug("Updating FamiliarSelectionScreen after familiar death: {}", deadFamiliarId);
                 familiarScreen.reloadFamiliarData();
 
                 // Si no quedan familiares, cerrar la pantalla
@@ -1269,7 +1282,7 @@ public class FamiliarManager {
                 if (player != null) {
                     PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
                     if (familiarData.isEmpty()) {
-                        FamiliarsLib.LOGGER.debug("No familiars remaining, closing FamiliarSelectionScreen");
+                        //FamiliarsLib.LOGGER.debug("No familiars remaining, closing FamiliarSelectionScreen");
                         familiarScreen.onClose();
                     }
                 }
@@ -1297,7 +1310,7 @@ public class FamiliarManager {
                     updatedSelection.remove(deadFamiliarId);
                     AbstractMultiSelectionCurio.setSelectedFamiliars(curio, updatedSelection);
 
-                    FamiliarsLib.LOGGER.debug("Client: Removed dead familiar {} from equipped Multi Selection curio", deadFamiliarId);
+                    //FamiliarsLib.LOGGER.debug("Client: Removed dead familiar {} from equipped Multi Selection curio", deadFamiliarId);
                     return;
                 }
             }
@@ -1314,7 +1327,7 @@ public class FamiliarManager {
                         updatedSelection.remove(deadFamiliarId);
                         AbstractMultiSelectionCurio.setSelectedFamiliars(handItem, updatedSelection);
 
-                        FamiliarsLib.LOGGER.debug("Client: Removed dead familiar {} from held Multi Selection curio", deadFamiliarId);
+                        //FamiliarsLib.LOGGER.debug("Client: Removed dead familiar {} from held Multi Selection curio", deadFamiliarId);
                         break;
                     }
                 }
@@ -1327,10 +1340,10 @@ public class FamiliarManager {
 
     public static void handleReleaseFamiliar(ServerPlayer player, UUID familiarId) {
         PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-
+/*
         FamiliarsLib.LOGGER.debug("Attempting to release familiar {} for player {}",
                 familiarId, player.getName().getString());
-
+*/
         // Verificar que el familiar existe en los datos del jugador
         if (!familiarData.hasFamiliar(familiarId)) {
             FamiliarsLib.LOGGER.warn("Player {} tried to release familiar {} but it doesn't exist in their data",
@@ -1355,7 +1368,7 @@ public class FamiliarManager {
 
         // Si el familiar está summoneado, desummonearlo primero
         if (familiarData.isFamiliarSummoned(familiarId)) {
-            FamiliarsLib.LOGGER.debug("Familiar {} is summoned, desummoning before release", familiarId);
+            //FamiliarsLib.LOGGER.debug("Familiar {} is summoned, desummoning before release", familiarId);
             FamiliarManager.desummonSpecificFamiliar(player, familiarId);
         }
 
@@ -1373,13 +1386,13 @@ public class FamiliarManager {
             // Buscar otro familiar para seleccionar
             for (UUID otherId : remainingFamiliars.keySet()) {
                 familiarData.setSelectedFamiliarId(otherId);
-                FamiliarsLib.LOGGER.debug("Released familiar was selected, new selected: {}", otherId);
+                //FamiliarsLib.LOGGER.debug("Released familiar was selected, new selected: {}", otherId);
                 break; // Tomar el primero disponible
             }
         } else if (familiarId.equals(familiarData.getSelectedFamiliarId())) {
             // Si no quedan familiares, limpiar la selección
             familiarData.setSelectedFamiliarId(null);
-            FamiliarsLib.LOGGER.debug("Released familiar was selected and no familiars remain, clearing selection");
+            //FamiliarsLib.LOGGER.debug("Released familiar was selected and no familiars remain, clearing selection");
         }
 
         // Sincronizar datos actualizados con el cliente
@@ -1387,9 +1400,11 @@ public class FamiliarManager {
 
         boolean shouldClose = !hasRemainingFamiliars;
         PacketDistributor.sendToPlayer(player, new ReloadFamiliarScreenPacket(shouldClose));
-
+/*
         FamiliarsLib.LOGGER.debug("Successfully released familiar {} for player {}. Remaining familiars: {}. Screen action: {}",
                 familiarId, player.getName().getString(), remainingFamiliars.size(), shouldClose ? "CLOSE" : "RELOAD");
+
+ */
     }
 
     public static void handleFamiliarSummonPackage(ServerPlayer serverPlayer){
@@ -1455,11 +1470,11 @@ public class FamiliarManager {
             if (shouldClose) {
                 // Cerrar la pantalla si no quedan familiares
                 minecraft.setScreen(null);
-                FamiliarsLib.LOGGER.debug("Closed familiar selection screen - no familiars remaining");
+                //FamiliarsLib.LOGGER.debug("Closed familiar selection screen - no familiars remaining");
             } else {
                 // Recargar la pantalla con los nuevos datos
                 familiarScreen.reloadFamiliarData();
-                FamiliarsLib.LOGGER.debug("Reloaded familiar selection screen after familiar release");
+                //FamiliarsLib.LOGGER.debug("Reloaded familiar selection screen after familiar release");
             }
         }
     }
