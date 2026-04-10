@@ -26,7 +26,7 @@ public class FamiliarDeathEventHandler {
 
     private static final Set<UUID> processedDeaths = new HashSet<>();
 
-    @SubscribeEvent(priority = EventPriority.HIGHEST)
+    @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onLivingDeath(LivingDeathEvent event) {
         if (event.getEntity().level().isClientSide) {
             return;
