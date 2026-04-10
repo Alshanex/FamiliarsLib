@@ -1135,8 +1135,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                 // Ensure health is properly set
                 if (getHealth() <= 0) {
                     setHealth(getMaxHealth());
+                    /*
                     FamiliarsLib.LOGGER.debug("Set health for command-spawned familiar {}: {}/{}",
                             getUUID(), getHealth(), getMaxHealth());
+
+                     */
                 }
 
                 hasInitializedHealth = true;

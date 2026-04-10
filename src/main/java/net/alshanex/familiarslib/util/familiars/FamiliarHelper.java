@@ -84,10 +84,10 @@ public class FamiliarHelper {
         float currentHealth = familiar.getHealth();
         nbt.putFloat("currentHealth", currentHealth);
         nbt.putFloat("baseMaxHealth", familiar.getBaseMaxHealth());
-
+/*
         FamiliarsLib.LOGGER.debug("Creating NBT for familiar {}: current health = {}, max = {}, base = {}",
                 familiar.getUUID(), currentHealth, familiar.getMaxHealth(), familiar.getBaseMaxHealth());
-
+*/
         String entityTypeId = EntityType.getKey(familiar.getType()).toString();
         nbt.putString("id", entityTypeId);
 
@@ -98,9 +98,10 @@ public class FamiliarHelper {
         FamiliarConsumableIntegration.saveConsumableData(familiar, nbt);
 
         FamiliarConsumableSystem.ConsumableData data = FamiliarConsumableIntegration.getConsumableData(familiar);
+        /*
         FamiliarsLib.LOGGER.debug("Saving familiar {}: current health={}, base max health={}, consumable data = {}",
                 familiar.getUUID(), currentHealth, familiar.getBaseMaxHealth(), data.toString());
-
+*/
         return nbt;
     }
 
@@ -164,14 +165,14 @@ public class FamiliarHelper {
         if (!(familiar.level().getBlockEntity(familiar.housePosition) instanceof AbstractFamiliarStorageBlockEntity storageEntity)) {
             familiar.setIsInHouse(false, null);
             familiar.remove(Entity.RemovalReason.DISCARDED);
-            FamiliarsLib.LOGGER.debug("House destroyed, removing familiar {}", familiar.getUUID());
+            //FamiliarsLib.LOGGER.debug("House destroyed, removing familiar {}", familiar.getUUID());
             return;
         }
 
         double distanceToHouse = familiar.position().distanceTo(Vec3.atCenterOf(familiar.housePosition));
         if (distanceToHouse > 35.0) {
             if (familiar.tickCount % 20 == 0) {
-                FamiliarsLib.LOGGER.debug("Familiar {} too far from house, attempting to return", familiar.getUUID());
+                //FamiliarsLib.LOGGER.debug("Familiar {} too far from house, attempting to return", familiar.getUUID());
                 storageEntity.tryRecallFamiliar(familiar);
             }
         }

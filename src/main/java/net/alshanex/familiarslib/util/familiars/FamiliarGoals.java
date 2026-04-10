@@ -401,7 +401,7 @@ public class FamiliarGoals {
                 }
             }
 
-            FamiliarsLib.LOGGER.debug("No available bed found for pet " + pet.getUUID());
+            //FamiliarsLib.LOGGER.debug("No available bed found for pet " + pet.getUUID());
             return null;
         }
 
@@ -426,7 +426,7 @@ public class FamiliarGoals {
             if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
                 petBed.setBedTaken(false);
                 hasClaimedBed = false;
-                FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " released bed at " + targetBedPos);
+                //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " released bed at " + targetBedPos);
             }
         }
 
@@ -437,7 +437,7 @@ public class FamiliarGoals {
             if (shouldPlaySleepAnimation) {
                 if (!wasPlayingSleepAnimation) {
                     if (!pet.level().isClientSide) {
-                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " starting sleep animation on compatible bed");
+                        //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " starting sleep animation on compatible bed");
                     }
                     wasPlayingSleepAnimation = true;
                 }
@@ -447,7 +447,7 @@ public class FamiliarGoals {
                     if (bedRegenTimer >= 20) { // Every second
                         if (pet.getHealth() < pet.getMaxHealth()) {
                             pet.heal(1.0F);
-                            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " healed to " + pet.getHealth() + "/" + pet.getMaxHealth());
+                            //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " healed to " + pet.getHealth() + "/" + pet.getMaxHealth());
 
                             // Spawn sleeping particles
                             try {
@@ -466,7 +466,7 @@ public class FamiliarGoals {
                             }
                         } else {
                             // Full health
-                            FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " fully healed, goal will stop");
+                            //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " fully healed, goal will stop");
                         }
                         bedRegenTimer = 0;
                     }
@@ -475,7 +475,7 @@ public class FamiliarGoals {
                 // Not on a valid bed or not sitting
                 if (wasPlayingSleepAnimation) {
                     if (!pet.level().isClientSide) {
-                        FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopping sleep animation - not on valid bed or not sitting");
+                        //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopping sleep animation - not on valid bed or not sitting");
                     }
                     wasPlayingSleepAnimation = false;
                 }
