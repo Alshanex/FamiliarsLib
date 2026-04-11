@@ -1,6 +1,7 @@
 package net.alshanex.familiarslib.util.armor_sets;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -18,21 +19,29 @@ public class ArmorSetDefinition {
     private final Supplier<? extends Item> leggings;
     private final Supplier<? extends Item> boots;
     private final MutableComponent setTooltip;
+    private final MutableComponent shiftTooltip;
 
     public ArmorSetDefinition(String name, Supplier<? extends Item> helmet, Supplier<? extends Item> chestplate,
                               Supplier<? extends Item> leggings, Supplier<? extends Item> boots,
-                              MutableComponent setTooltip) {
+                              MutableComponent setTooltip, MutableComponent shiftTooltip) {
         this.name = name;
         this.helmet = helmet;
         this.chestplate = chestplate;
         this.leggings = leggings;
         this.boots = boots;
         this.setTooltip = setTooltip;
+        this.shiftTooltip = shiftTooltip;
+    }
+
+    public ArmorSetDefinition(String name, Supplier<? extends Item> helmet, Supplier<? extends Item> chestplate,
+                              Supplier<? extends Item> leggings, Supplier<? extends Item> boots,
+                              MutableComponent setTooltip) {
+        this(name, helmet, chestplate, leggings, boots, setTooltip, null);
     }
 
     public ArmorSetDefinition(String name, Supplier<? extends Item> helmet, Supplier<? extends Item> chestplate,
                               Supplier<? extends Item> leggings, Supplier<? extends Item> boots) {
-        this(name, helmet, chestplate, leggings, boots, null);
+        this(name, helmet, chestplate, leggings, boots, null, null);
     }
 
     public boolean isFullSetEquipped(Player player) {
@@ -55,10 +64,13 @@ public class ArmorSetDefinition {
     public void addSetTooltip(Player player, List<Component> tooltipComponents) {
         if (setTooltip == null) return;
 
+        boolean shiftHeld = Screen.hasShiftDown();
+        MutableComponent tooltipToShow = (shiftHeld && shiftTooltip != null) ? shiftTooltip : setTooltip;
+
         if (isFullSetEquipped(player)) {
-            tooltipComponents.add(setTooltip.copy().withStyle(ChatFormatting.YELLOW));
+            tooltipComponents.add(tooltipToShow.copy().withStyle(ChatFormatting.YELLOW));
         } else {
-            tooltipComponents.add(setTooltip.copy().withStyle(ChatFormatting.GRAY));
+            tooltipComponents.add(tooltipToShow.copy().withStyle(ChatFormatting.GRAY));
         }
     }
 
@@ -68,5 +80,9 @@ public class ArmorSetDefinition {
 
     public MutableComponent getSetTooltip() {
         return setTooltip;
+    }
+
+    public MutableComponent getShiftTooltip() {
+        return shiftTooltip;
     }
 }
