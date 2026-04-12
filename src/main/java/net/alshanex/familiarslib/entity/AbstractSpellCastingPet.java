@@ -787,6 +787,13 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     private void handleStunTick() {
         if (!isStunned()) return;
 
+        MagicData data = this.getMagicData();
+        boolean isCasting = data.isCasting();
+
+        if(isCasting){
+            this.cancelCast();
+        }
+
         if (stunTimer > 0) {
             stunTimer--;
             if (stunTimer <= 0) {
