@@ -19,7 +19,9 @@ import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
+import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
+import net.alshanex.familiarslib.util.CylinderParticleManager;
 import net.alshanex.familiarslib.util.ModTags;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
@@ -140,7 +142,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         this.goalSelector.addGoal(7, new FamiliarGoals.MovementAwareFollowOwnerGoal(this, this::getSummoner, 1.2f, 10, 3, false, Float.MAX_VALUE));
         this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8.0F));
         //this.goalSelector.addGoal(9, new FamiliarGoals.MovementAwareRandomLookAroundGoal(this));
-        this.goalSelector.addGoal(10, new FamiliarGoals.FindAndUsePetBedGoal(this, 10.0));
+        this.goalSelector.addGoal(8, new FamiliarGoals.FindAndUsePetBedGoal(this, 10.0));
 
         this.targetSelector.addGoal(1, new GenericOwnerHurtByTargetGoal(this, this::getSummoner));
         this.targetSelector.addGoal(2, new GenericOwnerHurtTargetGoal(this, this::getSummoner));
@@ -662,6 +664,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         };
     }
 
+    private int bedRegenTimer = 0;
+
     @Override
     public void tick() {
         super.tick();
@@ -680,6 +684,52 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         if(!level().isClientSide){
             if (this.isStunned()) {
                 handleStunTick();
+            }
+        }
+
+        if (!level().isClientSide && tickCount % 5 == 0) {
+            if (getIsSitting() && isOnBed()) {
+                if(this.isOnFire()){
+                    this.setRemainingFireTicks(0);
+                }
+                bedRegenTimer += 5;
+                if (bedRegenTimer >= 20) {
+                    bedRegenTimer = 0;
+
+                    if (getHealth() < getMaxHealth()) {
+                        heal(1.0F);
+                        try {
+                            CylinderParticleManager.spawnParticlesAtBlockPos(
+                                    level(),
+                                    position(),
+                                    1,
+                                    FParticleRegistry.SLEEP_PARTICLE.get(),
+                                    CylinderParticleManager.ParticleDirection.UPWARD,
+                                    0.1, 0, 0.8
+                            );
+                        } catch (Exception e) {
+                            FamiliarsLib.LOGGER.error("Error spawning sleep particles: ", e);
+                        }
+                    } else {
+                        if (this.getIsSitting()) {
+                            this.setSitting(false);
+                        }
+                        // Fully healed — wake up
+                        BlockPos bedPos = findBedUnderPet();
+                        if (bedPos != null) {
+                            BlockEntity be = level().getBlockEntity(bedPos);
+                            if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
+                                petBed.setBedTaken(false);
+                            }
+                            BlockPos exitPos = bedPos.above();
+                            if (level().getBlockState(exitPos).isAir()) {
+                                setPos(exitPos.getX() + 0.5, exitPos.getY(), exitPos.getZ() + 0.5);
+                            }
+                        }
+                    }
+                }
+            } else {
+                bedRegenTimer = 0;
             }
         }
 
@@ -851,7 +901,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
 
     @Override
     public boolean isImmobile() {
-        if (isOnBed() || isStunned() || getIsSitting()) {
+        if (getMovementDisabled() || isStunned() || getIsSitting()) {
             return true;
         }
         return super.isImmobile();
@@ -1285,6 +1335,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     }
 
     public boolean isOnBed() {
+        return findBedUnderPet() != null;
+    }
+
+    @Nullable
+    public BlockPos findBedUnderPet() {
         BlockPos petPos = blockPosition();
 
         for (int x = -1; x <= 1; x++) {
@@ -1295,13 +1350,15 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                     if (level().getBlockState(checkPos).getBlock() instanceof AbstractFamiliarBedBlock) {
                         BlockEntity be = level().getBlockEntity(checkPos);
                         if (be instanceof AbstractFamiliarBedBlockEntity petBed) {
-                            return petBed.isPositionCorrectForSleeping(position());
+                            if (petBed.isPositionCorrectForSleeping(position())) {
+                                return checkPos;
+                            }
                         }
                     }
                 }
             }
         }
-        return false;
+        return null;
     }
 
     protected PlayState instantCastingPredicate(AnimationState event) {

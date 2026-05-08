@@ -223,7 +223,6 @@ public class FamiliarGoals {
                     }
                 }
 
-                handleSleepAndRegeneration();
                 return;
             }
 
@@ -427,61 +426,6 @@ public class FamiliarGoals {
                 petBed.setBedTaken(false);
                 hasClaimedBed = false;
                 //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " released bed at " + targetBedPos);
-            }
-        }
-
-        private void handleSleepAndRegeneration() {
-            boolean isOnValidBed = isOnCompatibleBed();
-            boolean shouldPlaySleepAnimation = pet.getIsSitting() && isOnValidBed;
-
-            if (shouldPlaySleepAnimation) {
-                if (!wasPlayingSleepAnimation) {
-                    if (!pet.level().isClientSide) {
-                        //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " starting sleep animation on compatible bed");
-                    }
-                    wasPlayingSleepAnimation = true;
-                }
-
-                if (!pet.level().isClientSide) {
-                    bedRegenTimer++;
-                    if (bedRegenTimer >= 20) { // Every second
-                        if (pet.getHealth() < pet.getMaxHealth()) {
-                            pet.heal(1.0F);
-                            //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " healed to " + pet.getHealth() + "/" + pet.getMaxHealth());
-
-                            // Spawn sleeping particles
-                            try {
-                                CylinderParticleManager.spawnParticlesAtBlockPos(
-                                        pet.level(),
-                                        pet.position(),
-                                        1,
-                                        FParticleRegistry.SLEEP_PARTICLE.get(),
-                                        CylinderParticleManager.ParticleDirection.UPWARD,
-                                        0.1,
-                                        0,
-                                        .8
-                                );
-                            } catch (Exception e) {
-                                FamiliarsLib.LOGGER.error("Error spawning sleep particles: ", e);
-                            }
-                        } else {
-                            // Full health
-                            //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " fully healed, goal will stop");
-                        }
-                        bedRegenTimer = 0;
-                    }
-                }
-            } else {
-                // Not on a valid bed or not sitting
-                if (wasPlayingSleepAnimation) {
-                    if (!pet.level().isClientSide) {
-                        //FamiliarsLib.LOGGER.debug("Pet " + pet.getUUID() + " stopping sleep animation - not on valid bed or not sitting");
-                    }
-                    wasPlayingSleepAnimation = false;
-                }
-                if (bedRegenTimer > 0) {
-                    bedRegenTimer = 0;
-                }
             }
         }
 
