@@ -4,6 +4,7 @@ package net.alshanex.familiarslib.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
+import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.network.MoveFamiliarPacket;
@@ -163,7 +164,7 @@ public class FamiliarStorageScreen extends Screen {
             }
         }
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        ClientFamiliarData familiarData = ClientFamiliarData.get();
         Map<UUID, CompoundTag> playerFams = familiarData.getAllFamiliars();
 
         for (Map.Entry<UUID, CompoundTag> entry : playerFams.entrySet()) {
@@ -222,7 +223,7 @@ public class FamiliarStorageScreen extends Screen {
     private void updateButtonStates() {
         BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
-            PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            ClientFamiliarData familiarData = ClientFamiliarData.get();
 
             storeButton.active = selectedPlayerFamiliar != null && storageEntity.canStoreFamiliar();
             retrieveButton.active = selectedStoredFamiliar != null && familiarData.canTameMoreFamiliars();

@@ -3,6 +3,7 @@ package net.alshanex.familiarslib.util.familiars;
 import io.redspace.ironsspellbooks.capabilities.magic.MagicManager;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
+import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
@@ -35,7 +36,7 @@ public class FamiliarHelper {
 
     public static void attemptLegacyMigration(ServerPlayer player, AbstractSpellCastingPet familiar) {
         try {
-            PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            FamiliarRoster familiarData = FamiliarRoster.of(player);
             UUID familiarId = familiar.getUUID();
 
             if (!familiarData.hasFamiliar(familiarId)) {
@@ -55,7 +56,7 @@ public class FamiliarHelper {
 
                     familiarData.setCurrentSummonedFamiliarId(familiarId);
 
-                    FamiliarManager.syncFamiliarDataForPlayer(player);
+                    FamiliarSync.snapshot(player, familiarId);
 
                     //FamiliarsLib.LOGGER.debug("Successfully migrated legacy familiar {} to data attachment", familiarId);
                 } else {
@@ -69,7 +70,7 @@ public class FamiliarHelper {
             } else {
                 if (!familiarId.equals(familiarData.getCurrentSummonedFamiliarId())) {
                     familiarData.setCurrentSummonedFamiliarId(familiarId);
-                    FamiliarManager.syncFamiliarDataForPlayer(player);
+                    FamiliarSync.snapshot(player, familiarId);
                 }
             }
         } catch (Exception e) {

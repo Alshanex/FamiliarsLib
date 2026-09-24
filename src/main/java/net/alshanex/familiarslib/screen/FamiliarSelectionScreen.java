@@ -3,6 +3,7 @@ package net.alshanex.familiarslib.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.network.ReleaseFamiliarPacket;
@@ -87,7 +88,7 @@ public class FamiliarSelectionScreen extends Screen {
 
         if (minecraft == null || minecraft.player == null) return;
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        ClientFamiliarData familiarData = ClientFamiliarData.get();
         selectedFamiliarId = familiarData.getSelectedFamiliarId();
 
         Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
@@ -147,7 +148,6 @@ public class FamiliarSelectionScreen extends Screen {
                             }
 
                             FamiliarConsumableSystem.saveConsumableDataToNBT(consumableData, nbt);
-                            familiarData.addTamedFamiliar(id, nbt);
                         }
                     }
 
@@ -227,7 +227,7 @@ public class FamiliarSelectionScreen extends Screen {
                 return;
             }
 
-            PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            ClientFamiliarData familiarData = ClientFamiliarData.get();
             if (familiarData == null) {
                 FamiliarsLib.LOGGER.warn("FamiliarData is null");
                 return;
@@ -300,7 +300,6 @@ public class FamiliarSelectionScreen extends Screen {
 
                                 // Save migrated data back to NBT
                                 FamiliarConsumableSystem.saveConsumableDataToNBT(consumableData, nbt);
-                                familiarData.addTamedFamiliar(id, nbt);
                             }
                         }
 

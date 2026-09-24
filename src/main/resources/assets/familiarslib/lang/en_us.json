@@ -55,6 +55,8 @@
   "message.familiarslib.familiars_toggled": "Familiars summoned/desummoned!",
   "message.familiarslib.familiar_died_in_house": "If you see this message report that your familiar died in a familiar house.",
   "message.familiarslib.quick_summon_no_familiar": "No familiar in slot %d!",
+  "message.familiarslib.max_summoned": "You can't have more than %s familiars summoned at once",
+  "message.familiarslib.max_summoned_tame": "You already have %s familiars summoned. Unsummon one before taming another!",
 
   "key.familiarslib.summoning_keys": "FamiliarLib",
   "key.familiarslib.quick_summoning_keys": "Quick summon keys",

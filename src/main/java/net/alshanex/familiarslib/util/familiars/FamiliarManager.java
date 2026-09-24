@@ -2,6 +2,8 @@ package net.alshanex.familiarslib.util.familiars;
 
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
+import net.alshanex.familiarslib.data.ClientFamiliarData;
+import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.item.AbstractMultiSelectionCurio;
@@ -42,6 +44,59 @@ public class FamiliarManager {
 
     private static final Set<UUID> deadFamiliars = new HashSet<>();
 
+    /** Max familiars summoned at the same time, independent of how many a player can own. */
+    public static final int MAX_SUMMONED_FAMILIARS = 10;
+
+    /**
+     * Rebuilds the summoned set from the world: every owned familiar that is loaded in the
+     * player's level counts as summoned, whether it got there by summoning or by taming.
+     */
+    public static void refreshSummonedFamiliars(ServerPlayer player, FamiliarRoster familiarData) {
+        ServerLevel level = player.serverLevel();
+        Set<UUID> actual = new HashSet<>();
+        for (UUID id : familiarData.getFamiliarIds()) {
+            if (level.getEntity(id) instanceof AbstractSpellCastingPet familiar
+                    && familiar.getSummoner() != null && familiar.getSummoner().is(player)) {
+                actual.add(id);
+            }
+        }
+        familiarData.retainSummoned(actual::contains);
+        actual.forEach(familiarData::addSummonedFamiliar);
+    }
+
+    /** True if the player can have one more familiar out in the world. */
+    private static boolean hasSummonCapacity(ServerPlayer player, FamiliarRoster familiarData) {
+        refreshSummonedFamiliars(player, familiarData);
+        return familiarData.getSummonedFamiliarCount() < MAX_SUMMONED_FAMILIARS;
+    }
+
+    /**
+     * Checks both caps before taming (a tamed familiar is already out in the world, so it
+     * counts as summoned) and tells the player which one blocked it.
+     */
+    public static boolean canTameAnother(ServerPlayer player) {
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
+        if (!familiarData.canTameMoreFamiliars()) {
+            player.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.translatable("message.familiarslib.limit_familiars", FamiliarRoster.maxFamiliars())
+                            .withStyle(ChatFormatting.RED)));
+            return false;
+        }
+        if (!hasSummonCapacity(player, familiarData)) {
+            player.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.translatable("message.familiarslib.max_summoned_tame", MAX_SUMMONED_FAMILIARS)
+                            .withStyle(ChatFormatting.RED)));
+            return false;
+        }
+        return true;
+    }
+
+    private static void sendMaxSummonedMessage(ServerPlayer player) {
+        player.connection.send(new ClientboundSetActionBarTextPacket(
+                Component.translatable("message.familiarslib.max_summoned", MAX_SUMMONED_FAMILIARS)
+                        .withStyle(ChatFormatting.RED)));
+    }
+
     public static void markFamiliarAsDead(UUID familiarId) {
         deadFamiliars.add(familiarId);
         //FamiliarsLib.LOGGER.debug("Marked familiar {} as dead", familiarId);
@@ -57,9 +112,10 @@ public class FamiliarManager {
     }
 
     public static boolean handleFamiliarTaming(AbstractSpellCastingPet familiar, ServerPlayer player) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
 
-        if (!familiarData.canTameMoreFamiliars()) {
+        // A tamed familiar stays in the world, so it also needs a free summon slot
+        if (!familiarData.canTameMoreFamiliars() || !hasSummonCapacity(player, familiarData)) {
             /*
             FamiliarsLib.LOGGER.debug("Player {} tried to tame familiar but is at max capacity ({}/{})",
                     player.getName().getString(),
@@ -76,11 +132,12 @@ public class FamiliarManager {
         boolean success = familiarData.tryAddTamedFamiliar(familiarId, familiarNBT);
 
         if (success) {
+            familiarData.addSummonedFamiliar(familiarId); // it's already out in the world
             if (familiarData.getSelectedFamiliarId() == null) {
                 familiarData.setSelectedFamiliarId(familiarId);
             }
 
-            syncFamiliarData(player, familiarData);
+            FamiliarSync.snapshot(player, familiarId);
 /*
             FamiliarsLib.LOGGER.debug("Player {} successfully tamed familiar {}. ({}/{})",
                     player.getName().getString(),
@@ -96,13 +153,13 @@ public class FamiliarManager {
     }
 
     public static boolean canPlayerTameMoreFamiliars(ServerPlayer player) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
         return familiarData.canTameMoreFamiliars();
     }
 
     public static String getFamiliarCapacityInfo(ServerPlayer player) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        return familiarData.getFamiliarCount() + "/" + PlayerFamiliarData.MAX_FAMILIAR_LIMIT;
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
+        return familiarData.getFamiliarCount() + "/" + FamiliarRoster.maxFamiliars();
     }
 
     public static void handleFamiliarSummoning(ServerPlayer player) {
@@ -133,13 +190,18 @@ public class FamiliarManager {
     }
 
     public static void summonFamiliar(ServerPlayer player, UUID familiarId) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
         CompoundTag familiarNBT = familiarData.getFamiliarData(familiarId);
 
         //FamiliarsLib.LOGGER.debug("Attempting to summon familiar: {}", familiarId);
 
         if (familiarNBT == null) {
             //FamiliarsLib.LOGGER.debug("No NBT data found for familiar: {}", familiarId);
+            return;
+        }
+
+        if (!hasSummonCapacity(player, familiarData)) {
+            sendMaxSummonedMessage(player);
             return;
         }
 
@@ -181,7 +243,7 @@ public class FamiliarManager {
     }
 
     public static void desummonFamiliar(ServerPlayer player, UUID familiarId) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
         ServerLevel level = player.serverLevel();
 
         //FamiliarsLib.LOGGER.debug("Attempting to desummon familiar: {}", familiarId);
@@ -233,7 +295,7 @@ public class FamiliarManager {
 
     public static void updateFamiliarData(AbstractSpellCastingPet familiar) {
         if (familiar.getSummoner() instanceof ServerPlayer player) {
-            PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            FamiliarRoster familiarData = FamiliarRoster.of(player);
             UUID familiarId = familiar.getUUID();
 
             if (isFamiliarDead(familiarId)) {
@@ -283,6 +345,8 @@ public class FamiliarManager {
         FamiliarsLib.LOGGER.debug("Saving familiar {}: current health={}, max health={}, base max health={}, consumable data = {}",
                 familiar.getUUID(), currentHealth, familiar.getMaxHealth(), familiar.getBaseMaxHealth(), data.toString());
 */
+        FamiliarSnapshots.trim(nbt);
+
         return nbt;
     }
 
@@ -531,78 +595,26 @@ public class FamiliarManager {
         return false;
     }
 
-    public static void syncFamiliarData(ServerPlayer player, PlayerFamiliarData familiarData) {
-        try {
-            Map<UUID, CompoundTag> familiarsData = familiarData.getAllFamiliars();
-            UUID selectedId = familiarData.getSelectedFamiliarId();
-            UUID summonedId = familiarData.getCurrentSummonedFamiliarId();
-            Set<UUID> summonedIds = familiarData.getSummonedFamiliarIds();
-/*
-            FamiliarsLib.LOGGER.debug("Syncing familiar data - Familiars: {}, Selected: {}, Summoned: {}, All Summoned: {}",
-                    familiarsData.size(), selectedId, summonedId, summonedIds.size());
-*/
-            PacketDistributor.sendToPlayer(player, new FamiliarDataPacket(familiarsData, selectedId, summonedId, summonedIds));
-
-            CompoundTag syncData = familiarData.serializeNBT(player.registryAccess());
-            PacketDistributor.sendToPlayer(player, new SyncFamiliarDataPacket(syncData));
-
-            //FamiliarsLib.LOGGER.debug("All data synced to client successfully");
-
-        } catch (Exception e) {
-            FamiliarsLib.LOGGER.error("Error syncing familiar data: ", e);
-        }
+    public static void syncFamiliarData(ServerPlayer player, FamiliarRoster roster) {
+        FamiliarSync.state(player);
     }
 
-    @OnlyIn(Dist.CLIENT)
-    public static void handleFamiliarDataPacket(Map<UUID, CompoundTag> familiars, UUID selectedFamiliarId, UUID currentSummonedFamiliarId, Set<UUID> summonedFamiliarIds){
-        Player player = Minecraft.getInstance().player;
-        if (player != null) {
-            PlayerFamiliarData data = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-
-            Map<UUID, CompoundTag> currentFamiliars = data.getAllFamiliars();
-            for (UUID id : new HashSet<>(currentFamiliars.keySet())) {
-                data.removeTamedFamiliar(id);
-            }
-
-            data.clearAllSummoned();
-
-            for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {
-                data.addTamedFamiliar(entry.getKey(), entry.getValue());
-            }
-
-            data.setSelectedFamiliarId(selectedFamiliarId);
-            data.setCurrentSummonedFamiliarId(currentSummonedFamiliarId);
-
-            if (summonedFamiliarIds != null) {
-                for (UUID summonedId : summonedFamiliarIds) {
-                    data.addSummonedFamiliar(summonedId);
-                }
-            }
-/*
-            FamiliarsLib.LOGGER.debug("Client received familiar data - Count: {}, Selected: {}, Summoned: {}, All Summoned: {}",
-                    familiars.size(), selectedFamiliarId, currentSummonedFamiliarId, summonedFamiliarIds != null ? summonedFamiliarIds.size() : 0);
-
- */
-        }
+    public static void syncFamiliarDataForPlayer(ServerPlayer player) {
+        FamiliarSync.state(player);
     }
 
     public static boolean hasSelectedFamiliar(ServerPlayer player) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
         return familiarData.getSelectedFamiliarId() != null;
     }
 
     public static boolean isFamiliarSummoned(ServerPlayer player) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
         return familiarData.getCurrentSummonedFamiliarId() != null;
     }
 
-    public static void syncFamiliarDataForPlayer(ServerPlayer player) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        syncFamiliarData(player, familiarData);
-    }
-
     public static void handleFamiliarSelection(ServerPlayer player, UUID familiarId) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
 
         if (familiarData.hasFamiliar(familiarId)) {
             familiarData.setSelectedFamiliarId(familiarId);
@@ -611,7 +623,7 @@ public class FamiliarManager {
     }
 
     public static void summonSpecificFamiliarAtPosition(ServerPlayer player, UUID familiarId, int positionIndex) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
         CompoundTag familiarNBT = familiarData.getFamiliarData(familiarId);
 
         //FamiliarsLib.LOGGER.debug("Attempting to summon specific familiar: {} at position {}", familiarId, positionIndex);
@@ -623,6 +635,10 @@ public class FamiliarManager {
 
         if (familiarData.isFamiliarSummoned(familiarId)) {
             //FamiliarsLib.LOGGER.debug("Familiar {} is already summoned", familiarId);
+            return;
+        }
+
+        if (!hasSummonCapacity(player, familiarData)) {
             return;
         }
 
@@ -713,7 +729,7 @@ public class FamiliarManager {
     }
 
     public static void desummonSpecificFamiliar(ServerPlayer player, UUID familiarId) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
         ServerLevel level = player.serverLevel();
 
         //FamiliarsLib.LOGGER.debug("Attempting to desummon specific familiar: {}", familiarId);
@@ -758,15 +774,6 @@ public class FamiliarManager {
     }
 
     @OnlyIn(Dist.CLIENT)
-    public static void syncFamiliarData(CompoundTag familiarData){
-        Player player = Minecraft.getInstance().player;
-        if (player != null) {
-            PlayerFamiliarData data = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-            data.deserializeNBT(player.registryAccess(), familiarData);
-        }
-    }
-
-    @OnlyIn(Dist.CLIENT)
     public static void openStorageScreen(BlockPos blockPos){
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level != null) {
@@ -783,7 +790,7 @@ public class FamiliarManager {
 
     public static void updateSummonedFamiliarsData(ServerPlayer player) {
         try {
-            PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            FamiliarRoster familiarData = FamiliarRoster.of(player);
             ServerLevel level = player.serverLevel();
 
             Set<UUID> actualSummonedFamiliars = new HashSet<>();
@@ -803,7 +810,8 @@ public class FamiliarManager {
                 }
             }
 
-            familiarData.getSummonedFamiliarIds().clear();
+            // getSummonedFamiliarIds() returns a copy, so clearing it had no effect
+            familiarData.retainSummoned(actualSummonedFamiliars::contains);
             for (UUID summonedId : actualSummonedFamiliars) {
                 familiarData.addSummonedFamiliar(summonedId);
             }
@@ -856,7 +864,7 @@ public class FamiliarManager {
             return;
         }
 
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
 
         if (toStorage) {
             // Player to storage
@@ -866,18 +874,16 @@ public class FamiliarManager {
                 return;
             }
 
+            if (player.level() instanceof ServerLevel serverLevel
+                    && serverLevel.getEntity(familiarId) instanceof AbstractSpellCastingPet) {
+                desummonSpecificFamiliar(player, familiarId);
+            }
+
             CompoundTag familiarNBT = familiarData.getFamiliarData(familiarId);
             if (familiarNBT == null) {
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.familiar_data_error").withStyle(ChatFormatting.RED)));
                 return;
-            }
-
-            if (player.level() instanceof ServerLevel serverLevel) {
-                Entity entity = serverLevel.getEntity(familiarId);
-                if (entity instanceof AbstractSpellCastingPet familiar) {
-                    desummonSpecificFamiliar(player, familiarId);
-                }
             }
 
             boolean success = storageEntity.storeFamiliar(familiarId, familiarNBT, player);
@@ -916,7 +922,7 @@ public class FamiliarManager {
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.familiar_retrieved", familiarName).withStyle(ChatFormatting.GREEN)));
 
-                syncFamiliarDataForPlayer(player);
+                FamiliarSync.snapshot(player, familiarId);
             } else {
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.retrieval_failed").withStyle(ChatFormatting.RED)));
@@ -981,7 +987,7 @@ public class FamiliarManager {
             return false;
         }
 
-        PlayerFamiliarData playerData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster playerData = FamiliarRoster.of(player);
 
         AbstractFamiliarStorageBlockEntity.FamiliarData data = new AbstractFamiliarStorageBlockEntity.FamiliarData(familiarData, 0);
         storageEntity.storedFamiliars.put(familiarId, data);
@@ -1014,7 +1020,7 @@ public class FamiliarManager {
             return false;
         }
 
-        PlayerFamiliarData playerData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster playerData = FamiliarRoster.of(player);
 
         if (!playerData.canTameMoreFamiliars()) {
             return false;
@@ -1022,6 +1028,9 @@ public class FamiliarManager {
 
         AbstractFamiliarStorageBlockEntity.FamiliarData familiarData = storageEntity.storedFamiliars.remove(familiarId);
         storageEntity.outsideFamiliars.remove(familiarId);
+        if (familiarData == null) {
+            return false;
+        }
 
         CompoundTag nbtData = familiarData.nbtData.copy();
         nbtData.putBoolean("isInHouse", false);
@@ -1043,6 +1052,7 @@ public class FamiliarManager {
 
         storageEntity.setChanged();
         storageEntity.syncToClient();
+        FamiliarSync.snapshot(player, familiarId);
 
         //FamiliarsLib.LOGGER.debug("Retrieved familiar {} from house at {}", familiarId, storagePos);
         return true;
@@ -1102,10 +1112,10 @@ public class FamiliarManager {
     public static void requestFamiliarSelectionScreen(ServerPlayer serverPlayer){
         FamiliarManager.updateSummonedFamiliarsData(serverPlayer);
 
-        PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(serverPlayer);
 
         if (!familiarData.isEmpty()) {
-            FamiliarManager.syncFamiliarDataForPlayer(serverPlayer);
+            FamiliarSync.full(serverPlayer);
 
             // Verificar si tiene Multi Selection curio equipada
             if (CurioUtils.isWearingMultiSelectionCurio(serverPlayer)) {
@@ -1125,7 +1135,7 @@ public class FamiliarManager {
                 familiarId, player.getName().getString());
 */
         try {
-            PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            FamiliarRoster familiarData = FamiliarRoster.of(player);
 
             // Verificar que el familiar pertenece al jugador
             if (!familiarData.hasFamiliar(familiarId)) {
@@ -1143,40 +1153,10 @@ public class FamiliarManager {
             cleanFamiliarFromMultiSelectionCurio(player, familiarId);
 
             // Determinar nuevo familiar seleccionado si era el seleccionado
-            UUID newSelectedFamiliarId = null;
-            if (familiarId.equals(familiarData.getSelectedFamiliarId())) {
-                // Seleccionar otro familiar si hay disponibles
-                var availableFamiliars = familiarData.getAllFamiliars();
-                if (!availableFamiliars.isEmpty()) {
-                    newSelectedFamiliarId = availableFamiliars.keySet().iterator().next();
-                    familiarData.setSelectedFamiliarId(newSelectedFamiliarId);
-                    /*
-                    FamiliarsLib.LOGGER.debug("Selected new familiar {} after death of {}",
-                            newSelectedFamiliarId, familiarId);
+            // New selection (if the dead one was selected) is handled by removeTamedFamiliar
 
-                     */
-                } else {
-                    familiarData.setSelectedFamiliarId(null);
-                    //FamiliarsLib.LOGGER.debug("No familiars available, cleared selection after death of {}", familiarId);
-                }
-            }
-
-            // Preparar datos para sincronización
-            Map<UUID, CompoundTag> remainingFamiliars = familiarData.getAllFamiliars();
-            UUID currentSummonedFamiliarId = familiarData.getCurrentSummonedFamiliarId();
-
-            // Crear NBT para sync
-            CompoundTag familiarSyncData = familiarData.serializeNBT(player.registryAccess());
-
-            // Enviar packet de muerte al cliente
-            PacketDistributor.sendToPlayer(player, new FamiliarDeathPacket(
-                    familiarId,
-                    remainingFamiliars,
-                    newSelectedFamiliarId,
-                    currentSummonedFamiliarId,
-                    familiarSyncData
-            ));
-/*
+            FamiliarSync.state(player);
+            PacketDistributor.sendToPlayer(player, new FamiliarDeathPacket(familiarId));/*
             FamiliarsLib.LOGGER.debug("Successfully processed death of familiar {} for player {}. {} familiars remaining.",
                     familiarId, player.getName().getString(), remainingFamiliars.size());
 
@@ -1241,29 +1221,10 @@ public class FamiliarManager {
     }
 
     @OnlyIn(Dist.CLIENT)
-    public static void handleFamiliarDeathPacket(UUID deadFamiliarId, Map<UUID, CompoundTag> remainingFamiliars, UUID newSelectedFamiliarId,
-                                                 UUID currentSummonedFamiliarId, CompoundTag familiarData){
+    public static void handleFamiliarDeathPacket(UUID deadFamiliarId) {
         Player player = Minecraft.getInstance().player;
         if (player != null) {
-            //FamiliarsLib.LOGGER.debug("Client received familiar death packet for familiar: {}", deadFamiliarId);
-
-            // Actualizar datos del jugador
-            PlayerFamiliarData playerFamiliarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-
-            // Remover el familiar muerto específicamente
-            boolean wasRemoved = playerFamiliarData.hasFamiliar(deadFamiliarId);
-            if (wasRemoved) {
-                playerFamiliarData.removeTamedFamiliar(deadFamiliarId);
-                //FamiliarsLib.LOGGER.debug("Removed dead familiar {} from client data", deadFamiliarId);
-            }
-
-            // Deserializar todos los datos actualizados
-            playerFamiliarData.deserializeNBT(player.registryAccess(), familiarData);
-/*
-            FamiliarsLib.LOGGER.debug("Updated client data - Remaining familiars: {}, New selected: {}, Current summoned: {}",
-                    remainingFamiliars.size(), newSelectedFamiliarId, currentSummonedFamiliarId);
-*/
-            // Actualizar pantallas inmediatamente
+            ClientFamiliarData.get().removeTamedFamiliar(deadFamiliarId);
             cleanFamiliarFromMultiSelectionCurioClient(player, deadFamiliarId);
             updateScreensAfterDeath(deadFamiliarId);
         }
@@ -1274,17 +1235,10 @@ public class FamiliarManager {
         try {
             // Actualizar pantalla de selección de familiares si está abierta
             if (Minecraft.getInstance().screen instanceof FamiliarSelectionScreen familiarScreen) {
-                //FamiliarsLib.LOGGER.debug("Updating FamiliarSelectionScreen after familiar death: {}", deadFamiliarId);
                 familiarScreen.reloadFamiliarData();
 
-                // Si no quedan familiares, cerrar la pantalla
-                Player player = Minecraft.getInstance().player;
-                if (player != null) {
-                    PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-                    if (familiarData.isEmpty()) {
-                        //FamiliarsLib.LOGGER.debug("No familiars remaining, closing FamiliarSelectionScreen");
-                        familiarScreen.onClose();
-                    }
+                if (ClientFamiliarData.get().isEmpty()) {
+                    familiarScreen.onClose();
                 }
             }
 
@@ -1339,7 +1293,7 @@ public class FamiliarManager {
     }
 
     public static void handleReleaseFamiliar(ServerPlayer player, UUID familiarId) {
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
 /*
         FamiliarsLib.LOGGER.debug("Attempting to release familiar {} for player {}",
                 familiarId, player.getName().getString());
@@ -1378,31 +1332,17 @@ public class FamiliarManager {
         cleanFamiliarFromMultiSelectionCurio(player, familiarId);
 
         // Verificar si quedan familiares después de la liberación
-        Map<UUID, CompoundTag> remainingFamiliars = familiarData.getAllFamiliars();
-        boolean hasRemainingFamiliars = !remainingFamiliars.isEmpty();
+        boolean hasRemainingFamiliars = !familiarData.isEmpty();
 
-        // Si es el familiar seleccionado actualmente y quedan familiares, seleccionar otro
-        if (familiarId.equals(familiarData.getSelectedFamiliarId()) && hasRemainingFamiliars) {
-            // Buscar otro familiar para seleccionar
-            for (UUID otherId : remainingFamiliars.keySet()) {
-                familiarData.setSelectedFamiliarId(otherId);
-                //FamiliarsLib.LOGGER.debug("Released familiar was selected, new selected: {}", otherId);
-                break; // Tomar el primero disponible
-            }
-        } else if (familiarId.equals(familiarData.getSelectedFamiliarId())) {
-            // Si no quedan familiares, limpiar la selección
-            familiarData.setSelectedFamiliarId(null);
-            //FamiliarsLib.LOGGER.debug("Released familiar was selected and no familiars remain, clearing selection");
-        }
+        // New selection (if the released one was selected) is handled by removeTamedFamiliar
 
-        // Sincronizar datos actualizados con el cliente
         FamiliarManager.syncFamiliarData(player, familiarData);
 
         boolean shouldClose = !hasRemainingFamiliars;
         PacketDistributor.sendToPlayer(player, new ReloadFamiliarScreenPacket(shouldClose));
 /*
         FamiliarsLib.LOGGER.debug("Successfully released familiar {} for player {}. Remaining familiars: {}. Screen action: {}",
-                familiarId, player.getName().getString(), remainingFamiliars.size(), shouldClose ? "CLOSE" : "RELOAD");
+                familiarId, player.getName().getString(), familiarData.getFamiliarCount(), shouldClose ? "CLOSE" : "RELOAD");
 
  */
     }
@@ -1425,25 +1365,42 @@ public class FamiliarManager {
             return;
         }
 
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
+        // Decide from the world, not the tracked set: familiars that are out must be desummoned
+        refreshSummonedFamiliars(player, familiarData);
         boolean anyAction = false;
+        boolean hitSummonCap = false;
         int spawnIndex = 0;
 
+        // Decide the toggles up front, so familiars desummoned in pass 1 aren't summoned again in pass 2
+        List<UUID> toDesummon = new ArrayList<>();
+        List<UUID> toSummon = new ArrayList<>();
         for (UUID familiarId : selectedFamiliars) {
-            if (familiarData.hasFamiliar(familiarId)) {
-                boolean isSummoned = familiarData.isFamiliarSummoned(familiarId);
+            if (!familiarData.hasFamiliar(familiarId)) continue;
+            if (familiarData.isFamiliarSummoned(familiarId)) toDesummon.add(familiarId);
+            else toSummon.add(familiarId);
+        }
 
-                if (isSummoned) {
-                    // Dessummonear
-                    FamiliarManager.desummonSpecificFamiliar(player, familiarId);
-                    anyAction = true;
-                } else {
-                    // Summonear con posición específica
-                    FamiliarManager.summonSpecificFamiliarAtPosition(player, familiarId, spawnIndex);
-                    anyAction = true;
-                    spawnIndex++;
-                }
+        // Pass 1: desummon first, so the freed slots count toward the cap
+        for (UUID familiarId : toDesummon) {
+            FamiliarManager.desummonSpecificFamiliar(player, familiarId);
+            anyAction = true;
+        }
+
+        // Pass 2: summon, up to MAX_SUMMONED_FAMILIARS
+        for (UUID familiarId : toSummon) {
+            if (!hasSummonCapacity(player, familiarData)) {
+                hitSummonCap = true;
+                break;
             }
+            FamiliarManager.summonSpecificFamiliarAtPosition(player, familiarId, spawnIndex);
+            anyAction = true;
+            spawnIndex++;
+        }
+
+        if (hitSummonCap) {
+            sendMaxSummonedMessage(player);
+            return;
         }
 
         if (anyAction) {
@@ -1483,7 +1440,7 @@ public class FamiliarManager {
      * Handles quick summon keybinds (1-10). Works like the normal summon key but targets a specific familiar by index.
      */
     public static void handleQuickSummon(ServerPlayer serverPlayer, int familiarIndex) {
-        PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(serverPlayer);
 
         if (familiarData.isEmpty()) {
             serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(

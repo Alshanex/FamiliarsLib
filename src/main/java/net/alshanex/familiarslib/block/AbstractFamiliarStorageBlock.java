@@ -6,6 +6,7 @@ import net.alshanex.familiarslib.network.OpenFamiliarStoragePacket;
 import net.alshanex.familiarslib.network.UpdateFamiliarStoragePacket;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
+import net.alshanex.familiarslib.util.familiars.FamiliarSync;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleOptions;
@@ -81,6 +82,8 @@ public abstract class AbstractFamiliarStorageBlock extends BaseEntityBlock imple
                         storageEntity.canFamiliarsUseGoals(),
                         storageEntity.getMaxDistance()
                 ));
+
+                FamiliarSync.full(serverPlayer);
 
                 PacketDistributor.sendToPlayer(serverPlayer, new OpenFamiliarStoragePacket(pos));
                 return InteractionResult.SUCCESS;

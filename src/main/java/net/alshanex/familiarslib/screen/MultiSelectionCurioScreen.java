@@ -3,6 +3,7 @@ package net.alshanex.familiarslib.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.item.AbstractMultiSelectionCurio;
@@ -76,7 +77,7 @@ public class MultiSelectionCurioScreen extends Screen {
 
         if (minecraft == null || minecraft.player == null) return;
 
-        PlayerFamiliarData familiarData = minecraft.player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        ClientFamiliarData familiarData = ClientFamiliarData.get();
         Map<UUID, CompoundTag> familiars = familiarData.getAllFamiliars();
 
         for (Map.Entry<UUID, CompoundTag> entry : familiars.entrySet()) {

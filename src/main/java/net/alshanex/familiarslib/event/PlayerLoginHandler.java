@@ -1,10 +1,13 @@
 package net.alshanex.familiarslib.event;
 
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
+import net.alshanex.familiarslib.util.familiars.FamiliarMigration;
+import net.alshanex.familiarslib.util.familiars.FamiliarSync;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -41,10 +44,18 @@ public class PlayerLoginHandler {
             try {
                 var oldFamiliarNBT = oldFamiliarData.serializeNBT(oldPlayer.registryAccess());
                 newFamiliarData.deserializeNBT(newPlayer.registryAccess(), oldFamiliarNBT);
-
             } catch (Exception e) {
                 FamiliarsLib.LOGGER.error("Error copying player data during clone: ", e);
             }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            FamiliarMigration.migrateLegacy(player);
+            FamiliarRoster.of(player).validate();
+            FamiliarSync.state(player);
         }
     }
 
@@ -55,7 +66,7 @@ public class PlayerLoginHandler {
         }
 
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            FamiliarRoster familiarData = FamiliarRoster.of(serverPlayer);
             /*
             FamiliarsLib.LOGGER.debug("Player {} died, desummoning all familiars",
                     serverPlayer.getName().getString());
@@ -105,7 +116,7 @@ public class PlayerLoginHandler {
         }
 
         if (event.getEntity() instanceof ServerPlayer serverPlayer) {
-            PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+            FamiliarRoster familiarData = FamiliarRoster.of(serverPlayer);
             //FamiliarsLib.LOGGER.debug("Player {} changed dimension, syncing familiar and bed link data", serverPlayer.getName().getString());
 
             if(!serverPlayer.level.isClientSide){

@@ -1,10 +1,13 @@
 package net.alshanex.familiarslib.block.entity;
 
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.data.FamiliarRoster;
+import net.alshanex.familiarslib.data.FamiliarSavedData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
+import net.alshanex.familiarslib.util.familiars.FamiliarSync;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -16,6 +19,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -445,8 +449,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             return false;
         }
 
-        PlayerFamiliarData playerData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-        if (!playerData.canTameMoreFamiliars()) {
+        FamiliarRoster familiarData = FamiliarRoster.of(player);
+        if (!familiarData.canTameMoreFamiliars()) {
             return false;
         }
 
@@ -459,48 +463,41 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
     // Returns stored familiars to the owner
     public void returnFamiliarsToOwner() {
-        if (ownerUUID == null || level == null || level.isClientSide) {
+        if (ownerUUID == null || !(level instanceof ServerLevel serverLevel)) {
             return;
         }
+        MinecraftServer server = serverLevel.getServer();
+        FamiliarSavedData roster = FamiliarSavedData.get(server, ownerUUID); // online or offline
 
-        if (level instanceof ServerLevel serverLevel) {
-            ServerPlayer owner = serverLevel.getServer().getPlayerList().getPlayer(ownerUUID);
-            if (owner != null) {
-                PlayerFamiliarData playerData = owner.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        // Familiars physically inside the house
+        for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
+            CompoundTag nbt = entry.getValue().nbtData.copy();
+            nbt.putBoolean("isInHouse", false);
+            roster.put(entry.getKey(), nbt); // no cap check on purpose: never destroy a familiar
+        }
 
-                // Return stored familiars
-                for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-                    UUID familiarId = entry.getKey();
-                    CompoundTag familiarData = entry.getValue().nbtData;
-
-                    if (playerData.canTameMoreFamiliars()) {
-                        familiarData.putBoolean("isInHouse", false);
-                        playerData.addTamedFamiliar(familiarId, familiarData);
-
-                        if (playerData.getSelectedFamiliarId() == null) {
-                            playerData.setSelectedFamiliarId(familiarId);
-                        }
-
-                        //FamiliarsLib.LOGGER.debug("Returned familiar {} to owner {}", familiarId, owner.getName().getString());
-                    }
+        // Familiars wandering around the house (wander mode)
+        for (UUID familiarId : outsideFamiliars) {
+            Entity entity = serverLevel.getEntity(familiarId);
+            if (entity instanceof AbstractSpellCastingPet familiar) {
+                familiar.setIsInHouse(false, null);
+                if (!roster.contains(familiarId)) {
+                    roster.put(familiarId, FamiliarManager.createFamiliarNBT(familiar));
                 }
-
-                // Remove outside familiars from world
-                for (UUID familiarId : outsideFamiliars) {
-                    Entity entity = serverLevel.getEntity(familiarId);
-                    if (entity instanceof AbstractSpellCastingPet familiar) {
-                        familiar.setIsInHouse(false, null);
-                        familiar.remove(Entity.RemovalReason.DISCARDED);
-                        FamiliarsLib.LOGGER.debug("Removed outside familiar {} from world due to house destruction", familiarId);
-                    }
-                }
-
-                FamiliarManager.syncFamiliarDataForPlayer(owner);
+                familiar.remove(Entity.RemovalReason.DISCARDED);
             }
         }
 
+        ServerPlayer owner = server.getPlayerList().getPlayer(ownerUUID);
+        if (owner != null) {
+            FamiliarRoster.of(owner).validate();
+            FamiliarSync.state(owner);
+        }
+        // Offline owners get their selection fixed by validate() on next login
+
         storedFamiliars.clear();
         outsideFamiliars.clear();
+        setChanged();
     }
 
     // Update mode in the client

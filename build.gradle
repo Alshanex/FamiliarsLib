@@ -158,6 +158,8 @@ dependencies {
 
     //ISS
     implementation "io.redspace:irons_spellbooks:${irons_spells_version}"
+    compileOnly("curse.maven:irons-lib-1492763:8364894")
+    runtimeOnly("curse.maven:irons-lib-1492763:8364894")
 
     // GECKOLIB ***************************************************************************************************
     implementation "software.bernie.geckolib:geckolib-neoforge-${geckolib_version}"

@@ -16,6 +16,7 @@ import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
+import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
@@ -811,7 +812,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         //Periodic status update for the player
         if (getSummoner() != null && this.tickCount % 40 == 0) {
             if (!level().isClientSide && getSummoner() instanceof ServerPlayer serverPlayer) {
-                PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+                FamiliarRoster familiarData = FamiliarRoster.of(serverPlayer);
                 if (familiarData.hasFamiliar(getUUID())) {
                     FamiliarManager.updateFamiliarData(this);
                 } else {
@@ -1065,6 +1066,9 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                 //Taming interaction
 
                 if (itemstack.is(ModTags.FAMILIAR_TAMING)) {
+                    if (player instanceof ServerPlayer serverPlayer && !FamiliarManager.canTameAnother(serverPlayer)) {
+                        return InteractionResult.FAIL;
+                    }
                     itemstack.consume(1, player);
                     this.tryToTame(player);
                     return InteractionResult.SUCCESS;
@@ -1095,10 +1099,9 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
             return;
         }
 
-        PlayerFamiliarData familiarData = serverPlayer.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
+        FamiliarRoster familiarData = FamiliarRoster.of(serverPlayer);
 
-        if (!familiarData.canTameMoreFamiliars()) {
-            serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.limit_familiars", PlayerFamiliarData.MAX_FAMILIAR_LIMIT).withStyle(ChatFormatting.RED)));
+        if (!FamiliarManager.canTameAnother(serverPlayer)) {
             return;
         }
 

@@ -2,6 +2,7 @@ package net.alshanex.familiarslib;
 
 import net.alshanex.familiarslib.registry.*;
 import net.neoforged.fml.ModList;
+import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import org.slf4j.Logger;
 
@@ -49,6 +50,7 @@ public class FamiliarsLib {
         modEventBus.addListener(this::addCreative);
 
         // Register our mod's ModConfigSpec so that FML can create and load the config file for us
+        modContainer.registerConfig(ModConfig.Type.SERVER, FamiliarsServerConfig.SPEC);
         //modContainer.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 

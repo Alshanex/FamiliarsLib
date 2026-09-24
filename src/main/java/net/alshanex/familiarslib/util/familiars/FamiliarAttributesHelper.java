@@ -4,6 +4,7 @@ import io.redspace.ironsspellbooks.api.registry.AttributeRegistry;
 import io.redspace.ironsspellbooks.api.registry.SchoolRegistry;
 import io.redspace.ironsspellbooks.api.spells.SchoolType;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.mixin.SchoolTypeAccessor;
@@ -176,18 +177,11 @@ public class FamiliarAttributesHelper {
             return summonedFamiliars;
         }
 
-        PlayerFamiliarData familiarData = player.getData(AttachmentRegistry.PLAYER_FAMILIAR_DATA);
-
-        for (Entity entity : serverLevel.getAllEntities()) {
-            if (entity instanceof AbstractSpellCastingPet familiar) {
-                UUID ownerUUID = familiar.getOwnerUUID();
-                if (ownerUUID != null && ownerUUID.equals(player.getUUID())) {
-                    if (familiarData.hasFamiliar(familiar.getUUID())) {
-                        if (!familiar.getIsInHouse()) {
-                            summonedFamiliars.add(familiar);
-                        }
-                    }
-                }
+        FamiliarRoster roster = FamiliarRoster.of(player);
+        for (UUID id : roster.getSummonedFamiliarIds()) {
+            if (serverLevel.getEntity(id) instanceof AbstractSpellCastingPet familiar
+                    && !familiar.getIsInHouse()) {
+                summonedFamiliars.add(familiar);
             }
         }
 
