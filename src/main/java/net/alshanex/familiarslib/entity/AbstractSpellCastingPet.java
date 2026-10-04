@@ -17,8 +17,6 @@ import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.data.FamiliarRoster;
-import net.alshanex.familiarslib.data.PlayerFamiliarData;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
@@ -27,6 +25,9 @@ import net.alshanex.familiarslib.util.ModTags;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.alshanex.familiarslib.util.familiars.*;
+import net.alshanex.familiarslib.render.LayerColorHolder;
+import net.minecraft.nbt.Tag;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -85,9 +86,13 @@ import java.util.UUID;
 /**
  * Generic class with the main methods of all familiars
  */
-public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
+public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob implements LayerColorHolder {
     protected static final EntityDataAccessor<Boolean> DATA_IS_SITTING;
     protected static final EntityDataAccessor<Boolean> DATA_IS_HOUSE;
+    private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_0 =
+            SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_1 =
+            SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
 
     static {
         DATA_ID_OWNER_UUID = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.OPTIONAL_UUID);
@@ -102,6 +107,14 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     private static final EntityDataAccessor<Boolean> DATA_IMPOSTOR;
     private static final EntityDataAccessor<Boolean> DATA_TOTEM;
     private static final EntityDataAccessor<Boolean> DATA_STUNNED;
+
+    public static final int LAYER_COLOR_SLOTS = 2;
+    public static final int DYE_LAYER_SLOT = 0;
+
+    // True once spawn colors were rolled, or the familiar was loaded from a save
+    private boolean layerColorsInitialized = false;
+    // True if the loaded NBT already had colors
+    private boolean layerColorsFromNbt = false;
 
     protected LivingEntity cachedSummoner;
 
@@ -493,6 +506,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         pBuilder.define(DATA_IMPOSTOR, false);
         pBuilder.define(DATA_TOTEM, false);
         pBuilder.define(DATA_STUNNED, false);
+        pBuilder.define(DATA_LAYER_COLOR_0, NO_LAYER_COLOR);
+        pBuilder.define(DATA_LAYER_COLOR_1, NO_LAYER_COLOR);
     }
 
     @Override
@@ -527,6 +542,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         pCompound.putBoolean("hasAttemptedConsumableMigration", hasAttemptedConsumableMigration);
         pCompound.putBoolean("hasInitializedHealth", hasInitializedHealth);
 
+        pCompound.putIntArray("LayerColors", new int[]{getLayerColor(0), getLayerColor(1)});
+
         pCompound.putBoolean("isInHouse", getIsInHouse());
         if (housePosition != null) {
             pCompound.putLong("housePosition", housePosition.asLong());
@@ -550,6 +567,16 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
                 setOwnerUUID(null);
             }
         }
+
+        if (pCompound.contains("LayerColors", Tag.TAG_INT_ARRAY)) {
+            int[] colors = pCompound.getIntArray("LayerColors");
+            for (int i = 0; i < Math.min(colors.length, LAYER_COLOR_SLOTS); i++) {
+                setLayerColor(i, colors[i]);
+            }
+            layerColorsFromNbt = true;
+        }
+        // Familiars saved before this update have no "LayerColors": they keep the original look
+        layerColorsInitialized = true;
 
         // Load New System Data
         FamiliarConsumableIntegration.loadConsumableData(this, pCompound);
@@ -1143,10 +1170,43 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
         return null;
     }
 
+    private static EntityDataAccessor<Integer> layerColorAccessor(int slot) {
+        return slot == 0 ? DATA_LAYER_COLOR_0 : DATA_LAYER_COLOR_1;
+    }
+
+    @Override
+    public int getLayerColor(int slot) {
+        if (slot < 0 || slot >= LAYER_COLOR_SLOTS) return NO_LAYER_COLOR;
+        return this.entityData.get(layerColorAccessor(slot));
+    }
+
+    public void setLayerColor(int slot, int rgb) {
+        if (slot < 0 || slot >= LAYER_COLOR_SLOTS) return;
+        this.entityData.set(layerColorAccessor(slot), rgb == NO_LAYER_COLOR ? NO_LAYER_COLOR : rgb & 0xFFFFFF);
+    }
+
+    // Whether the owner can recolor DYE_LAYER_SLOT by right-clicking with a dye.
+    public boolean canBeDyed() {
+        return false;
+    }
+
+    /**
+     * Called once on the server when a new familiar appears.
+     * reason is null for familiars created without finalizeSpawn (shards).
+     * Familiars loaded from a save never call this.
+     */
+    protected void initializeLayerColors(LevelReader level, @Nullable MobSpawnType reason) {
+    }
+
     //Spawning logic and effects
     @Override
     public void onAddedToLevel() {
         super.onAddedToLevel();
+        // Covers familiars created without finalizeSpawn, e.g. shards
+        if (!level().isClientSide && !layerColorsInitialized) {
+            initializeLayerColors(level(), null);
+            layerColorsInitialized = true;
+        }
         triggerAnim("spawn_controller", "spawn");
     }
 
@@ -1170,6 +1230,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob {
     @Override
     public SpawnGroupData finalizeSpawn(ServerLevelAccessor level, DifficultyInstance difficulty, MobSpawnType reason, @Nullable SpawnGroupData spawnData) {
         SpawnGroupData result = super.finalizeSpawn(level, difficulty, reason, spawnData);
+
+        if (!layerColorsFromNbt) {
+            initializeLayerColors(level, reason);
+            layerColorsInitialized = true;
+        }
 
         // Handle command-spawned entities
         if (reason == MobSpawnType.COMMAND) {
