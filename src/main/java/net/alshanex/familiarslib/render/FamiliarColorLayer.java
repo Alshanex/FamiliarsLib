@@ -76,16 +76,16 @@ public class FamiliarColorLayer<T extends Entity & GeoAnimatable & LayerColorHol
     }
 
     /**
-     * Mirrors how the familiar renderers draw the body: cutout normally, translucent when invisible
-     * but still visible to this player (spectators), nothing when fully invisible.
+     * Mirrors how familiar renderers should draw the body: culled cutout normally, culled translucent when
+     * invisible but still visible to this player (spectators), nothing when fully invisible.
      */
     @Nullable
     protected RenderType getLayerRenderType(T animatable, ResourceLocation texture) {
         if (!animatable.isInvisible()) {
-            return RenderType.entityCutoutNoCull(texture);
+            return RenderType.entityCutout(texture);
         }
         if (!animatable.isInvisibleTo(ClientUtil.getClientPlayer())) {
-            return RenderType.entityTranslucent(texture);
+            return RenderType.itemEntityTranslucentCull(texture);
         }
         return null;
     }
