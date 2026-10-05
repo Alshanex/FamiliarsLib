@@ -886,14 +886,13 @@ public class FamiliarManager {
                 return;
             }
 
-            boolean success = storageEntity.storeFamiliar(familiarId, familiarNBT, player);
+            boolean success = storageEntity.storeFamiliar(familiarId, player);
             if (success) {
                 CurioUtils.removeFamiliarFromEquippedMultiSelectionCurio(player, familiarId);
                 String familiarName = getFamiliarName(familiarNBT);
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.familiar_stored", familiarName).withStyle(ChatFormatting.GREEN)));
-
-                syncFamiliarDataForPlayer(player);
+                // storeFamiliar already synced the player's state
             } else {
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.storage_full").withStyle(ChatFormatting.RED)));
@@ -921,8 +920,7 @@ public class FamiliarManager {
                 String familiarName = getFamiliarName(familiarNBT);
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.familiar_retrieved", familiarName).withStyle(ChatFormatting.GREEN)));
-
-                FamiliarSync.snapshot(player, familiarId);
+                // retrieveFamiliar already sent the familiar's snapshot
             } else {
                 player.connection.send(new ClientboundSetActionBarTextPacket(
                         Component.translatable("message.familiarslib.retrieval_failed").withStyle(ChatFormatting.RED)));
@@ -958,11 +956,7 @@ public class FamiliarManager {
         if (minecraft.level != null) {
             BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
             if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
-                storageEntity.storedFamiliars.clear();
-                for (Map.Entry<UUID, CompoundTag> entry : storedFamiliars.entrySet()) {
-                    storageEntity.storedFamiliars.put(entry.getKey(),
-                            new AbstractFamiliarStorageBlockEntity.FamiliarData(entry.getValue(), 0));
-                }
+                storageEntity.setClientStoredFamiliars(storedFamiliars);
 
                 storageEntity.setClientStoreMode(storeMode);
                 storageEntity.setClientCanFamiliarsUseGoals(canFamiliarsUseGoals);
@@ -978,84 +972,16 @@ public class FamiliarManager {
         }
     }
 
+    /** Kept for compatibility: the storage block entity now does the work. */
     public static boolean storeFamiliarInHouse(UUID familiarId, CompoundTag familiarData, ServerPlayer player, BlockPos storagePos) {
-        if (!(player.level().getBlockEntity(storagePos) instanceof AbstractFamiliarStorageBlockEntity storageEntity)) {
-            return false;
-        }
-
-        if (!storageEntity.isOwner(player)) {
-            return false;
-        }
-
-        FamiliarRoster playerData = FamiliarRoster.of(player);
-
-        AbstractFamiliarStorageBlockEntity.FamiliarData data = new AbstractFamiliarStorageBlockEntity.FamiliarData(familiarData, 0);
-        storageEntity.storedFamiliars.put(familiarId, data);
-
-        storageEntity.outsideFamiliars.remove(familiarId);
-
-        if (player.level() instanceof ServerLevel serverLevel) {
-            var entity = serverLevel.getEntity(familiarId);
-            if (entity instanceof AbstractSpellCastingPet familiar) {
-                familiar.setIsInHouse(true, storagePos);
-                desummonSpecificFamiliar(player, familiarId);
-            }
-        }
-
-        playerData.removeTamedFamiliar(familiarId);
-
-        storageEntity.setChanged();
-        storageEntity.syncToClient();
-
-        //FamiliarsLib.LOGGER.debug("Stored familiar {} in house at {}", familiarId, storagePos);
-        return true;
+        return player.level().getBlockEntity(storagePos) instanceof AbstractFamiliarStorageBlockEntity storageEntity
+                && storageEntity.storeFamiliar(familiarId, player);
     }
 
+    /** Kept for compatibility: the storage block entity now does the work. */
     public static boolean retrieveFamiliarFromHouse(UUID familiarId, ServerPlayer player, BlockPos storagePos) {
-        if (!(player.level().getBlockEntity(storagePos) instanceof AbstractFamiliarStorageBlockEntity storageEntity)) {
-            return false;
-        }
-
-        if (!storageEntity.isOwner(player)) {
-            return false;
-        }
-
-        FamiliarRoster playerData = FamiliarRoster.of(player);
-
-        if (!playerData.canTameMoreFamiliars()) {
-            return false;
-        }
-
-        AbstractFamiliarStorageBlockEntity.FamiliarData familiarData = storageEntity.storedFamiliars.remove(familiarId);
-        storageEntity.outsideFamiliars.remove(familiarId);
-        if (familiarData == null) {
-            return false;
-        }
-
-        CompoundTag nbtData = familiarData.nbtData.copy();
-        nbtData.putBoolean("isInHouse", false);
-
-        playerData.addTamedFamiliar(familiarId, nbtData);
-
-        if (playerData.getSelectedFamiliarId() == null) {
-            playerData.setSelectedFamiliarId(familiarId);
-        }
-
-        if (player.level() instanceof ServerLevel serverLevel) {
-            Entity entity = serverLevel.getEntity(familiarId);
-            if (entity instanceof AbstractSpellCastingPet familiar) {
-                familiar.setIsInHouse(false, null);
-                familiar.remove(Entity.RemovalReason.DISCARDED);
-                //FamiliarsLib.LOGGER.debug("Removed familiar {} from world as it was retrieved", familiarId);
-            }
-        }
-
-        storageEntity.setChanged();
-        storageEntity.syncToClient();
-        FamiliarSync.snapshot(player, familiarId);
-
-        //FamiliarsLib.LOGGER.debug("Retrieved familiar {} from house at {}", familiarId, storagePos);
-        return true;
+        return player.level().getBlockEntity(storagePos) instanceof AbstractFamiliarStorageBlockEntity storageEntity
+                && storageEntity.retrieveFamiliar(familiarId, player);
     }
 
     public static void handleSetStorageMode(ServerPlayer player, BlockPos blockPos, boolean storeMode) {

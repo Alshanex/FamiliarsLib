@@ -17,6 +17,7 @@ import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.data.FamiliarRoster;
+import net.alshanex.familiarslib.data.FamiliarSavedData;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
 import net.alshanex.familiarslib.registry.FParticleRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
@@ -712,6 +713,15 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         if(!level().isClientSide){
             if (this.isStunned()) {
                 handleStunTick();
+            }
+        }
+
+        if (!level().isClientSide && getIsInHouse() && tickCount % 100 == 0
+                && getOwnerUUID() != null && level() instanceof ServerLevel serverLevel) {
+            FamiliarSavedData data = FamiliarSavedData.get(serverLevel.getServer(), getOwnerUUID());
+            FamiliarSavedData.HousedFamiliar housed = data.getHoused(getUUID());
+            if (data.contains(getUUID()) || (housed != null && !housed.outside())) {
+                discard(); // the real copy is in the owner's data
             }
         }
 

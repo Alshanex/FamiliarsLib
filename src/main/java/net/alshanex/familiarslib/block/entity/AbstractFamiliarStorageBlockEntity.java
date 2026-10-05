@@ -3,9 +3,7 @@ package net.alshanex.familiarslib.block.entity;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.data.FamiliarSavedData;
-import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.alshanex.familiarslib.util.familiars.FamiliarSync;
 import net.minecraft.ChatFormatting;
@@ -19,7 +17,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -36,13 +33,27 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
+/**
+ * Familiar storage block.
+ *
+ * Only familiar UUIDs are kept here. The snapshots live in the owner's FamiliarSavedData.
+ */
 public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     private static final int MAX_STORED_FAMILIARS = 10;
     private static final int DEFAULT_MAX_DISTANCE = 25;
 
     private UUID ownerUUID;
-    public final Map<UUID, FamiliarData> storedFamiliars = new HashMap<>();
+
+    // Familiars inside the house (store mode)
+    private final Set<UUID> storedFamiliars = new LinkedHashSet<>();
+    // Familiars wandering around the house (wander mode)
     public final Set<UUID> outsideFamiliars = new HashSet<>();
+
+    // Client only: snapshots received through UpdateFamiliarStoragePacket, for the screen
+    private final Map<UUID, CompoundTag> clientSnapshots = new LinkedHashMap<>();
+
+    // Houses saved by the old version kept full snapshots here; moved to SavedData in onLoad()
+    private final Map<UUID, CompoundTag> legacySnapshots = new LinkedHashMap<>();
 
     private boolean storeMode = true; // Default to store mode
     private boolean canFamiliarsUseGoals = true;
@@ -52,6 +63,52 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         super(type, pos, blockState);
     }
 
+    /** The owner's familiar data (works while the owner is offline). Server only. */
+    @Nullable
+    protected FamiliarSavedData ownerData() {
+        if (ownerUUID == null || !(level instanceof ServerLevel serverLevel)) {
+            return null;
+        }
+        return FamiliarSavedData.get(serverLevel.getServer(), ownerUUID);
+    }
+
+    // Loading / migration
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (!(level instanceof ServerLevel serverLevel)) return;
+
+        FamiliarSavedData data = ownerData();
+        if (data == null) return;
+
+        boolean changed = false;
+
+        // 1. Houses saved by the old version: move their snapshots into the owner's SavedData
+        if (!legacySnapshots.isEmpty()) {
+            int moved = 0;
+            for (Map.Entry<UUID, CompoundTag> e : legacySnapshots.entrySet()) {
+                if (data.putHousedIfAbsent(e.getKey(), level.dimension(), worldPosition, false, e.getValue())) {
+                    moved++;
+                }
+            }
+            // Write the SavedData before this block entity stops carrying the legacy copy
+            serverLevel.getServer().overworld().getDataStorage().save();
+            legacySnapshots.clear();
+            changed = true;
+            FamiliarsLib.LOGGER.info("Migrated {} familiar(s) from storage block at {} to SavedData", moved, worldPosition);
+        }
+
+        // 2. Drop IDs whose familiar no longer belongs to this house
+        if (storedFamiliars.removeIf(id -> !data.isHousedAt(id, level.dimension(), worldPosition))) {
+            changed = true;
+        }
+
+        if (changed) {
+            setChanged();
+        }
+    }
+
     public static void serverTick(Level level, BlockPos pos, BlockState state, AbstractFamiliarStorageBlockEntity storageEntity) {
         storageEntity.tick();
     }
@@ -59,7 +116,7 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     protected void tick() {
         if (level == null || level.isClientSide) return;
 
-        // In store mode, nothing to do - familiars are stored as NBT
+        // In store mode, nothing to do - familiars are stored in the owner's SavedData
         if (storeMode) {
             return;
         }
@@ -69,9 +126,8 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             enforceDistanceLimits();
         }
 
-        // In wander mode, only do a gentle cleanup of truly dead/removed familiars
-        // This runs infrequently to avoid performance issues
-        if (level.getGameTime() % 100 == 0) { // Every 5 seconds
+        // Every 5 seconds, clean up dead familiars and refresh the snapshots of wandering ones
+        if (level.getGameTime() % 100 == 0) {
             cleanupDeadFamiliars();
         }
     }
@@ -96,29 +152,20 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
                 // If familiar is beyond the max distance + a small buffer, teleport them back
                 if (distance > maxDistance + 2.0) {
-                    // Calculate a position near the house within the allowed range
                     Vec3 direction = familiar.position().subtract(houseCenter).normalize();
                     Vec3 targetPos = houseCenter.add(direction.scale(maxDistance * 0.6));
 
-                    // Find safe ground position
                     BlockPos targetBlock = BlockPos.containing(targetPos);
                     BlockPos safePos = findSafePositionNear(targetBlock);
 
                     if (safePos != null) {
                         familiar.teleportTo(safePos.getX() + 0.5, safePos.getY(), safePos.getZ() + 0.5);
                         familiar.getNavigation().stop();
-                        /*
-                        FamiliarsLib.LOGGER.debug("Teleported familiar {} back within range (was {} blocks away, max {})",
-                                familiarId, (int) distance, maxDistance);
-
-                         */
                     } else {
-                        // Fallback: teleport to house position
                         Vec3 releasePos = findSafeReleasePosition();
                         if (releasePos != null) {
                             familiar.teleportTo(releasePos.x, releasePos.y, releasePos.z);
                             familiar.getNavigation().stop();
-                            //FamiliarsLib.LOGGER.debug("Teleported familiar {} to house position (no safe nearby pos found)", familiarId);
                         }
                     }
                 }
@@ -128,12 +175,10 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
     // Finds a safe position near the given block position
     private BlockPos findSafePositionNear(BlockPos center) {
-        // Try the center first
         if (isSafeSpawnPosition(center)) {
             return center;
         }
 
-        // Try nearby positions
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) {
                 for (int dy = -2; dy <= 2; dy++) {
@@ -147,153 +192,11 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return null;
     }
 
-    public boolean isStoreMode() {
-        return storeMode;
-    }
-
-    public void setStoreMode(boolean storeMode) {
-        if (this.storeMode != storeMode) {
-            this.storeMode = storeMode;
-
-            if (storeMode) {
-                // Only recall when manually switching to store mode
-                recallAllOutsideFamiliars();
-            } else {
-                // When switching to wander mode, release all stored familiars
-                releaseAllStoredFamiliars();
-            }
-
-            setChanged();
-            syncToClient();
-
-            //FamiliarsLib.LOGGER.debug("Storage mode changed to: {}", storeMode ? "Store" : "Wander");
-        }
-    }
-
-    public boolean canFamiliarsUseGoals() {
-        return canFamiliarsUseGoals;
-    }
-
-    public void setCanFamiliarsUseGoals(boolean canFamiliarsUseGoals) {
-        if (this.canFamiliarsUseGoals != canFamiliarsUseGoals) {
-            this.canFamiliarsUseGoals = canFamiliarsUseGoals;
-            setChanged();
-            syncToClient();
-            //FamiliarsLib.LOGGER.debug("Can familiars use goals changed to: {}", canFamiliarsUseGoals);
-        }
-    }
-
-    public int getMaxDistance() {
-        return maxDistance;
-    }
-
-    public void setMaxDistance(int maxDistance) {
-        this.maxDistance = Math.max(3, Math.min(25, maxDistance));
-        setChanged();
-        syncToClient();
-        //FamiliarsLib.LOGGER.debug("Max distance changed to: {}", this.maxDistance);
-    }
-
-    // Recalls all outside familiars back into storage (used when switching to store mode)
-    protected void recallAllOutsideFamiliars() {
-        if (outsideFamiliars.isEmpty()) return;
-
-        ServerLevel serverLevel = (ServerLevel) level;
-        Set<UUID> familiarsToRecall = new HashSet<>(outsideFamiliars);
-
-        for (UUID familiarId : familiarsToRecall) {
-            Entity entity = serverLevel.getEntity(familiarId);
-            if (entity instanceof AbstractSpellCastingPet familiar) {
-                CompoundTag nbtData = FamiliarManager.createFamiliarNBT(familiar);
-                FamiliarData data = new FamiliarData(nbtData, 0);
-                storedFamiliars.put(familiarId, data);
-
-                familiar.remove(Entity.RemovalReason.DISCARDED);
-
-                //FamiliarsLib.LOGGER.debug("Recalled familiar {} due to Store Mode activation", familiarId);
-            }
-        }
-
-        outsideFamiliars.clear();
-        setChanged();
-        syncToClient();
-    }
-
-    // Releases all stored familiars into the world (used when switching to wander mode)
-    protected void releaseAllStoredFamiliars() {
-        if (storedFamiliars.isEmpty()) return;
-
-        Map<UUID, FamiliarData> familiarsToRelease = new HashMap<>(storedFamiliars);
-
-        for (Map.Entry<UUID, FamiliarData> entry : familiarsToRelease.entrySet()) {
-            releaseFamiliar(entry.getKey());
-        }
-    }
-
-    // Releases a specific familiar from storage into the world
-    protected void releaseFamiliar(UUID familiarId) {
-        FamiliarData familiarData = storedFamiliars.get(familiarId);
-        if (familiarData == null) return;
-
-        ServerLevel serverLevel = (ServerLevel) level;
-        String entityTypeString = familiarData.nbtData.getString("id");
-        EntityType<?> entityType = EntityType.byString(entityTypeString).orElse(null);
-
-        if (entityType == null) {
-            //FamiliarsLib.LOGGER.debug("Unknown entity type: {}", entityTypeString);
-            return;
-        }
-
-        Entity entity = entityType.create(serverLevel);
-        if (!(entity instanceof AbstractSpellCastingPet familiar)) {
-            //FamiliarsLib.LOGGER.debug("Entity is not a familiar: {}", entity);
-            return;
-        }
-
-        // Load familiar data
-        familiar.load(familiarData.nbtData);
-        familiar.setUUID(familiarId);
-
-        // Set health
-        float savedHealth = familiarData.nbtData.getFloat("currentHealth");
-        familiar.setHealth(Math.min(savedHealth, familiar.getMaxHealth()));
-
-        // Set position near the storage block
-        Vec3 spawnPos = findSafeReleasePosition();
-        if (spawnPos == null) {
-            //FamiliarsLib.LOGGER.debug("No safe release position found for familiar {}", familiarId);
-            return;
-        }
-
-        familiar.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
-        familiar.setYRot(level.random.nextFloat() * 360F);
-        familiar.setOldPosAndRot();
-
-        // Mark as being in house mode
-        familiar.setIsInHouse(true, getBlockPos());
-
-        // Add to world
-        serverLevel.addFreshEntity(familiar);
-        serverLevel.playSound(null, spawnPos.x, spawnPos.y, spawnPos.z,
-                SoundEvents.BEEHIVE_EXIT, SoundSource.BLOCKS, 1.0F, 1.0F);
-        serverLevel.gameEvent(GameEvent.BLOCK_CHANGE, getBlockPos(), GameEvent.Context.of(familiar, getBlockState()));
-
-        // Move from stored to outside
-        storedFamiliars.remove(familiarId);
-        outsideFamiliars.add(familiarId);
-
-        setChanged();
-        syncToClient();
-
-        //FamiliarsLib.LOGGER.debug("Released familiar {} from storage at {}", familiarId, getBlockPos());
-    }
-
-    // Only cleans up familiars that are confirmed dead or removed from the world
-    // Does NOT remove familiars that are simply null (could be in unloaded chunks)
     protected void cleanupDeadFamiliars() {
         if (outsideFamiliars.isEmpty()) return;
 
         ServerLevel serverLevel = (ServerLevel) level;
+        FamiliarSavedData data = ownerData();
         Set<UUID> familiarsToRemove = new HashSet<>();
 
         for (UUID familiarId : new HashSet<>(outsideFamiliars)) {
@@ -307,12 +210,14 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
             if (entity instanceof AbstractSpellCastingPet familiar) {
                 if (!familiar.isAlive() || familiar.isRemoved()) {
                     familiarsToRemove.add(familiarId);
-                    //FamiliarsLib.LOGGER.debug("Familiar {} is dead or removed, cleaning up", familiarId);
+                } else if (data != null) {
+                    // Upsert: also registers wandering familiars from houses saved by the old version
+                    data.putHoused(familiarId, level.dimension(), worldPosition, true,
+                            FamiliarManager.createFamiliarNBT(familiar));
                 }
             } else {
                 // UUID points to something that isn't a familiar
                 familiarsToRemove.add(familiarId);
-                //FamiliarsLib.LOGGER.debug("Entity {} is not a familiar, removing from tracking", familiarId);
             }
         }
 
@@ -323,28 +228,141 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         }
     }
 
-    // Direction for the familiars to spawn, recommended to set the opposite to the block's FACING property
-    protected abstract Direction getFacingDirection();
-
-    // Finds a safe position to spawn in the set direction
-    protected Vec3 findSafeReleasePosition() {
-        BlockPos storagePos = getBlockPos();
-
-        Direction facing = getFacingDirection();
-
-        BlockPos frontPos = storagePos.relative(facing);
-        if (isSafeSpawnPosition(frontPos)) {
-            return Vec3.atBottomCenterOf(frontPos);
-        }
-
-        return null;
+    public boolean isStoreMode() {
+        return storeMode;
     }
 
-    // Checks if the position is safe to spawn
-    protected boolean isSafeSpawnPosition(BlockPos pos) {
-        return level.getBlockState(pos).isAir() &&
-                level.getBlockState(pos.above()).isAir() &&
-                level.getBlockState(pos.below()).isSolid();
+    public void setStoreMode(boolean storeMode) {
+        if (this.storeMode != storeMode) {
+            this.storeMode = storeMode;
+
+            if (storeMode) {
+                recallAllOutsideFamiliars();
+            } else {
+                releaseAllStoredFamiliars();
+            }
+
+            setChanged();
+            syncToClient();
+        }
+    }
+
+    public boolean canFamiliarsUseGoals() {
+        return canFamiliarsUseGoals;
+    }
+
+    public void setCanFamiliarsUseGoals(boolean canFamiliarsUseGoals) {
+        if (this.canFamiliarsUseGoals != canFamiliarsUseGoals) {
+            this.canFamiliarsUseGoals = canFamiliarsUseGoals;
+            setChanged();
+            syncToClient();
+        }
+    }
+
+    public int getMaxDistance() {
+        return maxDistance;
+    }
+
+    public void setMaxDistance(int maxDistance) {
+        this.maxDistance = Math.max(3, Math.min(25, maxDistance));
+        setChanged();
+        syncToClient();
+    }
+
+    // Wander mode: release / recall
+
+    // Recalls all outside familiars back into storage (used when switching to store mode)
+    protected void recallAllOutsideFamiliars() {
+        if (outsideFamiliars.isEmpty()) return;
+
+        ServerLevel serverLevel = (ServerLevel) level;
+        FamiliarSavedData data = ownerData();
+        if (data == null) return;
+
+        for (UUID familiarId : new HashSet<>(outsideFamiliars)) {
+            Entity entity = serverLevel.getEntity(familiarId);
+            if (entity instanceof AbstractSpellCastingPet familiar) {
+                // Loaded: take a fresh snapshot and remove the entity
+                data.putHoused(familiarId, level.dimension(), worldPosition, false,
+                        FamiliarManager.createFamiliarNBT(familiar));
+                storedFamiliars.add(familiarId);
+                familiar.remove(Entity.RemovalReason.DISCARDED);
+            } else if (data.isHousedAt(familiarId, level.dimension(), worldPosition)) {
+                // Not loaded, but we have a recent snapshot: store it. The entity still in the
+                // unloaded chunk is discarded by the familiar's house check when it loads.
+                data.setHousedOutside(familiarId, false);
+                storedFamiliars.add(familiarId);
+            }
+            // Not loaded and never snapshotted (old-version wandering familiar): nothing we can
+            // store, it keeps living in the world as before.
+        }
+
+        outsideFamiliars.clear();
+        setChanged();
+        syncToClient();
+    }
+
+    // Releases all stored familiars into the world (used when switching to wander mode)
+    protected void releaseAllStoredFamiliars() {
+        for (UUID familiarId : new ArrayList<>(storedFamiliars)) {
+            releaseFamiliar(familiarId);
+        }
+    }
+
+    // Releases a specific familiar from storage into the world
+    protected void releaseFamiliar(UUID familiarId) {
+        if (!storedFamiliars.contains(familiarId)) return;
+
+        FamiliarSavedData data = ownerData();
+        if (data == null) return;
+
+        CompoundTag nbtData = data.getHousedData(familiarId);
+        if (nbtData == null) {
+            // Not in the owner's data anymore: stale ID
+            storedFamiliars.remove(familiarId);
+            setChanged();
+            return;
+        }
+
+        ServerLevel serverLevel = (ServerLevel) level;
+        EntityType<?> entityType = EntityType.byString(nbtData.getString("id")).orElse(null);
+        if (entityType == null) {
+            return;
+        }
+
+        Entity entity = entityType.create(serverLevel);
+        if (!(entity instanceof AbstractSpellCastingPet familiar)) {
+            return;
+        }
+
+        familiar.load(nbtData);
+        familiar.setUUID(familiarId);
+
+        float savedHealth = nbtData.getFloat("currentHealth");
+        familiar.setHealth(Math.min(savedHealth, familiar.getMaxHealth()));
+
+        Vec3 spawnPos = findSafeReleasePosition();
+        if (spawnPos == null) {
+            return;
+        }
+
+        familiar.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
+        familiar.setYRot(level.random.nextFloat() * 360F);
+        familiar.setOldPosAndRot();
+        familiar.setIsInHouse(true, getBlockPos());
+
+        serverLevel.addFreshEntity(familiar);
+        serverLevel.playSound(null, spawnPos.x, spawnPos.y, spawnPos.z,
+                SoundEvents.BEEHIVE_EXIT, SoundSource.BLOCKS, 1.0F, 1.0F);
+        serverLevel.gameEvent(GameEvent.BLOCK_CHANGE, getBlockPos(), GameEvent.Context.of(familiar, getBlockState()));
+
+        // Still housed (the snapshot stays as a backup), but now wandering
+        data.setHousedOutside(familiarId, true);
+        storedFamiliars.remove(familiarId);
+        outsideFamiliars.add(familiarId);
+
+        setChanged();
+        syncToClient();
     }
 
     // Method to manually recall a familiar (e.g., from the familiar's AI returning to house)
@@ -355,15 +373,16 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
         UUID familiarId = familiar.getUUID();
 
-        // Only recall if familiar belongs to the house
         if (outsideFamiliars.contains(familiarId) &&
                 familiar.getIsInHouse() &&
                 getBlockPos().equals(familiar.housePosition)) {
 
-            CompoundTag nbtData = FamiliarManager.createFamiliarNBT(familiar);
+            FamiliarSavedData data = ownerData();
+            if (data == null) return false;
 
-            FamiliarData familiarDataObj = new FamiliarData(nbtData, 0);
-            storedFamiliars.put(familiarId, familiarDataObj);
+            data.putHoused(familiarId, level.dimension(), worldPosition, false,
+                    FamiliarManager.createFamiliarNBT(familiar));
+            storedFamiliars.add(familiarId);
             outsideFamiliars.remove(familiarId);
 
             familiar.remove(Entity.RemovalReason.DISCARDED);
@@ -373,12 +392,28 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
 
             setChanged();
             syncToClient();
-
-            //FamiliarsLib.LOGGER.debug("Recalled familiar {} to storage", familiarId);
             return true;
         }
 
         return false;
+    }
+
+    protected abstract Direction getFacingDirection();
+
+    // Finds a safe position to spawn in the set direction
+    protected Vec3 findSafeReleasePosition() {
+        BlockPos frontPos = getBlockPos().relative(getFacingDirection());
+        if (isSafeSpawnPosition(frontPos)) {
+            return Vec3.atBottomCenterOf(frontPos);
+        }
+        return null;
+    }
+
+    // Checks if the position is safe to spawn
+    protected boolean isSafeSpawnPosition(BlockPos pos) {
+        return level.getBlockState(pos).isAir() &&
+                level.getBlockState(pos.above()).isAir() &&
+                level.getBlockState(pos.below()).isSolid();
     }
 
     public void setOwner(ServerPlayer player) {
@@ -394,24 +429,35 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return ownerUUID;
     }
 
+    /** Snapshots of the familiars inside the house (copies). Server: from SavedData. Client: last packet. */
     public Map<UUID, CompoundTag> getStoredFamiliars() {
-        Map<UUID, CompoundTag> result = new HashMap<>();
-        for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-            result.put(entry.getKey(), entry.getValue().nbtData);
+        if (level != null && level.isClientSide) {
+            return new LinkedHashMap<>(clientSnapshots);
+        }
+
+        Map<UUID, CompoundTag> result = new LinkedHashMap<>();
+        FamiliarSavedData data = ownerData();
+        if (data == null) return result;
+
+        for (UUID id : storedFamiliars) {
+            CompoundTag snapshot = data.getHousedData(id);
+            if (snapshot != null) {
+                result.put(id, snapshot);
+            }
         }
         return result;
-    }
-
-    public boolean isFamiliarPhysicallyStored(UUID familiarId) {
-        return storedFamiliars.containsKey(familiarId);
     }
 
     public Map<UUID, CompoundTag> getPhysicallyStoredFamiliars() {
-        Map<UUID, CompoundTag> result = new HashMap<>();
-        for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-            result.put(entry.getKey(), entry.getValue().nbtData);
-        }
-        return result;
+        return getStoredFamiliars();
+    }
+
+    public boolean isFamiliarPhysicallyStored(UUID familiarId) {
+        return storedFamiliars.contains(familiarId);
+    }
+
+    public Set<UUID> getStoredFamiliarIds() {
+        return Collections.unmodifiableSet(storedFamiliars);
     }
 
     public boolean canStoreFamiliar() {
@@ -430,65 +476,103 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         return outsideFamiliars.size();
     }
 
-    // Stores familiar in the house
-    public boolean storeFamiliar(UUID familiarId, CompoundTag familiarData, ServerPlayer player) {
-        if (!isOwner(player)) {
-            return false;
-        }
-
-        if (!canStoreFamiliar()) {
-            return false;
-        }
-
-        return FamiliarManager.storeFamiliarInHouse(familiarId, familiarData, player, getBlockPos());
+    public boolean ownsFamiliar(UUID familiarId) {
+        return storedFamiliars.contains(familiarId) || outsideFamiliars.contains(familiarId);
     }
 
-    // Retrieves familiar from the house
+    // Store / retrieve
+
+    /** Moves a carried familiar into this house. */
+    public boolean storeFamiliar(UUID familiarId, ServerPlayer player) {
+        if (!isOwner(player) || !canStoreFamiliar() || level == null) {
+            return false;
+        }
+
+        FamiliarRoster roster = FamiliarRoster.of(player);
+        if (!roster.hasFamiliar(familiarId)) {
+            return false;
+        }
+
+        // Desummon first, so the roster holds an up-to-date snapshot
+        if (player.serverLevel().getEntity(familiarId) instanceof AbstractSpellCastingPet) {
+            FamiliarManager.desummonSpecificFamiliar(player, familiarId);
+        }
+
+        // One operation: carried -> housed
+        if (!FamiliarSavedData.get(player).moveToHouse(familiarId, level.dimension(), worldPosition)) {
+            return false;
+        }
+
+        // Clears selection/summon references (the carried entry is already gone) and reselects
+        roster.removeTamedFamiliar(familiarId);
+
+        storedFamiliars.add(familiarId);
+        outsideFamiliars.remove(familiarId);
+
+        setChanged();
+        syncToClient();
+        FamiliarSync.state(player);
+        return true;
+    }
+
+    /** Moves a familiar from inside this house back to the owner. */
     public boolean retrieveFamiliar(UUID familiarId, ServerPlayer player) {
-        if (!isOwner(player)) {
+        if (!isOwner(player) || !storedFamiliars.contains(familiarId)) {
             return false;
         }
 
-        FamiliarRoster familiarData = FamiliarRoster.of(player);
-        if (!familiarData.canTameMoreFamiliars()) {
+        FamiliarRoster roster = FamiliarRoster.of(player);
+        if (!roster.canTameMoreFamiliars()) {
             return false;
         }
 
-        if (storedFamiliars.containsKey(familiarId)) {
-            return FamiliarManager.retrieveFamiliarFromHouse(familiarId, player, getBlockPos());
+        // One operation: housed -> carried
+        if (!FamiliarSavedData.get(player).moveToCarried(familiarId)) {
+            // Stale ID: the familiar isn't in the owner's data anymore
+            storedFamiliars.remove(familiarId);
+            setChanged();
+            syncToClient();
+            return false;
         }
 
-        return false;
+        storedFamiliars.remove(familiarId);
+
+        if (roster.getSelectedFamiliarId() == null) {
+            roster.setSelectedFamiliarId(familiarId);
+        }
+
+        setChanged();
+        syncToClient();
+        FamiliarSync.snapshot(player, familiarId);
+        return true;
     }
 
-    // Returns stored familiars to the owner
+    // Returns every familiar of this house to the owner (house broken or blown up)
     public void returnFamiliarsToOwner() {
-        if (ownerUUID == null || !(level instanceof ServerLevel serverLevel)) {
+        if (!(level instanceof ServerLevel serverLevel)) {
             return;
         }
-        MinecraftServer server = serverLevel.getServer();
-        FamiliarSavedData roster = FamiliarSavedData.get(server, ownerUUID); // online or offline
-
-        // Familiars physically inside the house
-        for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-            CompoundTag nbt = entry.getValue().nbtData.copy();
-            nbt.putBoolean("isInHouse", false);
-            roster.put(entry.getKey(), nbt); // no cap check on purpose: never destroy a familiar
+        FamiliarSavedData data = ownerData(); // online or offline
+        if (data == null) {
+            return;
         }
 
-        // Familiars wandering around the house (wander mode)
+        // Wandering familiars that are loaded: fresh snapshot, then remove the entity.
+        // Unloaded ones are returned from their last snapshot; their entity is discarded by the familiar's house check when its chunk loads.
         for (UUID familiarId : outsideFamiliars) {
             Entity entity = serverLevel.getEntity(familiarId);
             if (entity instanceof AbstractSpellCastingPet familiar) {
+                data.putHoused(familiarId, level.dimension(), worldPosition, true,
+                        FamiliarManager.createFamiliarNBT(familiar));
                 familiar.setIsInHouse(false, null);
-                if (!roster.contains(familiarId)) {
-                    roster.put(familiarId, FamiliarManager.createFamiliarNBT(familiar));
-                }
                 familiar.remove(Entity.RemovalReason.DISCARDED);
             }
         }
 
-        ServerPlayer owner = server.getPlayerList().getPlayer(ownerUUID);
+        // One operation per familiar: housed -> carried. No cap check: never destroy a familiar.
+        data.returnAllFromHouse(level.dimension(), worldPosition);
+
+        ServerPlayer owner = serverLevel.getServer().getPlayerList().getPlayer(ownerUUID);
         if (owner != null) {
             FamiliarRoster.of(owner).validate();
             FamiliarSync.state(owner);
@@ -500,49 +584,21 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         setChanged();
     }
 
-    // Update mode in the client
-    public void setClientStoreMode(boolean storeMode) {
-        if (level != null && level.isClientSide) {
-            this.storeMode = storeMode;
-            FamiliarsLib.LOGGER.debug("Client updated storage mode to: {}", storeMode ? "Store" : "Wander");
-        }
-    }
-
-    public void setClientCanFamiliarsUseGoals(boolean canFamiliarsUseGoals) {
-        if (level != null && level.isClientSide) {
-            this.canFamiliarsUseGoals = canFamiliarsUseGoals;
-            FamiliarsLib.LOGGER.debug("Client updated can familiars use goals to: {}", canFamiliarsUseGoals);
-        }
-    }
-
-    public void setClientMaxDistance(int maxDistance) {
-        if (level != null && level.isClientSide) {
-            this.maxDistance = maxDistance;
-            FamiliarsLib.LOGGER.debug("Client updated max distance to: {}", maxDistance);
-        }
-    }
-
-    public boolean ownsFamiliar(UUID familiarId) {
-        return storedFamiliars.containsKey(familiarId) || outsideFamiliars.contains(familiarId);
-    }
-
     // Handles familiar death
     public void handleFamiliarDeath(UUID familiarId) {
         if (level == null || level.isClientSide) return;
 
-        boolean wasTracked = false;
-
-        if (outsideFamiliars.remove(familiarId)) {
+        boolean wasTracked = outsideFamiliars.remove(familiarId);
+        if (storedFamiliars.remove(familiarId)) {
             wasTracked = true;
-            FamiliarsLib.LOGGER.debug("Removed dead familiar {} from outside tracking", familiarId);
-        }
-
-        if (storedFamiliars.remove(familiarId) != null) {
-            wasTracked = true;
-            FamiliarsLib.LOGGER.debug("Removed dead familiar {} from stored familiars (unusual case)", familiarId);
         }
 
         if (wasTracked) {
+            FamiliarSavedData data = ownerData();
+            if (data != null) {
+                data.removeHoused(familiarId);
+            }
+
             setChanged();
             syncToClient();
 
@@ -554,6 +610,33 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
                                     .withStyle(ChatFormatting.RED), false);
                 }
             }
+        }
+    }
+
+    public void setClientStoredFamiliars(Map<UUID, CompoundTag> snapshots) {
+        if (level != null && level.isClientSide) {
+            clientSnapshots.clear();
+            clientSnapshots.putAll(snapshots);
+            storedFamiliars.clear();
+            storedFamiliars.addAll(snapshots.keySet());
+        }
+    }
+
+    public void setClientStoreMode(boolean storeMode) {
+        if (level != null && level.isClientSide) {
+            this.storeMode = storeMode;
+        }
+    }
+
+    public void setClientCanFamiliarsUseGoals(boolean canFamiliarsUseGoals) {
+        if (level != null && level.isClientSide) {
+            this.canFamiliarsUseGoals = canFamiliarsUseGoals;
+        }
+    }
+
+    public void setClientMaxDistance(int maxDistance) {
+        if (level != null && level.isClientSide) {
+            this.maxDistance = maxDistance;
         }
     }
 
@@ -575,23 +658,24 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         tag.putBoolean("canFamiliarsUseGoals", canFamiliarsUseGoals);
         tag.putInt("maxDistance", maxDistance);
 
-        // Save stored familiars
+        // IDs only. Legacy snapshots not migrated yet are written back so nothing is lost.
         ListTag storedList = new ListTag();
-        for (Map.Entry<UUID, FamiliarData> entry : storedFamiliars.entrySet()) {
-            CompoundTag familiarEntry = new CompoundTag();
-            familiarEntry.putUUID("id", entry.getKey());
-            familiarEntry.put("data", entry.getValue().nbtData);
-            familiarEntry.putInt("occupationTime", entry.getValue().occupationTime);
-            storedList.add(familiarEntry);
+        for (UUID id : storedFamiliars) {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID("id", id);
+            CompoundTag legacy = legacySnapshots.get(id);
+            if (legacy != null) {
+                entry.put("data", legacy);
+            }
+            storedList.add(entry);
         }
         tag.put("storedFamiliars", storedList);
 
-        // Save outside familiars
         ListTag outsideList = new ListTag();
         for (UUID familiarId : outsideFamiliars) {
-            CompoundTag outsideEntry = new CompoundTag();
-            outsideEntry.putUUID("id", familiarId);
-            outsideList.add(outsideEntry);
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID("id", familiarId);
+            outsideList.add(entry);
         }
         tag.put("outsideFamiliars", outsideList);
     }
@@ -609,30 +693,30 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
         maxDistance = tag.getInt("maxDistance");
         if (maxDistance == 0) maxDistance = DEFAULT_MAX_DISTANCE; // Fallback for old saves
 
-        // Load stored familiars
         storedFamiliars.clear();
+        legacySnapshots.clear();
         if (tag.contains("storedFamiliars", Tag.TAG_LIST)) {
             ListTag storedList = tag.getList("storedFamiliars", Tag.TAG_COMPOUND);
             for (int i = 0; i < storedList.size(); i++) {
-                CompoundTag familiarEntry = storedList.getCompound(i);
-                if (familiarEntry.hasUUID("id")) {
-                    UUID id = familiarEntry.getUUID("id");
-                    CompoundTag data = familiarEntry.getCompound("data");
-                    int occupationTime = familiarEntry.getInt("occupationTime");
-                    storedFamiliars.put(id, new FamiliarData(data, occupationTime));
+                CompoundTag entry = storedList.getCompound(i);
+                if (entry.hasUUID("id")) {
+                    UUID id = entry.getUUID("id");
+                    storedFamiliars.add(id);
+                    // Old format: full snapshot inside the block entity
+                    if (entry.contains("data", Tag.TAG_COMPOUND) && !entry.getCompound("data").isEmpty()) {
+                        legacySnapshots.put(id, entry.getCompound("data"));
+                    }
                 }
             }
         }
 
-        // Load outside familiars
         outsideFamiliars.clear();
         if (tag.contains("outsideFamiliars", Tag.TAG_LIST)) {
             ListTag outsideList = tag.getList("outsideFamiliars", Tag.TAG_COMPOUND);
             for (int i = 0; i < outsideList.size(); i++) {
-                CompoundTag outsideEntry = outsideList.getCompound(i);
-                if (outsideEntry.hasUUID("id")) {
-                    UUID id = outsideEntry.getUUID("id");
-                    outsideFamiliars.add(id);
+                CompoundTag entry = outsideList.getCompound(i);
+                if (entry.hasUUID("id")) {
+                    outsideFamiliars.add(entry.getUUID("id"));
                 }
             }
         }
@@ -655,20 +739,5 @@ public abstract class AbstractFamiliarStorageBlockEntity extends BlockEntity {
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
-    }
-
-    // Helper class to store familiar data with occupation time
-    public static class FamiliarData {
-        public final CompoundTag nbtData;
-        public int occupationTime;
-
-        public FamiliarData(CompoundTag nbtData, int occupationTime) {
-            this.nbtData = nbtData;
-            this.occupationTime = occupationTime;
-        }
-
-        public boolean canBeReleased() {
-            return true; // No longer need minimum occupation time since release is manual
-        }
     }
 }
