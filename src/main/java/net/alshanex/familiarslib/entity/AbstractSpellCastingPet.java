@@ -92,9 +92,14 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     protected static final EntityDataAccessor<Boolean> DATA_IS_SITTING;
     protected static final EntityDataAccessor<Boolean> DATA_IS_HOUSE;
 
+    public static final int LAYER_COLOR_SLOTS = 3;
+    public static final int DYE_LAYER_SLOT = 0;
+
     private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_0 =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_1 =
+            SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_2 =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<ItemStack> DATA_COSMETIC_HAT =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.ITEM_STACK);
@@ -115,8 +120,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     private static final EntityDataAccessor<Boolean> DATA_TOTEM;
     private static final EntityDataAccessor<Boolean> DATA_STUNNED;
 
-    public static final int LAYER_COLOR_SLOTS = 2;
-    public static final int DYE_LAYER_SLOT = 0;
+
 
     // True once spawn colors were rolled, or the familiar was loaded from a save
     private boolean layerColorsInitialized = false;
@@ -568,6 +572,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         pBuilder.define(DATA_STUNNED, false);
         pBuilder.define(DATA_LAYER_COLOR_0, NO_LAYER_COLOR);
         pBuilder.define(DATA_LAYER_COLOR_1, NO_LAYER_COLOR);
+        pBuilder.define(DATA_LAYER_COLOR_2, NO_LAYER_COLOR);
         pBuilder.define(DATA_COSMETIC_HAT, ItemStack.EMPTY);
         pBuilder.define(DATA_COSMETIC_WEAPON, ItemStack.EMPTY);
     }
@@ -604,7 +609,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         pCompound.putBoolean("hasAttemptedConsumableMigration", hasAttemptedConsumableMigration);
         pCompound.putBoolean("hasInitializedHealth", hasInitializedHealth);
 
-        pCompound.putIntArray("LayerColors", new int[]{getLayerColor(0), getLayerColor(1)});
+        int[] colors = new int[LAYER_COLOR_SLOTS];
+        for (int i = 0; i < LAYER_COLOR_SLOTS; i++) {
+            colors[i] = getLayerColor(i);
+        }
+        pCompound.putIntArray("LayerColors", colors);
 
         ItemStack hat = getCosmetic(FamiliarCosmeticSlot.HAT);
         if (!hat.isEmpty()) {
@@ -1258,7 +1267,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     }
 
     private static EntityDataAccessor<Integer> layerColorAccessor(int slot) {
-        return slot == 0 ? DATA_LAYER_COLOR_0 : DATA_LAYER_COLOR_1;
+        return switch (slot) {
+            case 0 -> DATA_LAYER_COLOR_0;
+            case 1 -> DATA_LAYER_COLOR_1;
+            default -> DATA_LAYER_COLOR_2;
+        };
     }
 
     @Override
