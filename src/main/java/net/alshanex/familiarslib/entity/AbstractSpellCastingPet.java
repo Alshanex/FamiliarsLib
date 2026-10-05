@@ -28,6 +28,7 @@ import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.alshanex.familiarslib.util.familiars.*;
 import net.alshanex.familiarslib.render.LayerColorHolder;
 import net.minecraft.nbt.Tag;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -90,10 +91,15 @@ import java.util.UUID;
 public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob implements LayerColorHolder {
     protected static final EntityDataAccessor<Boolean> DATA_IS_SITTING;
     protected static final EntityDataAccessor<Boolean> DATA_IS_HOUSE;
+
     private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_0 =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_1 =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<ItemStack> DATA_COSMETIC_HAT =
+            SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.ITEM_STACK);
+    private static final EntityDataAccessor<ItemStack> DATA_COSMETIC_WEAPON =
+            SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.ITEM_STACK);
 
     static {
         DATA_ID_OWNER_UUID = SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.OPTIONAL_UUID);
@@ -498,6 +504,59 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         }
     }
 
+    private static EntityDataAccessor<ItemStack> cosmeticAccessor(FamiliarCosmeticSlot slot) {
+        return slot == FamiliarCosmeticSlot.HAT ? DATA_COSMETIC_HAT : DATA_COSMETIC_WEAPON;
+    }
+
+    /** The cosmetic item in a slot, or ItemStack.EMPTY. Don't modify the returned stack. */
+    public ItemStack getCosmetic(FamiliarCosmeticSlot slot) {
+        return this.entityData.get(cosmeticAccessor(slot));
+    }
+
+    public void setCosmetic(FamiliarCosmeticSlot slot, ItemStack stack) {
+        this.entityData.set(cosmeticAccessor(slot), stack.isEmpty() ? ItemStack.EMPTY : stack.copyWithCount(1));
+    }
+
+    /** Override to return true for familiars that can wear a cosmetic hat. */
+    public boolean canWearCosmeticHat() {
+        return false;
+    }
+
+    /** Whether this familiar can wear this (shrunk) item as a hat. Defaults to the shared familiarslib:familiar_hats tag. */
+    public boolean canWearCosmeticHat(ItemStack stack) {
+        return canWearCosmeticHat() && stack.is(FamiliarCosmetics.HATS);
+    }
+
+    /** Override to return true for familiars with a weapon bone that a cosmetic item can replace. */
+    public boolean canHoldCosmeticWeapon() {
+        return false;
+    }
+
+    /**
+     * Whether this familiar can hold this (shrunk) item as its weapon. Defaults to the familiar's own
+     * weapon tag, <entity namespace>:familiar_weapons/<entity path>
+     * (e.g. alshanex_familiars:familiar_weapons/hunter_pet). Override for anything a tag can't express.
+     */
+    public boolean canHoldCosmeticWeapon(ItemStack stack) {
+        return canHoldCosmeticWeapon() && stack.is(getCosmeticWeaponTag());
+    }
+
+    /** The item tag of weapons this familiar accepts. Override to use a different tag. */
+    public TagKey<Item> getCosmeticWeaponTag() {
+        return FamiliarCosmetics.weaponTagFor(this.getType());
+    }
+
+    /** Drops both cosmetic items and empties the slots. Call it wherever a familiar is gone for good. */
+    public void dropCosmetics() {
+        for (FamiliarCosmeticSlot slot : FamiliarCosmeticSlot.values()) {
+            ItemStack stack = getCosmetic(slot);
+            if (!stack.isEmpty()) {
+                spawnAtLocation(stack.copy());
+                setCosmetic(slot, ItemStack.EMPTY);
+            }
+        }
+    }
+
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder pBuilder) {
         super.defineSynchedData(pBuilder);
@@ -509,6 +568,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         pBuilder.define(DATA_STUNNED, false);
         pBuilder.define(DATA_LAYER_COLOR_0, NO_LAYER_COLOR);
         pBuilder.define(DATA_LAYER_COLOR_1, NO_LAYER_COLOR);
+        pBuilder.define(DATA_COSMETIC_HAT, ItemStack.EMPTY);
+        pBuilder.define(DATA_COSMETIC_WEAPON, ItemStack.EMPTY);
     }
 
     @Override
@@ -545,6 +606,15 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
 
         pCompound.putIntArray("LayerColors", new int[]{getLayerColor(0), getLayerColor(1)});
 
+        ItemStack hat = getCosmetic(FamiliarCosmeticSlot.HAT);
+        if (!hat.isEmpty()) {
+            pCompound.put("CosmeticHat", hat.save(this.registryAccess()));
+        }
+        ItemStack weapon = getCosmetic(FamiliarCosmeticSlot.WEAPON);
+        if (!weapon.isEmpty()) {
+            pCompound.put("CosmeticWeapon", weapon.save(this.registryAccess()));
+        }
+
         pCompound.putBoolean("isInHouse", getIsInHouse());
         if (housePosition != null) {
             pCompound.putLong("housePosition", housePosition.asLong());
@@ -578,6 +648,13 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         }
         // Familiars saved before this update have no "LayerColors": they keep the original look
         layerColorsInitialized = true;
+
+        setCosmetic(FamiliarCosmeticSlot.HAT, pCompound.contains("CosmeticHat", Tag.TAG_COMPOUND)
+                ? ItemStack.parse(this.registryAccess(), pCompound.getCompound("CosmeticHat")).orElse(ItemStack.EMPTY)
+                : ItemStack.EMPTY);
+        setCosmetic(FamiliarCosmeticSlot.WEAPON, pCompound.contains("CosmeticWeapon", Tag.TAG_COMPOUND)
+                ? ItemStack.parse(this.registryAccess(), pCompound.getCompound("CosmeticWeapon")).orElse(ItemStack.EMPTY)
+                : ItemStack.EMPTY);
 
         // Load New System Data
         FamiliarConsumableIntegration.loadConsumableData(this, pCompound);

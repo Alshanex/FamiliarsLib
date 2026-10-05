@@ -1,0 +1,15 @@
+{
+  "variants": {
+    "facing=north,half=lower": { "model": "familiarslib:block/shrinking_station", "y": 90 },
+    "facing=north,half=upper": { "model": "familiarslib:block/invisible", "y": 90 },
+
+    "facing=east,half=lower":  { "model": "familiarslib:block/shrinking_station", "y": 180 },
+    "facing=east,half=upper":  { "model": "familiarslib:block/invisible", "y": 180 },
+
+    "facing=south,half=lower": { "model": "familiarslib:block/shrinking_station", "y": 270 },
+    "facing=south,half=upper": { "model": "familiarslib:block/invisible", "y": 270 },
+
+    "facing=west,half=lower":  { "model": "familiarslib:block/shrinking_station" },
+    "facing=west,half=upper":  { "model": "familiarslib:block/invisible" }
+  }
+}

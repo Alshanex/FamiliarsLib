@@ -1,4 +1,8 @@
 {
+  "block.familiarslib.pet_bed": "Familiar Bed",
+  "block.familiarslib.familiar_storage": "Familiar House",
+  "block.familiarslib.shrinking_station": "Shrinking Station",
+
   "ui.familiarslib.consumable_item": "Upgrade Item",
   "ui.familiarslib.consumable_item_desc": "Right click a Familiar to use",
   "ui.familiarslib.familiar_storage_screen": "Familiar Storage",
@@ -30,7 +34,12 @@
   "tooltip.familiarslib.multi_selection_item.selected": "Selected: %d Familiars",
   "tooltip.familiarslib.multi_selection_item.none_selected": "No Familiars selected",
   "tooltip.familiarslib.totem": "A small totem which can be used on a familiar to bind them to it",
+  "tooltip.familiarslib.cosmetic.hat": "Familiar hat",
+  "tooltip.familiarslib.cosmetic.weapon": "Familiar weapon",
+  "tooltip.familiarslib.cosmetic.hat_or_weapon": "Familiar hat or weapon (sneak to put it on as a hat)",
+  "tooltip.familiarslib.cosmetic.usage": "Use on your familiar to put it on. Sneak + empty hand takes it off",
 
+  "message.familiarslib.cosmetic.not_allowed": "This familiar can't wear or hold that",
   "message.familiarslib.consumable.success": "Enhanced %s to %s!",
   "message.familiarslib.consumable.max_reached": "This Essence cannot increase %s any further!",
   "message.familiarslib.consumable.tier_too_high": "Cannot use Tier %d consumable! Maximum usable tier is %d.",

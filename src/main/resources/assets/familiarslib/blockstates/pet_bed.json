@@ -1,0 +1,83 @@
+{
+	"variants": {
+		"facing=north,color=white": { "model": "familiarslib:block/pet_bed_white" },
+		"facing=east,color=white": { "model": "familiarslib:block/pet_bed_white", "y": 90 },
+		"facing=south,color=white": { "model": "familiarslib:block/pet_bed_white", "y": 180 },
+		"facing=west,color=white": { "model": "familiarslib:block/pet_bed_white", "y": 270 },
+
+		"facing=north,color=black": { "model": "familiarslib:block/pet_bed_black" },
+		"facing=east,color=black": { "model": "familiarslib:block/pet_bed_black", "y": 90 },
+		"facing=south,color=black": { "model": "familiarslib:block/pet_bed_black", "y": 180 },
+		"facing=west,color=black": { "model": "familiarslib:block/pet_bed_black", "y": 270 },
+
+		"facing=north,color=brown": { "model": "familiarslib:block/pet_bed_brown" },
+		"facing=east,color=brown": { "model": "familiarslib:block/pet_bed_brown", "y": 90 },
+		"facing=south,color=brown": { "model": "familiarslib:block/pet_bed_brown", "y": 180 },
+		"facing=west,color=brown": { "model": "familiarslib:block/pet_bed_brown", "y": 270 },
+
+		"facing=north,color=cyan": { "model": "familiarslib:block/pet_bed_cyan" },
+		"facing=east,color=cyan": { "model": "familiarslib:block/pet_bed_cyan", "y": 90 },
+		"facing=south,color=cyan": { "model": "familiarslib:block/pet_bed_cyan", "y": 180 },
+		"facing=west,color=cyan": { "model": "familiarslib:block/pet_bed_cyan", "y": 270 },
+
+		"facing=north,color=gray": { "model": "familiarslib:block/pet_bed_gray" },
+		"facing=east,color=gray": { "model": "familiarslib:block/pet_bed_gray", "y": 90 },
+		"facing=south,color=gray": { "model": "familiarslib:block/pet_bed_gray", "y": 180 },
+		"facing=west,color=gray": { "model": "familiarslib:block/pet_bed_gray", "y": 270 },
+
+		"facing=north,color=green": { "model": "familiarslib:block/pet_bed_green" },
+		"facing=east,color=green": { "model": "familiarslib:block/pet_bed_green", "y": 90 },
+		"facing=south,color=green": { "model": "familiarslib:block/pet_bed_green", "y": 180 },
+		"facing=west,color=green": { "model": "familiarslib:block/pet_bed_green", "y": 270 },
+
+		"facing=north,color=light_blue": { "model": "familiarslib:block/pet_bed_light_blue" },
+		"facing=east,color=light_blue": { "model": "familiarslib:block/pet_bed_light_blue", "y": 90 },
+		"facing=south,color=light_blue": { "model": "familiarslib:block/pet_bed_light_blue", "y": 180 },
+		"facing=west,color=light_blue": { "model": "familiarslib:block/pet_bed_light_blue", "y": 270 },
+
+		"facing=north,color=light_gray": { "model": "familiarslib:block/pet_bed_light_gray" },
+		"facing=east,color=light_gray": { "model": "familiarslib:block/pet_bed_light_gray", "y": 90 },
+		"facing=south,color=light_gray": { "model": "familiarslib:block/pet_bed_light_gray", "y": 180 },
+		"facing=west,color=light_gray": { "model": "familiarslib:block/pet_bed_light_gray", "y": 270 },
+
+		"facing=north,color=lime": { "model": "familiarslib:block/pet_bed_lime" },
+		"facing=east,color=lime": { "model": "familiarslib:block/pet_bed_lime", "y": 90 },
+		"facing=south,color=lime": { "model": "familiarslib:block/pet_bed_lime", "y": 180 },
+		"facing=west,color=lime": { "model": "familiarslib:block/pet_bed_lime", "y": 270 },
+
+		"facing=north,color=magenta": { "model": "familiarslib:block/pet_bed_magenta" },
+		"facing=east,color=magenta": { "model": "familiarslib:block/pet_bed_magenta", "y": 90 },
+		"facing=south,color=magenta": { "model": "familiarslib:block/pet_bed_magenta", "y": 180 },
+		"facing=west,color=magenta": { "model": "familiarslib:block/pet_bed_magenta", "y": 270 },
+
+		"facing=north,color=orange": { "model": "familiarslib:block/pet_bed_orange" },
+		"facing=east,color=orange": { "model": "familiarslib:block/pet_bed_orange", "y": 90 },
+		"facing=south,color=orange": { "model": "familiarslib:block/pet_bed_orange", "y": 180 },
+		"facing=west,color=orange": { "model": "familiarslib:block/pet_bed_orange", "y": 270 },
+
+		"facing=north,color=pink": { "model": "familiarslib:block/pet_bed_pink" },
+		"facing=east,color=pink": { "model": "familiarslib:block/pet_bed_pink", "y": 90 },
+		"facing=south,color=pink": { "model": "familiarslib:block/pet_bed_pink", "y": 180 },
+		"facing=west,color=pink": { "model": "familiarslib:block/pet_bed_pink", "y": 270 },
+
+		"facing=north,color=purple": { "model": "familiarslib:block/pet_bed_purple" },
+		"facing=east,color=purple": { "model": "familiarslib:block/pet_bed_purple", "y": 90 },
+		"facing=south,color=purple": { "model": "familiarslib:block/pet_bed_purple", "y": 180 },
+		"facing=west,color=purple": { "model": "familiarslib:block/pet_bed_purple", "y": 270 },
+
+		"facing=north,color=red": { "model": "familiarslib:block/pet_bed_red" },
+		"facing=east,color=red": { "model": "familiarslib:block/pet_bed_red", "y": 90 },
+		"facing=south,color=red": { "model": "familiarslib:block/pet_bed_red", "y": 180 },
+		"facing=west,color=red": { "model": "familiarslib:block/pet_bed_red", "y": 270 },
+
+		"facing=north,color=yellow": { "model": "familiarslib:block/pet_bed_yellow" },
+		"facing=east,color=yellow": { "model": "familiarslib:block/pet_bed_yellow", "y": 90 },
+		"facing=south,color=yellow": { "model": "familiarslib:block/pet_bed_yellow", "y": 180 },
+		"facing=west,color=yellow": { "model": "familiarslib:block/pet_bed_yellow", "y": 270 },
+
+		"facing=north,color=blue": { "model": "familiarslib:block/pet_bed_blue" },
+		"facing=east,color=blue": { "model": "familiarslib:block/pet_bed_blue", "y": 90 },
+		"facing=south,color=blue": { "model": "familiarslib:block/pet_bed_blue", "y": 180 },
+		"facing=west,color=blue": { "model": "familiarslib:block/pet_bed_blue", "y": 270 }
+	}
+}

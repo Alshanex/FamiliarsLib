@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "W": {
+      "tag": "minecraft:wool"
+    },
+    "C": {
+      "item": "irons_spellbooks:magic_cloth"
+    },
+    "P": {
+      "tag": "minecraft:planks"
+    }
+  },
+  "pattern": [
+    "WCW",
+    "P P"
+  ],
+  "result": {
+    "count": 1,
+    "id": "familiarslib:pet_bed"
+  }
+}

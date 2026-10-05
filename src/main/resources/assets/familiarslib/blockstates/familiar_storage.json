@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "facing=south,half=lower": { "model": "familiarslib:block/familiar_house_bottom", "y": 270},
+    "facing=south,half=upper": { "model": "familiarslib:block/familiar_house_top", "y": 270},
+    "facing=west,half=lower": { "model": "familiarslib:block/familiar_house_bottom"},
+    "facing=west,half=upper": { "model": "familiarslib:block/familiar_house_top"},
+    "facing=north,half=lower": { "model": "familiarslib:block/familiar_house_bottom", "y": 90},
+    "facing=north,half=upper": { "model": "familiarslib:block/familiar_house_top", "y": 90},
+    "facing=east,half=lower": { "model": "familiarslib:block/familiar_house_bottom", "y": 180},
+    "facing=east,half=upper": { "model": "familiarslib:block/familiar_house_top", "y": 180}
+  }
+}

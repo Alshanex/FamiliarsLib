@@ -8,6 +8,8 @@ import net.alshanex.familiarslib.util.consumables.FamiliarFoodComponent;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.util.Unit;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -45,6 +47,21 @@ public class ComponentRegistry {
                     .networkSynchronized(SelectedFamiliarsComponent.STREAM_CODEC)
                     .build()
     );
+
+    public static final Supplier<DataComponentType<CompoundTag>> PET_BED_COLOR =
+            COMPONENTS.register("pet_bed_color", () ->
+                    DataComponentType.<CompoundTag>builder()
+                            .persistent(CompoundTag.CODEC)
+                            .build()
+            );
+
+    public static final Supplier<DataComponentType<Unit>> FAMILIAR_COSMETIC =
+            COMPONENTS.register("familiar_cosmetic", () ->
+                    DataComponentType.<Unit>builder()
+                            .persistent(Unit.CODEC)
+                            .networkSynchronized(StreamCodec.unit(Unit.INSTANCE))
+                            .build()
+            );
 
     public static final Supplier<DataComponentType<CompoundTag>> SOUL_LINK = register("soul_link", CompoundTag::new, op -> op.persistent(CompoundTag.CODEC));
 

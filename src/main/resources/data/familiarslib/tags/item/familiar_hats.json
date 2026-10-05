@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "irons_spellbooks:tarnished_helmet",
+    "irons_spellbooks:archevoker_helmet",
+    "irons_spellbooks:electromancer_helmet",
+    "irons_spellbooks:wizard_hat"
+  ]
+}

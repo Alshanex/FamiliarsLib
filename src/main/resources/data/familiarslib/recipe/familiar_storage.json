@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "M": {
+      "item": "minecraft:red_mushroom"
+    },
+    "L": {
+      "tag": "minecraft:logs"
+    },
+    "P": {
+      "item": "familiarslib:pet_bed"
+    },
+    "S": {
+      "item": "minecraft:stone"
+    },
+    "E": {
+      "item": "minecraft:ender_chest"
+    }
+  },
+  "pattern": [
+    " M ",
+    "LPL",
+    "SES"
+  ],
+  "result": {
+    "count": 1,
+    "id": "familiarslib:familiar_storage"
+  }
+}

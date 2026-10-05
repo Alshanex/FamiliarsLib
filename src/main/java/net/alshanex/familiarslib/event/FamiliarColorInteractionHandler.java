@@ -62,7 +62,7 @@ public class FamiliarColorInteractionHandler {
     }
 
     private static void applyRule(PlayerInteractEvent.EntityInteract event, AbstractSpellCastingPet familiar,
-                                  Player player, ItemStack stack, FamiliarColorOverrides.Rule rule) {
+                                      Player player, ItemStack stack, FamiliarColorOverrides.Rule rule) {
         if (!rule.wouldChange(familiar)) {
             return;
         }
