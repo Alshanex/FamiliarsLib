@@ -4,6 +4,7 @@ package net.alshanex.familiarslib.screen;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
+import net.alshanex.familiarslib.client.FamiliarPreviewHelper;
 import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
@@ -336,6 +337,7 @@ public class FamiliarStorageScreen extends Screen {
         poseStack.pushPose();
         poseStack.translate(x, y, z);
         poseStack.scale(1.0f, -1.0f, 1.0f);
+        FamiliarPreviewHelper.applyPreviewAdjustments(poseStack, entity);
 
         float rotationY = (animationTime * 0.02f) % (2 * (float) Math.PI);
         Quaternionf rotation = new Quaternionf().rotateY(rotationY);
@@ -348,8 +350,6 @@ public class FamiliarStorageScreen extends Screen {
                 new Vector3f(0.2f, 1.0f, -1.0f),
                 new Vector3f(-0.2f, -1.0f, 0.0f)
         );
-
-        RenderSystem.disableCull();
 
         try {
             var bufferSource = guiGraphics.bufferSource();
@@ -365,7 +365,6 @@ public class FamiliarStorageScreen extends Screen {
             guiGraphics.drawString(font, errorText, (int)x - textWidth/2, (int)y, 0xFF5555);
         }
 
-        RenderSystem.enableCull();
         poseStack.popPose();
     }
 

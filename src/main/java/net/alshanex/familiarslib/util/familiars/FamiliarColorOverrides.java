@@ -91,7 +91,10 @@ public class FamiliarColorOverrides extends SimplePreparableReloadListener<Map<R
     public record Rule(List<Predicate<EntityType<?>>> familiars, List<Predicate<ItemStack>> items,
                        Map<Integer, Integer> layers, boolean consume, Optional<ResourceLocation> sound) {
         public boolean matches(AbstractSpellCastingPet familiar, ItemStack stack) {
-            EntityType<?> type = familiar.getType();
+            return matches(familiar.getType(), stack);
+        }
+
+        public boolean matches(EntityType<?> type, ItemStack stack) {
             return familiars.stream().anyMatch(p -> p.test(type)) && items.stream().anyMatch(p -> p.test(stack));
         }
 
@@ -107,12 +110,17 @@ public class FamiliarColorOverrides extends SimplePreparableReloadListener<Map<R
 
     /** The last loaded rule matching this familiar and item, if any. */
     public Optional<Rule> find(AbstractSpellCastingPet familiar, ItemStack stack) {
+        return find(familiar.getType(), stack);
+    }
+
+    /** The last loaded rule matching this familiar type and item, if any. */
+    public Optional<Rule> find(EntityType<?> type, ItemStack stack) {
         if (stack.isEmpty()) {
             return Optional.empty();
         }
         List<Rule> list = rules;
         for (int i = list.size() - 1; i >= 0; i--) {
-            if (list.get(i).matches(familiar, stack)) {
+            if (list.get(i).matches(type, stack)) {
                 return Optional.of(list.get(i));
             }
         }

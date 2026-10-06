@@ -16,6 +16,8 @@ import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.AbstractFamiliarBedBlock;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
+import net.alshanex.familiarslib.compendium.CompendiumAbility;
+import net.alshanex.familiarslib.compendium.FamiliarCompendium;
 import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.data.FamiliarSavedData;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
@@ -1238,6 +1240,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
             if (success) {
                 this.setPersistenceRequired();
                 triggerAdvancement(serverPlayer);
+                FamiliarCompendium.discover(serverPlayer, this);
 
                 int remainingSlots = familiarData.getRemainingFamiliarSlots();
                 serverPlayer.connection.send(new ClientboundSetActionBarTextPacket(Component.translatable("message.familiarslib.tamed_successfully", remainingSlots).withStyle(ChatFormatting.WHITE)));
@@ -1297,6 +1300,37 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
      */
     protected void initializeLayerColors(LevelReader level, @Nullable MobSpawnType reason) {
     }
+
+    /** Compendium "About" tab: paragraphs on how to obtain it, next to the preview. */
+    public List<Component> getCompendiumObtaining() {
+        return List.of();
+    }
+
+    /** Compendium "About" tab: paragraphs describing the familiar, below the preview. */
+    public List<Component> getCompendiumDescription() {
+        return List.of();
+    }
+
+    /** Compendium "Abilities" tab: hand-written abilities (not spells). */
+    public List<CompendiumAbility> getCompendiumAbilities() {
+        return List.of();
+    }
+
+    /**
+     * Compendium "Abilities" tab: the spells it casts, shown as icons with their names on hover.
+     */
+    public List<AbstractSpell> getCompendiumSpells() {
+        return List.of();
+    }
+
+    public float getCompendiumPreviewOffsetY() { return 0F; }
+
+    /** Moves the compendium preview right (positive) or left (negative), in blocks. Called on the client. */
+    public float getCompendiumPreviewOffsetX() {
+        return 0F;
+    }
+
+    public float getCompendiumPreviewScale()  { return 1F; }
 
     //Spawning logic and effects
     @Override

@@ -31,5 +31,7 @@ public class PayloadHandler {
         payloadRegistrar.playToClient(FamiliarDeathPacket.TYPE, FamiliarDeathPacket.STREAM_CODEC, FamiliarDeathPacket::handle);
         payloadRegistrar.playToClient(OpenMultiSelectionScreenPacket.TYPE, OpenMultiSelectionScreenPacket.STREAM_CODEC, OpenMultiSelectionScreenPacket::handle);
         payloadRegistrar.playToClient(ReloadFamiliarScreenPacket.TYPE, ReloadFamiliarScreenPacket.STREAM_CODEC, ReloadFamiliarScreenPacket::handle);
+        payloadRegistrar.playToClient(CompendiumCatalogPacket.TYPE, CompendiumCatalogPacket.STREAM_CODEC, CompendiumCatalogPacket::handle);
+        payloadRegistrar.playToClient(CompendiumDiscoveriesPacket.TYPE, CompendiumDiscoveriesPacket.STREAM_CODEC, CompendiumDiscoveriesPacket::handle);
     }
 }

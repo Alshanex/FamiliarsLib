@@ -1,6 +1,7 @@
 package net.alshanex.familiarslib.registry;
 
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.compendium.CompendiumDiscoveries;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
@@ -16,6 +17,13 @@ public class AttachmentRegistry {
     public static final Supplier<AttachmentType<PlayerFamiliarData>> PLAYER_FAMILIAR_DATA =
             ATTACHMENT_TYPES.register("player_familiar_data", () ->
                     AttachmentType.serializable(PlayerFamiliarData::new).build());
+
+    public static final Supplier<AttachmentType<CompendiumDiscoveries>> COMPENDIUM_DISCOVERIES =
+            ATTACHMENT_TYPES.register("compendium_discoveries", () ->
+                    AttachmentType.builder(CompendiumDiscoveries::new)
+                            .serialize(CompendiumDiscoveries.CODEC)
+                            .copyOnDeath()
+                            .build());
 
     public static void register(IEventBus eventBus) {
         ATTACHMENT_TYPES.register(eventBus);

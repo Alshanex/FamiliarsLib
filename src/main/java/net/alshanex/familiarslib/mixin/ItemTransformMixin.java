@@ -3,6 +3,7 @@ package net.alshanex.familiarslib.mixin;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.item.AbstractFamiliarTotem;
 import net.alshanex.familiarslib.registry.ComponentRegistry;
+import net.alshanex.familiarslib.registry.FItemRegistry;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.alshanex.familiarslib.util.familiars.FamiliarCosmetics;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -25,10 +26,10 @@ public class ItemTransformMixin {
                                       int combinedLight, int combinedOverlay, BakedModel model, CallbackInfo ci) {
 
         // Check if the item has the familiar consumable component (which makes it miniaturized)
-        if (FamiliarConsumableIntegration.isConsumableItem(itemStack)
+        if ((FamiliarConsumableIntegration.isConsumableItem(itemStack)
                 || itemStack.has(ComponentRegistry.FAMILIAR_FOOD)
                 || itemStack.getItem() instanceof AbstractFamiliarTotem
-                || FamiliarCosmetics.isShrunkCosmetic(itemStack)
+                || FamiliarCosmetics.isShrunkCosmetic(itemStack)) && !itemStack.is(FItemRegistry.FAMILIAR_COMPENDIUM)
         ) {
             // Scale down for all contexts except GUI contexts
             if (shouldScaleItem(displayContext) == 1) {

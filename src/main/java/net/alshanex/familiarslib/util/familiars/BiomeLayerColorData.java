@@ -40,14 +40,15 @@ import java.util.*;
  *     <li>Exact biome entries win over tag entries. Later files and later entries override earlier ones.</li>
  *     <li>A biome with no matching entry keeps the original look.</li>
  * </ul>
+ * Register the instance with {@code AddReloadListenerEvent}, then call {@link #applyTo} from the familiar's {@code initializeLayerColors}.
  */
 public class BiomeLayerColorData extends SimpleJsonResourceReloadListener {
     private static final Gson GSON = new GsonBuilder().create();
 
-    // JSON color field and the layer slot it sets
+    /** A JSON color field and the layer slot it sets. */
     public record Layer(String field, int slot) {}
 
-    // One parsed entry: layer slot -> 0xRRGGBB
+    /** One parsed entry: layer slot -> 0xRRGGBB. */
     private record Entry(Map<Integer, Integer> colors) {}
 
     private final String directory;
@@ -128,8 +129,14 @@ public class BiomeLayerColorData extends SimpleJsonResourceReloadListener {
 
     /** Applies the colors for the biome the familiar is standing in, if there is an entry for it. */
     public void applyTo(AbstractSpellCastingPet familiar, LevelReader level) {
-        Holder<Biome> biome = level.getBiome(familiar.blockPosition());
+        colorsFor(level.getBiome(familiar.blockPosition())).forEach(familiar::setLayerColor);
+    }
 
+    /**
+     * The colors (layer slot -> 0xRRGGBB) this data gives in a biome. Empty if the biome has no entry.
+     * Biome tags must be bound (true at runtime and after tags have loaded).
+     */
+    public Map<Integer, Integer> colorsFor(Holder<Biome> biome) {
         Entry entry = biome.unwrapKey().map(byBiome::get).orElse(null);
         if (entry == null) {
             List<Map.Entry<TagKey<Biome>, Entry>> tags = byTag;
@@ -140,10 +147,6 @@ public class BiomeLayerColorData extends SimpleJsonResourceReloadListener {
                 }
             }
         }
-        if (entry == null) {
-            return;
-        }
-
-        entry.colors().forEach(familiar::setLayerColor);
+        return entry == null ? Map.of() : entry.colors();
     }
 }

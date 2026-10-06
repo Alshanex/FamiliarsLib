@@ -50,6 +50,7 @@ public class FamiliarsLib {
         FItemRegistry.register(modEventBus);
         FBlockEntityRegistry.register(modEventBus);
         FRecipeRegistry.register(modEventBus);
+        FCreativeTab.register(modEventBus);
 
         NeoForge.EVENT_BUS.register(this);
 
@@ -66,11 +67,7 @@ public class FamiliarsLib {
 
     // The shared blocks go in the vanilla Functional Blocks tab; familiar mods can list them in their own tabs too
     private void addCreative(BuildCreativeModeTabContentsEvent event) {
-        if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
-            event.accept(FItemRegistry.PET_BED.get());
-            event.accept(FItemRegistry.FAMILIAR_STORAGE.get());
-            event.accept(FItemRegistry.SHRINKING_STATION.get());
-        }
+
     }
 
     // Lets hoppers and pipes use the shrinking station (top: input, bottom: output, sides: both)

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    { "item": "minecraft:book" },
+    { "item": "minecraft:rabbit_foot" }
+  ],
+  "result": {
+    "id": "familiarslib:familiar_compendium",
+    "count": 1
+  }
+}

@@ -1,6 +1,7 @@
 package net.alshanex.familiarslib.event;
 
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.compendium.FamiliarCompendium;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.util.familiars.FamiliarColorOverrides;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
@@ -47,14 +48,14 @@ public class FamiliarColorInteractionHandler {
         Player player = event.getEntity();
         UUID owner = familiar.getOwnerUUID();
         if (owner == null || !owner.equals(player.getUUID())) {
-            return;
+            return; // only the owner of a tamed familiar can recolor it
         }
 
         if (!player.level().isClientSide) {
             Optional<FamiliarColorOverrides.Rule> rule = FamiliarColorOverrides.INSTANCE.find(familiar, stack);
             if (rule.isPresent()) {
                 applyRule(event, familiar, player, stack, rule.get());
-                return;
+                return; // an override for this item always takes priority over the dye behavior
             }
         }
 
@@ -62,9 +63,9 @@ public class FamiliarColorInteractionHandler {
     }
 
     private static void applyRule(PlayerInteractEvent.EntityInteract event, AbstractSpellCastingPet familiar,
-                                      Player player, ItemStack stack, FamiliarColorOverrides.Rule rule) {
+                                  Player player, ItemStack stack, FamiliarColorOverrides.Rule rule) {
         if (!rule.wouldChange(familiar)) {
-            return;
+            return; // already these colors: don't waste the item, let other interactions run
         }
 
         event.setCanceled(true);
@@ -87,7 +88,7 @@ public class FamiliarColorInteractionHandler {
 
         int rgb = dyeItem.getDyeColor().getTextureDiffuseColor() & 0xFFFFFF;
         if (familiar.getLayerColor(AbstractSpellCastingPet.DYE_LAYER_SLOT) == rgb) {
-            return;
+            return; // already this color: don't waste the dye
         }
 
         event.setCanceled(true);
@@ -101,7 +102,7 @@ public class FamiliarColorInteractionHandler {
         finish(familiar, player, SoundEvents.DYE_USE);
     }
 
-    /** Feedback, then keep the roster snapshot (selection screen, resummoning) in sync. */
+    /** Server side: feedback, then keep the roster snapshot (selection screen, resummoning) in sync. */
     private static void finish(AbstractSpellCastingPet familiar, Player player, SoundEvent sound) {
         familiar.level().playSound(null, familiar, sound, SoundSource.PLAYERS, 1.0F, 1.0F);
         familiar.triggerAnim("interact_controller", "interact");
@@ -109,6 +110,8 @@ public class FamiliarColorInteractionHandler {
         FamiliarManager.updateFamiliarData(familiar);
         if (player instanceof ServerPlayer serverPlayer) {
             FamiliarSync.snapshot(serverPlayer, familiar.getUUID());
+            // Recoloring an owned familiar into a look unlocks its compendium entry
+            FamiliarCompendium.discover(serverPlayer, familiar);
         }
     }
 }
