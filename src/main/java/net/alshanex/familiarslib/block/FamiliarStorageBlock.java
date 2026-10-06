@@ -34,8 +34,10 @@ public class FamiliarStorageBlock extends AbstractFamiliarStorageBlock {
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final EnumProperty<DoubleBlockHalf> HALF = BlockStateProperties.DOUBLE_BLOCK_HALF;
 
-    private static final VoxelShape SHAPE_LOWER = Block.box(0.0D, 0.0D, 0.0D, 16.0D, 16.0D, 16.0D);
-    private static final VoxelShape SHAPE_UPPER = Block.box(0.0D, 0.0D, 0.0D, 16.0D, 16.0D, 16.0D);
+    private static final VoxelShape SHAPE_HALF = Block.box(0.0D, 0.0D, 0.0D, 16.0D, 16.0D, 16.0D);
+
+    private static final VoxelShape OUTLINE_LOWER = Block.box(0.0D, 0.0D, 0.0D, 16.0D, 32.0D, 16.0D);
+    private static final VoxelShape OUTLINE_UPPER = Block.box(0.0D, -16.0D, 0.0D, 16.0D, 16.0D, 16.0D);
 
     public static final MapCodec<FamiliarStorageBlock> CODEC = simpleCodec(FamiliarStorageBlock::new);
 
@@ -61,13 +63,19 @@ public class FamiliarStorageBlock extends AbstractFamiliarStorageBlock {
         return RenderShape.MODEL;
     }
 
-    private VoxelShape getShapeForState(BlockState state) {
-        return state.getValue(HALF) == DoubleBlockHalf.UPPER ? SHAPE_UPPER : SHAPE_LOWER;
+    @Override
+    public @NotNull VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return state.getValue(HALF) == DoubleBlockHalf.UPPER ? OUTLINE_UPPER : OUTLINE_LOWER;
     }
 
     @Override
-    public @NotNull VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        return getShapeForState(state);
+    public @NotNull VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return SHAPE_HALF;
+    }
+
+    @Override
+    protected @NotNull VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
+        return SHAPE_HALF;
     }
 
     @Override

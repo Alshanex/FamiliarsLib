@@ -35,7 +35,9 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 import static net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED;
 
@@ -237,20 +239,44 @@ public class ShrinkingStationBlock extends BaseEntityBlock {
         return state.rotate(mirrorIn.getRotation(state.getValue(FACING)));
     }
 
+    private static final Map<Direction, VoxelShape[]> HALF_SHAPES = new EnumMap<>(Direction.class);
+    private static final Map<Direction, VoxelShape[]> OUTLINES = new EnumMap<>(Direction.class);
+
+    static {
+        for (Direction facing : Direction.Plane.HORIZONTAL) {
+            Rotation rotation = switch (facing) {
+                case SOUTH -> Rotation.CLOCKWISE_180;
+                case EAST -> Rotation.CLOCKWISE_90;
+                case WEST -> Rotation.COUNTERCLOCKWISE_90;
+                default -> Rotation.NONE;
+            };
+            VoxelShape lower = rotateBox(SHAPE_LOWER_NORTH, rotation);
+            VoxelShape upper = rotateBox(SHAPE_UPPER_NORTH, rotation);
+            HALF_SHAPES.put(facing, new VoxelShape[]{lower, upper});
+            OUTLINES.put(facing, new VoxelShape[]{
+                    Shapes.or(lower, upper.move(0, 1, 0)).optimize(),
+                    Shapes.or(lower.move(0, -1, 0), upper).optimize()
+            });
+        }
+    }
+
+    private static int halfIndex(BlockState state) {
+        return state.getValue(HALF) == DoubleBlockHalf.LOWER ? 0 : 1;
+    }
+
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
-        VoxelShape baseShape = (state.getValue(HALF) == DoubleBlockHalf.LOWER) ? SHAPE_LOWER_NORTH : SHAPE_UPPER_NORTH;
+        return OUTLINES.get(state.getValue(FACING))[halfIndex(state)];
+    }
 
-        switch (state.getValue(FACING)) {
-            case SOUTH:
-                return rotateBox(baseShape, Rotation.CLOCKWISE_180);
-            case EAST:
-                return rotateBox(baseShape, Rotation.CLOCKWISE_90);
-            case WEST:
-                return rotateBox(baseShape, Rotation.COUNTERCLOCKWISE_90);
-            default:
-                return baseShape;
-        }
+    @Override
+    protected VoxelShape getCollisionShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        return HALF_SHAPES.get(state.getValue(FACING))[halfIndex(state)];
+    }
+
+    @Override
+    protected VoxelShape getOcclusionShape(BlockState state, BlockGetter level, BlockPos pos) {
+        return HALF_SHAPES.get(state.getValue(FACING))[halfIndex(state)];
     }
 
     private static VoxelShape rotateBox(VoxelShape shape, Rotation rotation) {
