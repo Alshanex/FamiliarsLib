@@ -1325,7 +1325,6 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
 
     public float getCompendiumPreviewOffsetY() { return 0F; }
 
-    /** Moves the compendium preview right (positive) or left (negative), in blocks. Called on the client. */
     public float getCompendiumPreviewOffsetX() {
         return 0F;
     }
