@@ -2,6 +2,7 @@ package net.alshanex.familiarslib.registry;
 
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.item.FamiliarCompendiumItem;
+import net.alshanex.familiarslib.item.IdentityVesselItem;
 import net.alshanex.familiarslib.item.PetBedBlockItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.BlockItem;
@@ -24,6 +25,9 @@ public class FItemRegistry {
 
     public static final DeferredHolder<Item, Item> FAMILIAR_COMPENDIUM = ITEMS.register("familiar_compendium",
             FamiliarCompendiumItem::new);
+
+    public static final DeferredHolder<Item, Item> IDENTITY_VESSEL = ITEMS.register("identity_vessel",
+            IdentityVesselItem::new);
 
     public static void register(IEventBus eventBus) {
         FMigration.alias(ITEMS, "pet_bed", "familiar_storage", "shrinking_station");

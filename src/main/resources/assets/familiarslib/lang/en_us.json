@@ -2,6 +2,13 @@
   "itemGroup.familiarslib.main_tab": "Familiarslib",
 
   "item.familiarslib.familiar_compendium": "Familiar Compendium",
+  "item.familiarslib.familiar_compendium.desc": "Holds the information of every familiar in existence",
+  "item.familiarslib.identity_vessel": "Identity Vessel",
+  "item.familiarslib.identity_vessel.empty": "Empty",
+  "item.familiarslib.identity_vessel.usage_empty": "Use on one of your familiars to take its identity (colors)",
+  "item.familiarslib.identity_vessel.contains": "Contains a %s's identity",
+  "item.familiarslib.identity_vessel.usage_filled": "Use on another of your %ss to give it this identity (colors)",
+  "item.familiarslib.identity_vessel.layer": "Layer %s",
 
   "block.familiarslib.pet_bed": "Familiar Bed",
   "block.familiarslib.familiar_storage": "Familiar House",
@@ -83,6 +90,9 @@
   "message.familiarslib.quick_summon_no_familiar": "No familiar in slot %d!",
   "message.familiarslib.max_summoned": "You can't have more than %s familiars summoned at once",
   "message.familiarslib.max_summoned_tame": "You already have %s familiars summoned. Unsummon one before taming another!",
+  "message.familiarslib.identity_vessel.not_yours": "You can only use this on familiars you've tamed",
+  "message.familiarslib.identity_vessel.nothing_to_take": "This familiar has no identity to take",
+  "message.familiarslib.identity_vessel.wrong_familiar": "This identity can only be given to a %s",
 
   "key.familiarslib.summoning_keys": "FamiliarLib",
   "key.familiarslib.quick_summoning_keys": "Quick summon keys",

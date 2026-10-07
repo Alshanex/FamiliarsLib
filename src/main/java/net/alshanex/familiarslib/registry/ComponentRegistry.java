@@ -2,6 +2,7 @@ package net.alshanex.familiarslib.registry;
 
 import com.google.common.base.Suppliers;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.data.FamiliarIdentity;
 import net.alshanex.familiarslib.util.SelectedFamiliarsComponent;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableComponent;
 import net.alshanex.familiarslib.util.consumables.FamiliarFoodComponent;
@@ -60,6 +61,14 @@ public class ComponentRegistry {
                     DataComponentType.<Unit>builder()
                             .persistent(Unit.CODEC)
                             .networkSynchronized(StreamCodec.unit(Unit.INSTANCE))
+                            .build()
+            );
+
+    public static final Supplier<DataComponentType<FamiliarIdentity>> FAMILIAR_IDENTITY =
+            COMPONENTS.register("familiar_identity", () ->
+                    DataComponentType.<FamiliarIdentity>builder()
+                            .persistent(FamiliarIdentity.CODEC)
+                            .networkSynchronized(FamiliarIdentity.STREAM_CODEC)
                             .build()
             );
 

@@ -154,7 +154,9 @@ public final class FamiliarCompendium {
             boolean changed = false;
             for (CompendiumCatalog.LayerOptions layer : section.layers()) {
                 int color = familiar.getLayerColor(layer.slot());
-                if (color >= 0) { // the original look is always unlocked
+                // The original look is always unlocked, and colors that aren't in the compendium (e.g. mixed with an identity vessel) aren't tracked
+                boolean listed = layer.options().stream().anyMatch(option -> option.color() == color);
+                if (color >= 0 && listed) {
                     changed |= discoveries.add(CompendiumCatalog.key(typeId, layer.slot(), color));
                 }
             }
