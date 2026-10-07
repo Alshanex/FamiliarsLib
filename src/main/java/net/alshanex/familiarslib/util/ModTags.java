@@ -13,6 +13,9 @@ public class ModTags {
     //Tag for familiar taming items
     public static final TagKey<Item> FAMILIAR_TAMING = TagKey.create(Registries.ITEM, new ResourceLocation(FamiliarsLib.MODID, "familiar_taming"));
 
+    //Tag for items that make a familiar sit / stand up when used on it
+    public static final TagKey<Item> FAMILIAR_SIT_ITEMS = TagKey.create(Registries.ITEM, ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "familiar_sit_items"));
+
     //Tag for food that can drop memory fragments
     public static final TagKey<Item> BERRY = TagKey.create(Registries.ITEM, new ResourceLocation(FamiliarsLib.MODID, "crystal_berry"));
     //Tag for memory fragments

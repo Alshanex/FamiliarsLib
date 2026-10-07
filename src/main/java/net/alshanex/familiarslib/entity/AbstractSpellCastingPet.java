@@ -143,6 +143,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     private boolean hasInitializedHealth = false;
 
     public BlockPos housePosition = null;
+    private boolean sleepingPose = false;
 
     private int stunTimer = 0;
 
@@ -781,11 +782,47 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         };
     }
 
+    protected boolean hasSitAnimation() {
+        return false;
+    }
+
+    public float getSittingOffsetY() {
+        return 0F;
+    }
+
+    public float getSleepingOffsetY() {
+        return 0F;
+    }
+
+    private boolean computeSleepingPose() {
+        return (getIsSitting() && isOnBed()) || (isStunned() && !hasSitAnimation());
+    }
+
+    public boolean isInSleepingPose() {
+        return sleepingPose;
+    }
+
+    public boolean isInSittingPose() {
+        return (getIsSitting() || isStunned()) && !sleepingPose;
+    }
+
+    public float getPoseOffsetY() {
+        if (sleepingPose) return getSleepingOffsetY();
+        if (getIsSitting()) return getSittingOffsetY();
+        return 0F;
+    }
+
+    private boolean isPlayingSitAnimation() {
+        return hasSitAnimation() && isInSittingPose() && !isCasting();
+    }
+
     private int bedRegenTimer = 0;
 
     @Override
     public void tick() {
         super.tick();
+        sleepingPose = computeSleepingPose();
+
         if (level().isClientSide) {
             this.noCulling = this.isAnimating();
         }
@@ -1119,9 +1156,15 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         }
 
         //Sitting interaction
-        if(getSummoner() != null && getSummoner().is(player) && itemstack.is(Items.STICK)){
-            this.setSitting(!getIsSitting());
-            return InteractionResult.SUCCESS;
+        if (getOwnerUUID() != null && getOwnerUUID().equals(player.getUUID()) && isSitItem(itemstack)) {
+            if (!level().isClientSide) {
+                boolean standingUp = getIsSitting();
+                this.setSitting(!standingUp);
+                if (standingUp) {
+                    triggerAnim("interact_controller", "interact");
+                }
+            }
+            return InteractionResult.sidedSuccess(level().isClientSide);
         }
 
         //Taming and feeding interaction
@@ -1267,6 +1310,10 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
 
     public @Nullable Holder<Attribute> getPreferredPowerAttribute(){
         return null;
+    }
+
+    protected boolean isSitItem(ItemStack stack) {
+        return stack.is(ModTags.FAMILIAR_SIT_ITEMS);
     }
 
     private static EntityDataAccessor<Integer> layerColorAccessor(int slot) {
@@ -1485,6 +1532,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     protected final RawAnimation stomp = RawAnimation.begin().thenPlay("stomp");
     protected final RawAnimation spawn = RawAnimation.begin().thenPlay("spawn");
     protected final RawAnimation sleep = RawAnimation.begin().thenPlayAndHold("sleep");
+    protected final RawAnimation sit = RawAnimation.begin().thenPlayAndHold("sit");
 
     protected final AnimationController animationControllerInstantCast = new AnimationController(this, "instant_casting", 0, this::instantCastingPredicate);
     protected final AnimationController animationControllerLongCast = new AnimationController(this, "long_casting", 0, this::longCastingPredicate);
@@ -1501,6 +1549,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         controllerRegistrar.add(animationControllerLongCast);
         controllerRegistrar.add(animationControllerOtherCast);
         controllerRegistrar.add(new AnimationController(this, "idle", 0, this::idlePredicate));
+        controllerRegistrar.add(new AnimationController(this, "sit", 0, this::sitPredicate));
         controllerRegistrar.add(new AnimationController(this, "sleep", 0, this::sleepPredicate));
         controllerRegistrar.add(new AnimationController<>(this, "interact_controller", state -> PlayState.STOP)
                 .triggerableAnim("interact", interact));
@@ -1524,15 +1573,20 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         return PlayState.STOP;
     }
 
-    protected PlayState sleepPredicate(AnimationState event) {
-        boolean shouldPlaySleepAnimation = (getIsSitting() && isOnBed()) || isStunned();
+    protected PlayState sitPredicate(AnimationState event) {
+        if (isPlayingSitAnimation()) {
+            event.getController().setAnimation(sit);
+            return PlayState.CONTINUE;
+        }
+        return PlayState.STOP;
+    }
 
-        if (shouldPlaySleepAnimation) {
+    protected PlayState sleepPredicate(AnimationState event) {
+        if (isInSleepingPose()) {
             event.getController().setAnimation(sleep);
             return PlayState.CONTINUE;
-        } else {
-            return PlayState.STOP;
         }
+        return PlayState.STOP;
     }
 
     public boolean isOnBed() {
@@ -1668,12 +1722,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     }
 
     public boolean isAnimating() {
-        boolean isSleeping = (getIsSitting() && isOnBed()) || isStunned();
-
         return isCasting()
                 || (animationControllerLongCast.getAnimationState() != AnimationController.State.STOPPED)
                 || (animationControllerInstantCast.getAnimationState() != AnimationController.State.STOPPED)
-                || isSleeping;
+                || isInSleepingPose()
+                || isPlayingSitAnimation();
     }
 
     @Override
@@ -1693,7 +1746,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
 
     @Override
     public boolean shouldAlwaysAnimateLegs() {
-        return !animatingLegs;
+        return !animatingLegs && !isPlayingSitAnimation();
     }
 
     @Override

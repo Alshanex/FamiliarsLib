@@ -10,7 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import java.util.List;
 
 /**
- * A familiar identity stored in an {@link IdentityVesselItem}: the familiar type it came from, and its layer colors
+ * A familiar identity stored in an IdentityVesselItem the familiar type it came from, and its layer colors
  * (one per layer slot, -1 = that layer was in its original look).
  */
 public record FamiliarIdentity(ResourceLocation entityType, List<Integer> colors) {
