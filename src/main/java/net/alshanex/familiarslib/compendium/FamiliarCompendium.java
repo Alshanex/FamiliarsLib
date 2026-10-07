@@ -99,7 +99,8 @@ public final class FamiliarCompendium {
                 continue; // not a familiar
             }
             ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(type);
-            CompendiumProfile profile = profiles.getOrDefault(type, CompendiumProfile.builder().build());
+            CompendiumProfile profile = profiles.getOrDefault(type, CompendiumProfile.builder().build())
+                    .withDefaultsFrom(familiar);
             CompendiumCatalog.Section section = CompendiumBuilder.build(id, type, profile, biomes, spellsOf(familiar));
             sections.add(section);
             total += section.optionCount();
@@ -128,7 +129,7 @@ public final class FamiliarCompendium {
     /** The familiar's spells. Read on the server because spell tags only exist there. */
     private static List<ResourceLocation> spellsOf(AbstractSpellCastingPet familiar) {
         try {
-            Set<ResourceLocation> ids = new LinkedHashSet<>();
+            Set<ResourceLocation> ids = new LinkedHashSet<>(); // keeps order, drops duplicates
             for (AbstractSpell spell : familiar.getCompendiumSpells()) {
                 if (spell != null && spell != SpellRegistry.none()) {
                     ids.add(spell.getSpellResource());
@@ -154,7 +155,6 @@ public final class FamiliarCompendium {
             boolean changed = false;
             for (CompendiumCatalog.LayerOptions layer : section.layers()) {
                 int color = familiar.getLayerColor(layer.slot());
-                // The original look is always unlocked, and colors that aren't in the compendium (e.g. mixed with an identity vessel) aren't tracked
                 boolean listed = layer.options().stream().anyMatch(option -> option.color() == color);
                 if (color >= 0 && listed) {
                     changed |= discoveries.add(CompendiumCatalog.key(typeId, layer.slot(), color));

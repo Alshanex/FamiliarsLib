@@ -72,6 +72,14 @@ public class ComponentRegistry {
                             .build()
             );
 
+    public static final Supplier<DataComponentType<Unit>> SHRUNK_DYE =
+            COMPONENTS.register("shrunk_dye", () ->
+                    DataComponentType.<Unit>builder()
+                            .persistent(Unit.CODEC)
+                            .networkSynchronized(StreamCodec.unit(Unit.INSTANCE))
+                            .build()
+            );
+
     public static final Supplier<DataComponentType<CompoundTag>> SOUL_LINK = register("soul_link", CompoundTag::new, op -> op.persistent(CompoundTag.CODEC));
 
     private static <T> ComponentSupplier<T> register(String name, Supplier<T> defaultVal, UnaryOperator<DataComponentType.Builder<T>> op) {

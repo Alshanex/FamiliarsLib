@@ -62,6 +62,9 @@
   "tooltip.familiarslib.cosmetic.weapon": "Familiar weapon",
   "tooltip.familiarslib.cosmetic.hat_or_weapon": "Familiar hat or weapon (sneak to put it on as a hat)",
   "tooltip.familiarslib.cosmetic.usage": "Use on your familiar to put it on. Sneak + empty hand takes it off",
+  "tooltip.familiarslib.shrunk_dye": "Shrunk dye",
+  "tooltip.familiarslib.shrunk_dye.usage": "Use on a familiar to color its eyes",
+  "tooltip.familiarslib.shrunk_dye.sneak": "Some familiars have a second part to color: sneak to color it",
 
   "message.familiarslib.cosmetic.not_allowed": "This familiar can't wear or hold that",
   "message.familiarslib.consumable.success": "Enhanced %s to %s!",
@@ -135,5 +138,10 @@
   "compendium.familiarslib.origin.more_biomes": " and %s more",
   "compendium.familiarslib.step": "Use %s on it",
   "compendium.familiarslib.step.alternatives": "%s (or %s similar items)",
-  "compendium.familiarslib.original_color": "Original"
+  "compendium.familiarslib.original_color": "Original",
+  "compendium.familiarslib.step.shrunk": "Shrunk %s",
+  "compendium.familiarslib.step.sneaking": "Sneak and use %s on it",
+  "compendium.familiarslib.layer.dye": "Main Color",
+  "compendium.familiarslib.layer.eyes": "Eyes",
+  "compendium.familiarslib.layer.second_eyes": "Second Eyes"
 }

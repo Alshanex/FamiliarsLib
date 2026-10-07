@@ -36,11 +36,15 @@ public record CompendiumCatalog(List<Section> sections) {
 
     /**
      * A way to find a familiar that spawns with this color.
+     * NATURAL_DYE: {@code value} is the dye name. BIOMES: {@code biomes} lists some of them, {@code moreBiomes} how many more.
      */
     public record Origin(OriginKind kind, String value, List<ResourceLocation> biomes, int moreBiomes) {}
 
-    /** "Use this item on it". {@code alternatives} = how many other items do the same. */
-    public record Step(ResourceLocation item, int alternatives) {}
+    /**
+     * "Use this item on it". {@code alternatives} = how many other items do the same.
+     * {@code shrunk}: the item has to be shrunk first. {@code sneaking}: use it while sneaking.
+     */
+    public record Step(ResourceLocation item, int alternatives, boolean shrunk, boolean sneaking) {}
 
     /** Identifies one unlocked layer color: entity id + layer slot + color. Used for the player's discoveries. */
     public static String key(ResourceLocation entityType, int slot, int color) {
@@ -75,6 +79,8 @@ public record CompendiumCatalog(List<Section> sections) {
                             for (Step step : option.steps()) {
                                 buf.writeResourceLocation(step.item());
                                 buf.writeVarInt(step.alternatives());
+                                buf.writeBoolean(step.shrunk());
+                                buf.writeBoolean(step.sneaking());
                             }
                         }
                     }
@@ -110,7 +116,7 @@ public record CompendiumCatalog(List<Section> sections) {
                             int stepCount = buf.readVarInt();
                             List<Step> steps = new ArrayList<>(stepCount);
                             for (int i = 0; i < stepCount; i++) {
-                                steps.add(new Step(buf.readResourceLocation(), buf.readVarInt()));
+                                steps.add(new Step(buf.readResourceLocation(), buf.readVarInt(), buf.readBoolean(), buf.readBoolean()));
                             }
                             options.add(new ColorOption(color, origins, steps));
                         }

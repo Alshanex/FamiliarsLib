@@ -28,6 +28,7 @@ public class ItemTransformMixin {
         // Check if the item has the familiar consumable component (which makes it miniaturized)
         if ((FamiliarConsumableIntegration.isConsumableItem(itemStack)
                 || itemStack.has(ComponentRegistry.FAMILIAR_FOOD)
+                || itemStack.has(ComponentRegistry.SHRUNK_DYE)
                 || itemStack.getItem() instanceof AbstractFamiliarTotem
                 || FamiliarCosmetics.isShrunkCosmetic(itemStack)) && !itemStack.is(FItemRegistry.FAMILIAR_COMPENDIUM)
         ) {

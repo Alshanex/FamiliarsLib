@@ -94,7 +94,7 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     protected static final EntityDataAccessor<Boolean> DATA_IS_SITTING;
     protected static final EntityDataAccessor<Boolean> DATA_IS_HOUSE;
 
-    public static final int LAYER_COLOR_SLOTS = 3;
+    public static final int LAYER_COLOR_SLOTS = 5;
     public static final int DYE_LAYER_SLOT = 0;
 
     private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_0 =
@@ -102,6 +102,10 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_1 =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_2 =
+            SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_3 =
+            SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_LAYER_COLOR_4 =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<ItemStack> DATA_COSMETIC_HAT =
             SynchedEntityData.defineId(AbstractSpellCastingPet.class, EntityDataSerializers.ITEM_STACK);
@@ -576,6 +580,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         pBuilder.define(DATA_LAYER_COLOR_0, NO_LAYER_COLOR);
         pBuilder.define(DATA_LAYER_COLOR_1, NO_LAYER_COLOR);
         pBuilder.define(DATA_LAYER_COLOR_2, NO_LAYER_COLOR);
+        pBuilder.define(DATA_LAYER_COLOR_3, NO_LAYER_COLOR);
+        pBuilder.define(DATA_LAYER_COLOR_4, NO_LAYER_COLOR);
         pBuilder.define(DATA_COSMETIC_HAT, ItemStack.EMPTY);
         pBuilder.define(DATA_COSMETIC_WEAPON, ItemStack.EMPTY);
     }
@@ -1320,7 +1326,9 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         return switch (slot) {
             case 0 -> DATA_LAYER_COLOR_0;
             case 1 -> DATA_LAYER_COLOR_1;
-            default -> DATA_LAYER_COLOR_2;
+            case 2 -> DATA_LAYER_COLOR_2;
+            case 3 -> DATA_LAYER_COLOR_3;
+            default -> DATA_LAYER_COLOR_4;
         };
     }
 
@@ -1338,6 +1346,19 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     // Whether the owner can recolor DYE_LAYER_SLOT by right-clicking with a dye.
     public boolean canBeDyed() {
         return false;
+    }
+
+    /** The slot shrunk dyes color (the eyes), or -1 if the familiar has no eye layer. */
+    public int getEyeDyeLayerSlot() {
+        return -1;
+    }
+
+    /**
+     * The slot shrunk dyes color while sneaking, for familiars with a second pair of eyes (e.g. the hunter's dog),
+     * or -1. Familiars without one color their normal eyes whether sneaking or not.
+     */
+    public int getSneakingEyeDyeLayerSlot() {
+        return -1;
     }
 
     /**

@@ -2,6 +2,7 @@ package net.alshanex.familiarslib.registry;
 
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.recipe.CosmeticShrinkingRecipe;
+import net.alshanex.familiarslib.recipe.DyeShrinkingRecipe;
 import net.alshanex.familiarslib.recipe.FixedShrinkingRecipe;
 import net.alshanex.familiarslib.recipe.FoodShrinkingRecipe;
 import net.alshanex.familiarslib.recipe.ShrinkingRecipe;
@@ -18,6 +19,7 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  *     <li>{@code familiarslib:shrinking_recipe}: fixed input -> result, written in JSON</li>
  *     <li>{@code familiarslib:food_shrinking}: any food -> familiar food</li>
  *     <li>{@code familiarslib:cosmetic_shrinking}: any item in the hat/weapon tags -> familiar cosmetic</li>
+ *     <li>{@code familiarslib:dye_shrinking}: any item in the shrinkable dyes tag -> shrunk dye (colors eyes)</li>
  * </ul>
  */
 public class FRecipeRegistry {
@@ -39,6 +41,9 @@ public class FRecipeRegistry {
 
     public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<CosmeticShrinkingRecipe>> COSMETIC_SHRINKING_SERIALIZER =
             RECIPE_SERIALIZERS.register("cosmetic_shrinking", CosmeticShrinkingRecipe.Serializer::new);
+
+    public static final DeferredHolder<RecipeSerializer<?>, RecipeSerializer<DyeShrinkingRecipe>> DYE_SHRINKING_SERIALIZER =
+            RECIPE_SERIALIZERS.register("dye_shrinking", DyeShrinkingRecipe.Serializer::new);
 
     public static void register(IEventBus eventBus) {
         // Old recipe files with "type": "alshanex_familiars:shrinking_recipe" / "food_shrinking" keep loading

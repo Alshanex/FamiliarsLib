@@ -31,14 +31,15 @@ import java.util.*;
 import java.util.function.Predicate;
 
 /**
- * Data-driven "use item on familiar -> recolor layers" rules, loaded from
- * {@code data/<namespace>/familiar_color_overrides/*.json}.
+ * Data-driven "use item on familiar -> recolor layers" rules, loaded from {@code data/<namespace>/familiar_color_overrides/*.json}.
  */
 public class FamiliarColorOverrides extends SimplePreparableReloadListener<Map<ResourceLocation, List<Pair<String, JsonElement>>>> {
     public static final FamiliarColorOverrides INSTANCE = new FamiliarColorOverrides();
     public static final String DIRECTORY = "familiar_color_overrides";
 
     private static final FileToIdConverter FILES = FileToIdConverter.json(DIRECTORY);
+
+    // JSON format
 
     private static final Codec<List<String>> STRING_OR_LIST = Codec.either(Codec.STRING, Codec.STRING.listOf()).xmap(
             either -> either.map(List::of, list -> list),
@@ -68,13 +69,14 @@ public class FamiliarColorOverrides extends SimplePreparableReloadListener<Map<R
             rgb -> rgb == LayerColorHolder.NO_LAYER_COLOR ? Either.left(rgb) : Either.right(rgb));
 
     private record RawEntry(List<String> familiars, List<String> items, Map<Integer, Integer> layers,
-                            boolean consume, Optional<ResourceLocation> sound) {
+                            boolean consume, Optional<ResourceLocation> sound, boolean shrunk) {
         static final Codec<RawEntry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
                 STRING_OR_LIST.fieldOf("familiar").forGetter(RawEntry::familiars),
                 STRING_OR_LIST.fieldOf("item").forGetter(RawEntry::items),
                 Codec.unboundedMap(SLOT, LAYER_COLOR).fieldOf("layers").forGetter(RawEntry::layers),
                 Codec.BOOL.optionalFieldOf("consume", true).forGetter(RawEntry::consume),
-                ResourceLocation.CODEC.optionalFieldOf("sound").forGetter(RawEntry::sound)
+                ResourceLocation.CODEC.optionalFieldOf("sound").forGetter(RawEntry::sound),
+                Codec.BOOL.optionalFieldOf("shrunk", false).forGetter(RawEntry::shrunk)
         ).apply(instance, RawEntry::new));
     }
 
@@ -89,13 +91,15 @@ public class FamiliarColorOverrides extends SimplePreparableReloadListener<Map<R
 
     /** One loaded rule. */
     public record Rule(List<Predicate<EntityType<?>>> familiars, List<Predicate<ItemStack>> items,
-                       Map<Integer, Integer> layers, boolean consume, Optional<ResourceLocation> sound) {
+                       Map<Integer, Integer> layers, boolean consume, Optional<ResourceLocation> sound, boolean shrunk) {
         public boolean matches(AbstractSpellCastingPet familiar, ItemStack stack) {
             return matches(familiar.getType(), stack);
         }
 
+        /** Shrunk dyes only match rules with {@code "shrunk": true}, and those rules only match shrunk dyes. */
         public boolean matches(EntityType<?> type, ItemStack stack) {
-            return familiars.stream().anyMatch(p -> p.test(type)) && items.stream().anyMatch(p -> p.test(stack));
+            return FamiliarDyes.isShrunkDye(stack) == shrunk
+                    && familiars.stream().anyMatch(p -> p.test(type)) && items.stream().anyMatch(p -> p.test(stack));
         }
 
         /** True if applying this rule would change at least one layer. */
@@ -126,6 +130,8 @@ public class FamiliarColorOverrides extends SimplePreparableReloadListener<Map<R
         }
         return Optional.empty();
     }
+
+    // Loading
 
     /** Reads every copy of every file, lowest priority pack first (same order tags use). */
     @Override
@@ -189,7 +195,7 @@ public class FamiliarColorOverrides extends SimplePreparableReloadListener<Map<R
             FamiliarsLib.LOGGER.warn("Familiar color overrides {} from {}: skipping an entry with no valid familiar, item or layer", fileId, pack);
             return Optional.empty();
         }
-        return Optional.of(new Rule(List.copyOf(familiars), List.copyOf(items), Map.copyOf(raw.layers()), raw.consume(), raw.sound()));
+        return Optional.of(new Rule(List.copyOf(familiars), List.copyOf(items), Map.copyOf(raw.layers()), raw.consume(), raw.sound(), raw.shrunk()));
     }
 
     private static Predicate<EntityType<?>> familiarPredicate(String value, ResourceLocation fileId, String pack) {

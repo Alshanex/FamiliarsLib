@@ -3,6 +3,7 @@ package net.alshanex.familiarslib.compendium;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.util.familiars.BiomeLayerColorData;
 import net.alshanex.familiarslib.util.familiars.FamiliarColorOverrides;
+import net.alshanex.familiarslib.util.familiars.FamiliarDyes;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -84,22 +85,42 @@ final class CompendiumBuilder {
         }
 
         // Items: group by identical effect, then add one step per layer color the effect sets
-        Map<Map<Integer, Integer>, List<Item>> grouped = new LinkedHashMap<>();
+        record Effect(Map<Integer, Integer> colors, boolean shrunk, boolean sneaking) {}
+        Map<Effect, List<Item>> grouped = new LinkedHashMap<>();
         for (Item item : BuiltInRegistries.ITEM) {
             ItemStack stack = new ItemStack(item);
+
+            // As a normal item: override rules, then dyes on the dye slot
             Map<Integer, Integer> effect = FamiliarColorOverrides.INSTANCE.find(type, stack)
                     .map(FamiliarColorOverrides.Rule::layers)
                     .orElse(null);
             if (effect == null && profile.dyeable() && item instanceof DyeItem dyeItem) {
-                effect = Map.of(AbstractSpellCastingPet.DYE_LAYER_SLOT, dyeItem.getDyeColor().getTextureDiffuseColor() & 0xFFFFFF);
+                effect = Map.of(AbstractSpellCastingPet.DYE_LAYER_SLOT, color(dyeItem));
             }
-            if (effect != null && !effect.isEmpty()) {
-                grouped.computeIfAbsent(new TreeMap<>(effect), e -> new ArrayList<>()).add(item);
+            addEffect(grouped, effect, false, false, item, Effect::new);
+
+            // As a shrunk dye: "shrunk" override rules, then dyes on the eye slots
+            if (FamiliarDyes.canBeShrunk(stack)) {
+                ItemStack shrunk = FamiliarDyes.shrink(stack);
+                Map<Integer, Integer> shrunkEffect = FamiliarColorOverrides.INSTANCE.find(type, shrunk)
+                        .map(FamiliarColorOverrides.Rule::layers)
+                        .orElse(null);
+                if (shrunkEffect == null && item instanceof DyeItem dyeItem) {
+                    if (profile.eyeDyeSlot() >= 0) {
+                        addEffect(grouped, Map.of(profile.eyeDyeSlot(), color(dyeItem)), true, false, item, Effect::new);
+                    }
+                    if (profile.sneakingEyeDyeSlot() >= 0) {
+                        addEffect(grouped, Map.of(profile.sneakingEyeDyeSlot(), color(dyeItem)), true, true, item, Effect::new);
+                    }
+                } else {
+                    addEffect(grouped, shrunkEffect, true, false, item, Effect::new);
+                }
             }
         }
         grouped.forEach((effect, items) -> {
-            CompendiumCatalog.Step step = new CompendiumCatalog.Step(BuiltInRegistries.ITEM.getKey(items.getFirst()), items.size() - 1);
-            effect.forEach((slot, rgb) -> {
+            CompendiumCatalog.Step step = new CompendiumCatalog.Step(
+                    BuiltInRegistries.ITEM.getKey(items.getFirst()), items.size() - 1, effect.shrunk(), effect.sneaking());
+            effect.colors().forEach((slot, rgb) -> {
                 int index = indexOfSlot(layers, slot);
                 if (index >= 0 && rgb >= 0) { // resetting to the original look isn't an option
                     option(options, index, rgb).steps.add(step);
@@ -117,6 +138,21 @@ final class CompendiumBuilder {
             result.add(new CompendiumCatalog.LayerOptions(layer.slot(), layer.nameKey(), List.copyOf(list)));
         }
         return new CompendiumCatalog.Section(typeId, List.copyOf(result), List.copyOf(spells));
+    }
+
+    private static int color(DyeItem dyeItem) {
+        return dyeItem.getDyeColor().getTextureDiffuseColor() & 0xFFFFFF;
+    }
+
+    private interface EffectFactory<E> {
+        E create(Map<Integer, Integer> colors, boolean shrunk, boolean sneaking);
+    }
+
+    private static <E> void addEffect(Map<E, List<Item>> grouped, Map<Integer, Integer> colors, boolean shrunk,
+                                      boolean sneaking, Item item, EffectFactory<E> factory) {
+        if (colors != null && !colors.isEmpty()) {
+            grouped.computeIfAbsent(factory.create(new TreeMap<>(colors), shrunk, sneaking), e -> new ArrayList<>()).add(item);
+        }
     }
 
     private static OptionBuilder option(List<Map<Integer, OptionBuilder>> options, int layerIndex, int rgb) {

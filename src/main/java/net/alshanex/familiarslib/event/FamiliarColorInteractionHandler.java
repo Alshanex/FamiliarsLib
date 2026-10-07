@@ -4,6 +4,7 @@ import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.compendium.FamiliarCompendium;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.util.familiars.FamiliarColorOverrides;
+import net.alshanex.familiarslib.util.familiars.FamiliarDyes;
 import net.alshanex.familiarslib.util.familiars.FamiliarManager;
 import net.alshanex.familiarslib.util.familiars.FamiliarSync;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -80,14 +81,30 @@ public class FamiliarColorInteractionHandler {
         finish(familiar, player, sound != null ? sound : SoundEvents.DYE_USE);
     }
 
+    /**
+     * Dyes: a normal dye colors the dye slot (clothes) of dyeable familiars. A shrunk dye colors the eyes
+     * ({@code getEyeDyeLayerSlot}); while sneaking, familiars with a second pair of eyes
+     * ({@code getSneakingEyeDyeLayerSlot}, e.g. the hunter's dog) get those colored instead.
+     */
     private static void applyDye(PlayerInteractEvent.EntityInteract event, AbstractSpellCastingPet familiar,
                                  Player player, ItemStack stack) {
-        if (!familiar.canBeDyed() || !(stack.getItem() instanceof DyeItem dyeItem)) {
+        if (!(stack.getItem() instanceof DyeItem dyeItem)) {
+            return;
+        }
+
+        int slot;
+        if (FamiliarDyes.isShrunkDye(stack)) {
+            int sneakingSlot = familiar.getSneakingEyeDyeLayerSlot();
+            slot = player.isShiftKeyDown() && sneakingSlot >= 0 ? sneakingSlot : familiar.getEyeDyeLayerSlot();
+        } else {
+            slot = familiar.canBeDyed() ? AbstractSpellCastingPet.DYE_LAYER_SLOT : -1;
+        }
+        if (slot < 0) {
             return;
         }
 
         int rgb = dyeItem.getDyeColor().getTextureDiffuseColor() & 0xFFFFFF;
-        if (familiar.getLayerColor(AbstractSpellCastingPet.DYE_LAYER_SLOT) == rgb) {
+        if (familiar.getLayerColor(slot) == rgb) {
             return; // already this color: don't waste the dye
         }
 
@@ -97,7 +114,7 @@ public class FamiliarColorInteractionHandler {
             return;
         }
 
-        familiar.setLayerColor(AbstractSpellCastingPet.DYE_LAYER_SLOT, rgb);
+        familiar.setLayerColor(slot, rgb);
         stack.consume(1, player);
         finish(familiar, player, SoundEvents.DYE_USE);
     }

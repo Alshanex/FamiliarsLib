@@ -131,7 +131,7 @@ public class CompendiumScreen extends Screen {
     private Tab tab = Tab.ABOUT;
     private double scroll = 0;
 
-    /** The familiars with something to show. */
+    /** The familiars with something to show (filled in init). */
     private List<CompendiumCatalog.Section> visible = List.of();
 
     /** The colors being previewed, per familiar (one per layer, -1 = original). */
@@ -223,7 +223,7 @@ public class CompendiumScreen extends Screen {
             addRenderableWidget(new FamiliarEntry(left + LIST_X, top + LIST_Y + row * ROW_H, index, visible.get(index)));
         }
         if (listPage > 0) {
-            addRenderableWidget(new PageArrow(left + 34, top + 214, false, () -> { listPage--; rebuild(); }));
+            addRenderableWidget(new PageArrow(left + 24, top + 214, false, () -> { listPage--; rebuild(); }));
         }
         if (listPage < listPages - 1) {
             addRenderableWidget(new PageArrow(left + 166, top + 214, true, () -> { listPage++; rebuild(); }));
@@ -819,10 +819,14 @@ public class CompendiumScreen extends Screen {
         for (CompendiumCatalog.Step step : option.steps()) {
             Item item = BuiltInRegistries.ITEM.get(step.item());
             MutableComponent itemName = item.getDescription().copy();
+            if (step.shrunk()) {
+                itemName = Component.translatable("compendium.familiarslib.step.shrunk", itemName);
+            }
             if (step.alternatives() > 0) {
                 itemName = Component.translatable("compendium.familiarslib.step.alternatives", itemName, step.alternatives());
             }
-            lines.add(Component.literal(" • ").append(Component.translatable("compendium.familiarslib.step", itemName)).withStyle(ChatFormatting.GRAY));
+            String key = step.sneaking() ? "compendium.familiarslib.step.sneaking" : "compendium.familiarslib.step";
+            lines.add(Component.literal(" • ").append(Component.translatable(key, itemName)).withStyle(ChatFormatting.GRAY));
         }
         return lines;
     }

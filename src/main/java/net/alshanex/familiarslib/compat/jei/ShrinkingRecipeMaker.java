@@ -16,13 +16,13 @@ import java.util.List;
 public final class ShrinkingRecipeMaker {
 
     private ShrinkingRecipeMaker() {
-        // Private constructor
+
     }
 
     public static List<ShrinkingRecipe> getRecipes(Level level) {
         List<ShrinkingRecipe> recipes = new ArrayList<>();
 
-        // 1. Get all registered shrinking recipes
+        // Get all registered shrinking recipes
         List<RecipeHolder<ShrinkingRecipe>> holders = level.getRecipeManager().getAllRecipesFor(FRecipeRegistry.SHRINKING_RECIPE_TYPE.get());
 
         for (RecipeHolder<ShrinkingRecipe> holder : holders) {
@@ -37,6 +37,9 @@ public final class ShrinkingRecipeMaker {
                 generateFoodRecipes(recipes, foodRecipe, level);
             }
             // Same for cosmetics: one display entry per item in the hat and weapon tags
+            else if (recipe instanceof DyeShrinkingRecipe dyeRecipe) {
+                generateDyeRecipes(recipes, dyeRecipe, level);
+            }
             else if (recipe instanceof CosmeticShrinkingRecipe cosmeticRecipe) {
                 generateCosmeticRecipes(recipes, cosmeticRecipe, level);
             }
@@ -60,6 +63,16 @@ public final class ShrinkingRecipeMaker {
                     // Create a "fake" FixedShrinkingRecipe just for JEI to display
                     recipes.add(new FixedShrinkingRecipe(Ingredient.of(stack), result));
                 }
+            }
+        }
+    }
+
+    private static void generateDyeRecipes(List<ShrinkingRecipe> recipes, DyeShrinkingRecipe dyeRecipe, Level level) {
+        for (Item item : BuiltInRegistries.ITEM) {
+            ItemStack stack = new ItemStack(item);
+            ShrinkingRecipe.Input input = new ShrinkingRecipe.Input(stack);
+            if (dyeRecipe.matches(input, level)) {
+                recipes.add(new FixedShrinkingRecipe(Ingredient.of(stack), dyeRecipe.assemble(input, level.registryAccess())));
             }
         }
     }
