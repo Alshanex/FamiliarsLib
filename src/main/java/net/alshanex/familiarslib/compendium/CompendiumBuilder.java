@@ -32,10 +32,10 @@ final class CompendiumBuilder {
     }
 
     static CompendiumCatalog.Section build(ResourceLocation typeId, EntityType<?> type, CompendiumProfile profile, Registry<Biome> biomes,
-                                           List<ResourceLocation> spells) {
+                                           List<ResourceLocation> hats, List<ResourceLocation> weapons, List<ResourceLocation> spells) {
         List<CompendiumProfile.Layer> layers = profile.layers();
         if (layers.isEmpty()) {
-            return new CompendiumCatalog.Section(typeId, List.of(), List.copyOf(spells));
+            return new CompendiumCatalog.Section(typeId, List.of(), List.copyOf(hats), List.copyOf(weapons), List.copyOf(spells));
         }
         // Per layer: color -> how to get it (insertion order = display order)
         List<Map<Integer, OptionBuilder>> options = new ArrayList<>();
@@ -137,7 +137,7 @@ final class CompendiumBuilder {
             CompendiumProfile.Layer layer = layers.get(i);
             result.add(new CompendiumCatalog.LayerOptions(layer.slot(), layer.nameKey(), List.copyOf(list)));
         }
-        return new CompendiumCatalog.Section(typeId, List.copyOf(result), List.copyOf(spells));
+        return new CompendiumCatalog.Section(typeId, List.copyOf(result), List.copyOf(hats), List.copyOf(weapons), List.copyOf(spells));
     }
 
     private static int color(DyeItem dyeItem) {

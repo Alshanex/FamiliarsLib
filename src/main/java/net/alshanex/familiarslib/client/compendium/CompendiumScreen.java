@@ -6,6 +6,7 @@ import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.compendium.CompendiumAbility;
 import net.alshanex.familiarslib.compendium.CompendiumCatalog;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
+import net.alshanex.familiarslib.util.familiars.FamiliarCosmeticSlot;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
@@ -87,6 +88,9 @@ public class CompendiumScreen extends Screen {
     private static final int LINE_H = 10;
     private static final int SWATCH = 12;
     private static final int SWATCH_STEP = 14;
+    /** Cosmetic cells hold a 16x16 item icon. */
+    private static final int COSMETIC_CELL = 18;
+    private static final int COSMETIC_STEP = 20;
     private static final int SWATCH_GAP_BELOW = 2;
     private static final int LABEL_H = 11;
     private static final int SPELL_ICON = 16;
@@ -136,6 +140,8 @@ public class CompendiumScreen extends Screen {
 
     /** The colors being previewed, per familiar (one per layer, -1 = original). */
     private final Map<ResourceLocation, int[]> previewColors = new HashMap<>();
+    /** The cosmetics being previewed, per familiar: [0] = hat, [1] = weapon (item ids, null = none). */
+    private final Map<ResourceLocation, ResourceLocation[]> previewCosmetics = new HashMap<>();
     private final Map<ResourceLocation, AbstractSpellCastingPet> previews = new HashMap<>();
 
     public CompendiumScreen() {
@@ -179,8 +185,13 @@ public class CompendiumScreen extends Screen {
         return ClientCompendium.isDiscovered(CompendiumCatalog.key(section.entityType(), layer.slot(), option.color()));
     }
 
+    private static boolean cosmeticUnlocked(ResourceLocation item) {
+        return ClientCompendium.isDiscovered(CompendiumCatalog.cosmeticKey(item));
+    }
+
     private static int unlockedCount(CompendiumCatalog.Section section) {
-        int found = 0;
+        int found = (int) section.hats().stream().filter(CompendiumScreen::cosmeticUnlocked).count()
+                + (int) section.weapons().stream().filter(CompendiumScreen::cosmeticUnlocked).count();
         for (CompendiumCatalog.LayerOptions layer : section.layers()) {
             for (CompendiumCatalog.ColorOption option : layer.options()) {
                 if (unlocked(section, layer, option)) found++;
@@ -247,7 +258,10 @@ public class CompendiumScreen extends Screen {
         // Colors tab: back to the original look
         if (tab == Tab.COLORS) {
             addRenderableWidget(new InkTextButton(left + BELOW_X, top + FOOTER_Y, Component.translatable("screen.familiarslib.compendium.reset"),
-                    () -> Arrays.fill(colorsFor(section), -1)));
+                    () -> {
+                        Arrays.fill(colorsFor(section), -1);
+                        previewCosmetics.remove(section.entityType());
+                    }));
         }
     }
 
@@ -392,7 +406,9 @@ public class CompendiumScreen extends Screen {
 
     // Page layout
 
-    private sealed interface El permits TextEl, IconEl, RuleEl, SwatchEl, SpellEl {}
+    private sealed interface El permits TextEl, IconEl, RuleEl, SwatchEl, SpellEl, CosmeticEl {}
+    /** A cosmetic item cell: hat (true) or weapon, and its index in the section's list (-1 = none). */
+    private record CosmeticEl(int x, int y, boolean hat, int index) implements El {}
     private record TextEl(FormattedCharSequence text, int x, int y, int color) implements El {}
     private record IconEl(ResourceLocation texture, int x, int y) implements El {}
     private record RuleEl(int x, int y, int width) implements El {}
@@ -530,6 +546,36 @@ public class CompendiumScreen extends Screen {
         private static int perRow(int width) {
             return Math.max(1, (width + 2) / SWATCH_STEP);
         }
+
+        /** The hat and weapon rows: like a color layer, each is one block of item cells (the first one is "none"). */
+        void cosmetics(CompendiumCatalog.Section section) {
+            cosmeticBlock(Component.translatable("screen.familiarslib.compendium.hat"), section.hats(), true);
+            cosmeticBlock(Component.translatable("screen.familiarslib.compendium.weapon"), section.weapons(), false);
+        }
+
+        private void cosmeticBlock(Component label, List<ResourceLocation> items, boolean hat) {
+            if (items.isEmpty()) return;
+            int count = items.size() + 1; // + none
+            int sideRows = (count + cellsPerRow(SIDE_W) - 1) / cellsPerRow(SIDE_W);
+            boolean inSide = placeInSide(LABEL_H + sideRows * COSMETIC_STEP - 2, 4);
+
+            List<El> out = inSide ? side : below;
+            int x0 = inSide ? SIDE_X : BELOW_X;
+            int perRow = cellsPerRow(inSide ? SIDE_W : BELOW_W);
+            int y = inSide ? sideY : belowY;
+
+            out.add(new TextEl(label.getVisualOrderText(), x0, y + 1, INK));
+            y += LABEL_H;
+            for (int i = 0; i < count; i++) {
+                out.add(new CosmeticEl(x0 + 1 + (i % perRow) * COSMETIC_STEP, y + 1 + (i / perRow) * COSMETIC_STEP, hat, i - 1));
+            }
+            y += ((count + perRow - 1) / perRow) * COSMETIC_STEP;
+            if (inSide) sideY = y; else belowY = y;
+        }
+
+        private static int cellsPerRow(int width) {
+            return Math.max(1, (width + 2) / COSMETIC_STEP);
+        }
     }
 
     private int abilityHeight(CompendiumAbility ability, int width) {
@@ -603,7 +649,10 @@ public class CompendiumScreen extends Screen {
                     flow.spells(spells, abilities.isEmpty() ? 0 : 8);
                 }
             }
-            case COLORS -> flow.colors(section);
+            case COLORS -> {
+                flow.colors(section);
+                flow.cosmetics(section);
+            }
         }
         return flow;
     }
@@ -660,7 +709,9 @@ public class CompendiumScreen extends Screen {
             }
         }
 
-        if (hovered instanceof SwatchEl swatch) {
+        if (hovered instanceof CosmeticEl cell) {
+            graphics.renderComponentTooltip(font, cosmeticTooltip(section, cell), mouseX, mouseY);
+        } else if (hovered instanceof SwatchEl swatch) {
             graphics.renderComponentTooltip(font, swatchTooltip(section, swatch), mouseX, mouseY);
         } else if (hovered instanceof SpellEl spell) {
             graphics.renderTooltip(font, spell.spell().getDisplayName(minecraft != null ? minecraft.player : null), mouseX, mouseY);
@@ -694,6 +745,12 @@ public class CompendiumScreen extends Screen {
                 renderSwatch(graphics, section, swatch, colors[swatch.layer()], x, y);
                 return mouseX >= x && mouseX < x + SWATCH && mouseY >= y && mouseY < y + SWATCH;
             }
+            case CosmeticEl cell -> {
+                int x = originX + cell.x();
+                int y = originY + cell.y();
+                renderCosmeticCell(graphics, section, cell, x, y);
+                return mouseX >= x && mouseX < x + COSMETIC_CELL && mouseY >= y && mouseY < y + COSMETIC_CELL;
+            }
             case SpellEl spell -> {
                 int x = originX + spell.x();
                 int y = originY + spell.y();
@@ -720,6 +777,9 @@ public class CompendiumScreen extends Screen {
         for (int i = 0; i < section.layers().size(); i++) {
             preview.setLayerColor(section.layers().get(i).slot(), colors[i]);
         }
+        ResourceLocation[] cosmetics = previewCosmetics.getOrDefault(section.entityType(), new ResourceLocation[2]);
+        preview.setCosmetic(FamiliarCosmeticSlot.HAT, cosmetics[0] == null ? ItemStack.EMPTY : new ItemStack(BuiltInRegistries.ITEM.get(cosmetics[0])));
+        preview.setCosmetic(FamiliarCosmeticSlot.WEAPON, cosmetics[1] == null ? ItemStack.EMPTY : new ItemStack(BuiltInRegistries.ITEM.get(cosmetics[1])));
 
         float partialTick = minecraft.getTimer().getGameTimeDeltaPartialTick(true);
         Vec3 renderOffset = minecraft.getEntityRenderDispatcher().getRenderer(preview).getRenderOffset(preview, partialTick);
@@ -849,6 +909,58 @@ public class CompendiumScreen extends Screen {
         };
     }
 
+    // ---------- Cosmetics ----------
+
+    @Nullable
+    private ResourceLocation cosmeticItem(CompendiumCatalog.Section section, CosmeticEl cell) {
+        if (cell.index() < 0) return null;
+        return (cell.hat() ? section.hats() : section.weapons()).get(cell.index());
+    }
+
+    private void renderCosmeticCell(GuiGraphics graphics, CompendiumCatalog.Section section, CosmeticEl cell, int x, int y) {
+        ResourceLocation item = cosmeticItem(section, cell);
+        ResourceLocation[] previewed = previewCosmetics.get(section.entityType());
+        ResourceLocation selected = previewed == null ? null : previewed[cell.hat() ? 0 : 1];
+        boolean isSelected = Objects.equals(item, selected);
+
+        if (item == null) {
+            graphics.fill(x, y, x + COSMETIC_CELL, y + COSMETIC_CELL, 0xFFE8D9B5);
+            graphics.drawString(font, "O", x + 6, y + 5, INK, false);
+        } else if (cosmeticUnlocked(item)) {
+            graphics.fill(x, y, x + COSMETIC_CELL, y + COSMETIC_CELL, 0xFFE8D9B5);
+            graphics.renderItem(new ItemStack(BuiltInRegistries.ITEM.get(item)), x + 1, y + 1);
+        } else {
+            graphics.fill(x, y, x + COSMETIC_CELL, y + COSMETIC_CELL, 0xFFD6C49C);
+            graphics.drawString(font, "?", x + 6, y + 5, INK_LIGHT, false);
+        }
+        graphics.renderOutline(x, y, COSMETIC_CELL, COSMETIC_CELL, INK);
+        if (isSelected) {
+            graphics.renderOutline(x - 1, y - 1, COSMETIC_CELL + 2, COSMETIC_CELL + 2, RIBBON_RED);
+        }
+    }
+
+    private List<Component> cosmeticTooltip(CompendiumCatalog.Section section, CosmeticEl cell) {
+        Component slotName = Component.translatable(cell.hat() ? "screen.familiarslib.compendium.hat" : "screen.familiarslib.compendium.weapon");
+        ResourceLocation item = cosmeticItem(section, cell);
+        List<Component> lines = new ArrayList<>();
+        if (item == null) {
+            lines.add(slotName.copy().append(": ").append(Component.translatable("screen.familiarslib.compendium.no_cosmetic")));
+            return lines;
+        }
+        Component itemName = BuiltInRegistries.ITEM.get(item).getDescription();
+        if (cosmeticUnlocked(item)) {
+            lines.add(slotName.copy().append(": ").append(itemName));
+            lines.add(Component.translatable("screen.familiarslib.compendium.click_to_preview").withStyle(ChatFormatting.GREEN));
+        } else {
+            lines.add(slotName.copy().append(": ")
+                    .append(Component.translatable("screen.familiarslib.compendium.locked").withStyle(ChatFormatting.GRAY)));
+            lines.add(Component.translatable("screen.familiarslib.compendium.how_to").withStyle(ChatFormatting.YELLOW));
+            lines.add(Component.literal(" • ").append(Component.translatable("screen.familiarslib.compendium.shrink_to_unlock", itemName))
+                    .withStyle(ChatFormatting.GRAY));
+        }
+        return lines;
+    }
+
     private static Component colorText(int rgb) {
         return Component.literal("■ ").withStyle(style -> style.withColor(TextColor.fromRgb(rgb)))
                 .append(Component.literal(String.format("#%06X", rgb)).withStyle(ChatFormatting.WHITE));
@@ -866,40 +978,50 @@ public class CompendiumScreen extends Screen {
             return false;
         }
         Flow flow = layout(section);
-        SwatchEl clicked = findSwatch(flow.side, left, top, mouseX, mouseY);
+        El clicked = findClickable(flow.side, left, top, mouseX, mouseY);
         if (clicked == null && mouseY >= top + BELOW_TOP && mouseY <= top + BELOW_BOTTOM) {
-            clicked = findSwatch(flow.below, left, top + BELOW_TOP - (int) scroll, mouseX, mouseY);
+            clicked = findClickable(flow.below, left, top + BELOW_TOP - (int) scroll, mouseX, mouseY);
         }
-        if (clicked == null) {
-            return false;
-        }
-        CompendiumCatalog.LayerOptions layer = section.layers().get(clicked.layer());
-        int color;
-        if (clicked.option() < 0) {
-            color = -1;
-        } else {
-            CompendiumCatalog.ColorOption option = layer.options().get(clicked.option());
-            if (!unlocked(section, layer, option)) {
+        if (clicked instanceof SwatchEl swatch) {
+            CompendiumCatalog.LayerOptions layer = section.layers().get(swatch.layer());
+            int color;
+            if (swatch.option() < 0) {
+                color = -1;
+            } else {
+                CompendiumCatalog.ColorOption option = layer.options().get(swatch.option());
+                if (!unlocked(section, layer, option)) {
+                    return true; // locked: can't preview it yet
+                }
+                color = option.color();
+            }
+            colorsFor(section)[swatch.layer()] = color;
+        } else if (clicked instanceof CosmeticEl cell) {
+            ResourceLocation item = cosmeticItem(section, cell);
+            if (item != null && !cosmeticUnlocked(item)) {
                 return true; // locked: can't preview it yet
             }
-            color = option.color();
+            previewCosmetics.computeIfAbsent(section.entityType(), id -> new ResourceLocation[2])[cell.hat() ? 0 : 1] = item;
+        } else {
+            return false;
         }
-        colorsFor(section)[clicked.layer()] = color;
         if (minecraft != null) {
             minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0F));
         }
         return true;
     }
 
+    /** The color swatch or cosmetic cell under the mouse, if any. */
     @Nullable
-    private static SwatchEl findSwatch(List<El> elements, int originX, int originY, double mouseX, double mouseY) {
+    private static El findClickable(List<El> elements, int originX, int originY, double mouseX, double mouseY) {
         for (El el : elements) {
             if (el instanceof SwatchEl swatch) {
                 int x = originX + swatch.x();
                 int y = originY + swatch.y();
-                if (mouseX >= x && mouseX < x + SWATCH && mouseY >= y && mouseY < y + SWATCH) {
-                    return swatch;
-                }
+                if (mouseX >= x && mouseX < x + SWATCH && mouseY >= y && mouseY < y + SWATCH) return swatch;
+            } else if (el instanceof CosmeticEl cell) {
+                int x = originX + cell.x();
+                int y = originY + cell.y();
+                if (mouseX >= x && mouseX < x + COSMETIC_CELL && mouseY >= y && mouseY < y + COSMETIC_CELL) return cell;
             }
         }
         return null;

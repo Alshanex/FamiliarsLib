@@ -53,6 +53,10 @@
   "screen.familiarslib.compendium.click_to_preview": "Click to try it on",
   "screen.familiarslib.compendium.locked": "Locked",
   "screen.familiarslib.compendium.how_to": "How to get it:",
+  "screen.familiarslib.compendium.hat": "Hat",
+  "screen.familiarslib.compendium.weapon": "Weapon",
+  "screen.familiarslib.compendium.no_cosmetic": "None",
+  "screen.familiarslib.compendium.shrink_to_unlock": "Shrink a %s in the Shrinking Station",
 
   "tooltip.familiarslib.multi_selection_item.line1": "Allows you to summon/unsummon multiple Familiars at once",
   "tooltip.familiarslib.multi_selection_item.selected": "Selected: %d Familiars",

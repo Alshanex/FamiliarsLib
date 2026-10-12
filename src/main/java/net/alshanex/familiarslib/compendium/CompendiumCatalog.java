@@ -16,10 +16,12 @@ import java.util.List;
 public record CompendiumCatalog(List<Section> sections) {
     public static final CompendiumCatalog EMPTY = new CompendiumCatalog(List.of());
 
-    /** One familiar: its layers, and the spells it can cast. */
-    public record Section(ResourceLocation entityType, List<LayerOptions> layers, List<ResourceLocation> spells) {
+    /** One familiar: its layers, the cosmetic hats and weapons it can wear (item ids), and the spells it can cast. */
+    public record Section(ResourceLocation entityType, List<LayerOptions> layers, List<ResourceLocation> hats,
+                          List<ResourceLocation> weapons, List<ResourceLocation> spells) {
+        /** Every collectible entry: layer colors, hats and weapons. */
         public int optionCount() {
-            return layers.stream().mapToInt(l -> l.options().size()).sum();
+            return layers.stream().mapToInt(l -> l.options().size()).sum() + hats.size() + weapons.size();
         }
     }
 
@@ -46,6 +48,11 @@ public record CompendiumCatalog(List<Section> sections) {
      */
     public record Step(ResourceLocation item, int alternatives, boolean shrunk, boolean sneaking) {}
 
+    /** Identifies an unlocked cosmetic item. Shared by every familiar that can wear it. */
+    public static String cosmeticKey(ResourceLocation item) {
+        return "cosmetic|" + item;
+    }
+
     /** Identifies one unlocked layer color: entity id + layer slot + color. Used for the player's discoveries. */
     public static String key(ResourceLocation entityType, int slot, int color) {
         return entityType + "|" + slot + "|" + Integer.toHexString(color);
@@ -58,6 +65,10 @@ public record CompendiumCatalog(List<Section> sections) {
                 buf.writeVarInt(catalog.sections().size());
                 for (Section section : catalog.sections()) {
                     buf.writeResourceLocation(section.entityType());
+                    buf.writeVarInt(section.hats().size());
+                    section.hats().forEach(buf::writeResourceLocation);
+                    buf.writeVarInt(section.weapons().size());
+                    section.weapons().forEach(buf::writeResourceLocation);
                     buf.writeVarInt(section.spells().size());
                     section.spells().forEach(buf::writeResourceLocation);
                     buf.writeVarInt(section.layers().size());
@@ -91,6 +102,12 @@ public record CompendiumCatalog(List<Section> sections) {
                 List<Section> sections = new ArrayList<>(sectionCount);
                 for (int s = 0; s < sectionCount; s++) {
                     ResourceLocation type = buf.readResourceLocation();
+                    int hatCount = buf.readVarInt();
+                    List<ResourceLocation> hats = new ArrayList<>(hatCount);
+                    for (int i = 0; i < hatCount; i++) hats.add(buf.readResourceLocation());
+                    int weaponCount = buf.readVarInt();
+                    List<ResourceLocation> weapons = new ArrayList<>(weaponCount);
+                    for (int i = 0; i < weaponCount; i++) weapons.add(buf.readResourceLocation());
                     int spellCount = buf.readVarInt();
                     List<ResourceLocation> spells = new ArrayList<>(spellCount);
                     for (int i = 0; i < spellCount; i++) spells.add(buf.readResourceLocation());
@@ -122,7 +139,7 @@ public record CompendiumCatalog(List<Section> sections) {
                         }
                         layers.add(new LayerOptions(slot, nameKey, options));
                     }
-                    sections.add(new Section(type, layers, spells));
+                    sections.add(new Section(type, layers, hats, weapons, spells));
                 }
                 return new CompendiumCatalog(sections);
             });

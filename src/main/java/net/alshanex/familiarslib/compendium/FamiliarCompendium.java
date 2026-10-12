@@ -7,6 +7,7 @@ import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.network.CompendiumCatalogPacket;
 import net.alshanex.familiarslib.network.CompendiumDiscoveriesPacket;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
+import net.alshanex.familiarslib.util.familiars.FamiliarCosmetics;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -14,6 +15,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
@@ -23,6 +27,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.TagsUpdatedEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
@@ -101,7 +106,8 @@ public final class FamiliarCompendium {
             ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(type);
             CompendiumProfile profile = profiles.getOrDefault(type, CompendiumProfile.builder().build())
                     .withDefaultsFrom(familiar);
-            CompendiumCatalog.Section section = CompendiumBuilder.build(id, type, profile, biomes, spellsOf(familiar));
+            CompendiumCatalog.Section section = CompendiumBuilder.build(id, type, profile, biomes,
+                    cosmeticsOf(familiar, true), cosmeticsOf(familiar, false), spellsOf(familiar));
             sections.add(section);
             total += section.optionCount();
         }
@@ -124,6 +130,27 @@ public final class FamiliarCompendium {
             FamiliarsLib.LOGGER.debug("Familiar compendium: skipping {}", BuiltInRegistries.ENTITY_TYPE.getKey(type), e);
         }
         return null;
+    }
+
+    /** The items this familiar can wear as a hat (hats = true) or hold as a weapon. */
+    private static List<ResourceLocation> cosmeticsOf(AbstractSpellCastingPet familiar, boolean hats) {
+        try {
+            if (hats ? !familiar.canWearCosmeticHat() : !familiar.canHoldCosmeticWeapon()) {
+                return List.of();
+            }
+            List<ResourceLocation> items = new ArrayList<>();
+            for (Item item : BuiltInRegistries.ITEM) {
+                ItemStack stack = new ItemStack(item);
+                boolean fits = hats
+                        ? stack.is(FamiliarCosmetics.HATS) && familiar.canWearCosmeticHat(stack)
+                        : stack.is(FamiliarCosmetics.WEAPONS) && familiar.canHoldCosmeticWeapon(stack);
+                if (fits) items.add(BuiltInRegistries.ITEM.getKey(item));
+            }
+            return List.copyOf(items);
+        } catch (Exception e) {
+            FamiliarsLib.LOGGER.error("Familiar compendium: couldn't read the cosmetics of {}", BuiltInRegistries.ENTITY_TYPE.getKey(familiar.getType()), e);
+            return List.of();
+        }
     }
 
     /** The familiar's spells. Read on the server because spell tags only exist there. */
@@ -165,6 +192,33 @@ public final class FamiliarCompendium {
                 sendDiscoveries(player);
             }
             return;
+        }
+    }
+
+    /** How often players' inventories are checked for newly shrunk cosmetics. */
+    private static final int COSMETIC_SCAN_INTERVAL = 40;
+
+    /**
+     * Shrunk cosmetics unlock their compendium entry as soon as a player has one: taken from the shrinking station,
+     * from a chest the station's hopper fed, or from anyone else.
+     */
+    @SubscribeEvent
+    public static void onPlayerTick(PlayerTickEvent.Post event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.tickCount % COSMETIC_SCAN_INTERVAL != 0) {
+            return;
+        }
+        CompendiumDiscoveries discoveries = player.getData(AttachmentRegistry.COMPENDIUM_DISCOVERIES);
+        boolean changed = false;
+        Inventory inventory = player.getInventory();
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (FamiliarCosmetics.isShrunkCosmetic(stack)) {
+                changed |= discoveries.add(CompendiumCatalog.cosmeticKey(BuiltInRegistries.ITEM.getKey(stack.getItem())));
+            }
+        }
+        if (changed) {
+            player.setData(AttachmentRegistry.COMPENDIUM_DISCOVERIES, discoveries); // marks it for saving
+            sendDiscoveries(player);
         }
     }
 
