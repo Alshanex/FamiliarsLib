@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "S": {
+      "item": "minecraft:spyglass"
+    },
+    "E": {
+      "item": "irons_spellbooks:arcane_essence"
+    },
+    "I": {
+      "item": "irons_spellbooks:arcane_ingot"
+    }
+  },
+  "pattern": [
+    "SI",
+    "IE"
+  ],
+  "result": {
+    "id": "familiarslib:familiar_camera"
+  }
+}

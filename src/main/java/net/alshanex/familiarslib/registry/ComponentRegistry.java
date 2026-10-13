@@ -3,6 +3,7 @@ package net.alshanex.familiarslib.registry;
 import com.google.common.base.Suppliers;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.data.FamiliarIdentity;
+import net.alshanex.familiarslib.item.camera.FamiliarPhoto;
 import net.alshanex.familiarslib.util.SelectedFamiliarsComponent;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableComponent;
 import net.alshanex.familiarslib.util.consumables.FamiliarFoodComponent;
@@ -79,6 +80,13 @@ public class ComponentRegistry {
                             .networkSynchronized(StreamCodec.unit(Unit.INSTANCE))
                             .build()
             );
+
+    public static final Supplier<DataComponentType<FamiliarPhoto>> FAMILIAR_PHOTO =
+            COMPONENTS.register("familiar_photo", () -> DataComponentType.<FamiliarPhoto>builder()
+                    .persistent(FamiliarPhoto.CODEC)
+                    .networkSynchronized(FamiliarPhoto.STREAM_CODEC)
+                    .cacheEncoding()
+                    .build());
 
     public static final Supplier<DataComponentType<CompoundTag>> SOUL_LINK = register("soul_link", CompoundTag::new, op -> op.persistent(CompoundTag.CODEC));
 

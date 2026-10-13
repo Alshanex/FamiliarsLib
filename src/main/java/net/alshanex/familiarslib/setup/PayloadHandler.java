@@ -22,6 +22,7 @@ public class PayloadHandler {
         payloadRegistrar.playToServer(SetStorageModePacket.TYPE, SetStorageModePacket.STREAM_CODEC, SetStorageModePacket::handle);
         payloadRegistrar.playToServer(UpdateStorageSettingsPacket.TYPE, UpdateStorageSettingsPacket.STREAM_CODEC, UpdateStorageSettingsPacket::handle);
         payloadRegistrar.playToServer(QuickSummonPacket.TYPE, QuickSummonPacket.STREAM_CODEC, QuickSummonPacket::handle);
+        payloadRegistrar.playToServer(ServerboundTakePhotoPacket.TYPE, ServerboundTakePhotoPacket.STREAM_CODEC, ServerboundTakePhotoPacket::handle);
 
         payloadRegistrar.playToClient(FamiliarStatePacket.TYPE, FamiliarStatePacket.STREAM_CODEC, FamiliarStatePacket::handle);
         payloadRegistrar.playToClient(FamiliarSnapshotsPacket.TYPE, FamiliarSnapshotsPacket.STREAM_CODEC, FamiliarSnapshotsPacket::handle);

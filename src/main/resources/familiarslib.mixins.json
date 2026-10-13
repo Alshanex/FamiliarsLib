@@ -10,6 +10,7 @@
     "SchoolTypeAccessor"
   ],
   "client": [
+    "GeoModelPhotoPoseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

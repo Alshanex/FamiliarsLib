@@ -3,12 +3,14 @@ package net.alshanex.familiarslib;
 import net.alshanex.familiarslib.block.ShrinkingStationBlock;
 import net.alshanex.familiarslib.block.entity.ShrinkingStationBlockEntity;
 import net.alshanex.familiarslib.registry.*;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.neoforged.fml.ModList;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
@@ -96,5 +98,9 @@ public class FamiliarsLib {
 
     public static boolean isModLoaded(String modId) {
         return ModList.get().isLoaded(modId);
+    }
+
+    public static ResourceLocation id(@NotNull String path) {
+        return new ResourceLocation(FamiliarsLib.MODID, path);
     }
 }
