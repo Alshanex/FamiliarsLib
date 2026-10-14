@@ -18,6 +18,8 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderItemInFrameEvent;
 
+import javax.annotation.Nullable;
+
 /**
  * A photo in an item frame is shown as a printed picture: the paper print (photo_print.png) with the captured
  * image of the familiar (see PhotoTextures) fitted inside the picture area. Blank photos render as a normal item.
@@ -67,12 +69,15 @@ public final class PhotoFrameRenderer {
     }
 
     /**
-     * Draws a photo as item frames show it: the paper print with the captured image in its picture area.
+     * Draws a photo as item frames show it: the paper print with the captured image in its picture area
+     * (just the paper for a blank photo).
      */
-    public static void drawPhoto(FamiliarPhoto photo, PoseStack pose, MultiBufferSource buffer, int light, float size) {
+    public static void drawPhoto(@Nullable FamiliarPhoto photo, PoseStack pose, MultiBufferSource buffer, int light, float size) {
         float h = size / 2F;
         quad(buffer.getBuffer(RenderType.entityCutoutNoCull(PRINT)), pose.last(), -h, -h, h, h, PRINT_Z, light);
-        drawImage(photo, pose, buffer, light, size);
+        if (photo != null) {
+            drawImage(photo, pose, buffer, light, size);
+        }
     }
 
     /** The captured image, as big as it fits in the picture area, standing on its bottom edge. */
@@ -101,12 +106,15 @@ public final class PhotoFrameRenderer {
                 left, bottom, left + width, bottom + height, IMAGE_Z, light);
     }
 
-    /** A flat textured rectangle facing the viewer, the whole texture stretched over it. */
+    /**
+     * A flat textured rectangle facing the viewer, the whole texture stretched over it. Seen from -Z, +X is the
+     * viewer's left (as in vanilla's frame space, where maps also start at +X), so the texture's left edge goes there.
+     */
     private static void quad(VertexConsumer consumer, PoseStack.Pose last, float x0, float y0, float x1, float y1, float z, int light) {
-        vertex(consumer, last, x0, y1, z, 0F, 0F, light);
-        vertex(consumer, last, x0, y0, z, 0F, 1F, light);
-        vertex(consumer, last, x1, y0, z, 1F, 1F, light);
-        vertex(consumer, last, x1, y1, z, 1F, 0F, light);
+        vertex(consumer, last, x1, y1, z, 0F, 0F, light);
+        vertex(consumer, last, x1, y0, z, 0F, 1F, light);
+        vertex(consumer, last, x0, y0, z, 1F, 1F, light);
+        vertex(consumer, last, x0, y1, z, 1F, 0F, light);
     }
 
     private static void vertex(VertexConsumer consumer, PoseStack.Pose last, float x, float y, float z, float u, float v, int light) {

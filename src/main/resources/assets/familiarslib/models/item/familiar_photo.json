@@ -1,6 +1,47 @@
 {
-  "parent": "minecraft:item/generated",
-  "textures": {
-    "layer0": "familiarslib:item/familiar_photo"
+  "loader": "neoforge:separate_transforms",
+  "gui_light": "front",
+  "base": {
+    "parent": "builtin/entity",
+    "gui_light": "front",
+    "textures": {
+      "particle": "familiarslib:item/familiar_photo"
+    },
+    "display": {
+      "thirdperson_righthand": {
+        "rotation": [0, 0, 0],
+        "translation": [0, 3, 1],
+        "scale": [0.55, 0.55, 0.55]
+      },
+      "thirdperson_lefthand": {
+        "rotation": [0, 0, 0],
+        "translation": [0, 3, 1],
+        "scale": [0.55, 0.55, 0.55]
+      },
+      "firstperson_righthand": {
+        "rotation": [0, 0, 0],
+        "translation": [0, 4, -2],
+        "scale": [0.55, 0.55, 0.55]
+      },
+      "firstperson_lefthand": {
+        "rotation": [0, 0, 0],
+        "translation": [0, 4, -2],
+        "scale": [0.55, 0.55, 0.55]
+      }
+    }
+  },
+  "perspectives": {
+    "gui": {
+      "parent": "familiarslib:item/familiar_photo_icon"
+    },
+    "ground": {
+      "parent": "familiarslib:item/familiar_photo_icon"
+    },
+    "fixed": {
+      "parent": "familiarslib:item/familiar_photo_icon"
+    },
+    "head": {
+      "parent": "familiarslib:item/familiar_photo_icon"
+    }
   }
 }
