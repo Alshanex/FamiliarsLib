@@ -97,7 +97,9 @@ public class FamiliarColorInteractionHandler {
             int sneakingSlot = familiar.getSneakingEyeDyeLayerSlot();
             slot = player.isShiftKeyDown() && sneakingSlot >= 0 ? sneakingSlot : familiar.getEyeDyeLayerSlot();
         } else {
-            slot = familiar.canBeDyed() ? AbstractSpellCastingPet.DYE_LAYER_SLOT : -1;
+            int sneakingSlot = familiar.getSneakingDyeLayerSlot();
+            slot = player.isShiftKeyDown() && sneakingSlot >= 0 ? sneakingSlot
+                    : familiar.canBeDyed() ? AbstractSpellCastingPet.DYE_LAYER_SLOT : -1;
         }
         if (slot < 0) {
             return;

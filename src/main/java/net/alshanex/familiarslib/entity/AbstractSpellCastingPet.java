@@ -1362,6 +1362,14 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
     }
 
     /**
+     * The slot normal dyes color while sneaking, for familiars with a second dyeable part (e.g. the vampire's
+     * wings), or -1. Familiars without one color their dye slot whether sneaking or not.
+     */
+    public int getSneakingDyeLayerSlot() {
+        return -1;
+    }
+
+    /**
      * Called once on the server when a new familiar appears.
      * reason is null for familiars created without finalizeSpawn (shards).
      * Familiars loaded from a save never call this.

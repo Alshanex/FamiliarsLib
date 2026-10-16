@@ -26,6 +26,7 @@ public final class CompendiumProfile {
     private final List<BiomeLayerColorData> biomeData;
     private final int eyeDyeSlot;
     private final int sneakingEyeDyeSlot;
+    private final int sneakingDyeSlot;
 
     private CompendiumProfile(Builder builder) {
         this.layers = List.copyOf(builder.layers);
@@ -34,6 +35,7 @@ public final class CompendiumProfile {
         this.biomeData = List.copyOf(builder.biomeData);
         this.eyeDyeSlot = builder.eyeDyeSlot;
         this.sneakingEyeDyeSlot = builder.sneakingEyeDyeSlot;
+        this.sneakingDyeSlot = builder.sneakingDyeSlot;
     }
 
     public List<Layer> layers() { return layers; }
@@ -42,6 +44,7 @@ public final class CompendiumProfile {
     public List<BiomeLayerColorData> biomeData() { return biomeData; }
     public int eyeDyeSlot() { return eyeDyeSlot; }
     public int sneakingEyeDyeSlot() { return sneakingEyeDyeSlot; }
+    public int sneakingDyeSlot() { return sneakingDyeSlot; }
 
     public static Builder builder() {
         return new Builder();
@@ -56,6 +59,7 @@ public final class CompendiumProfile {
         builder.biomeData.addAll(biomeData);
         builder.eyeDyeSlot = eyeDyeSlot;
         builder.sneakingEyeDyeSlot = sneakingEyeDyeSlot;
+        builder.sneakingDyeSlot = sneakingDyeSlot;
         return builder;
     }
 
@@ -91,6 +95,13 @@ public final class CompendiumProfile {
                 builder.layer(sneakingEyes, "compendium.familiarslib.layer.second_eyes");
             }
         }
+        int sneakingDye = familiar.getSneakingDyeLayerSlot();
+        if (sneakingDye >= 0 && sneakingDyeSlot < 0) {
+            builder.sneakingDyeSlot = sneakingDye;
+            if (!hasLayer(sneakingDye)) {
+                builder.layer(sneakingDye, "compendium.familiarslib.layer.second_dye");
+            }
+        }
         return builder.build();
     }
 
@@ -101,6 +112,7 @@ public final class CompendiumProfile {
         private final List<BiomeLayerColorData> biomeData = new ArrayList<>();
         private int eyeDyeSlot = -1;
         private int sneakingEyeDyeSlot = -1;
+        private int sneakingDyeSlot = -1;
 
         /** A color layer the compendium tracks, in display order. */
         public Builder layer(int slot, String nameKey) {
@@ -117,6 +129,12 @@ public final class CompendiumProfile {
         /** Shrunk dyes color this slot (match {@code getEyeDyeLayerSlot()}). Also add it with {@link #layer}. */
         public Builder eyeDyeable(int slot) {
             this.eyeDyeSlot = slot;
+            return this;
+        }
+
+        /** Normal dyes color this slot while sneaking (match {@code getSneakingDyeLayerSlot()}). Also add it with {@link #layer}. */
+        public Builder sneakingDyeable(int slot) {
+            this.sneakingDyeSlot = slot;
             return this;
         }
 

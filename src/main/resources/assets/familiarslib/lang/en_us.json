@@ -174,5 +174,6 @@
   "compendium.familiarslib.step.sneaking": "Sneak and use %s on it",
   "compendium.familiarslib.layer.dye": "Main Color",
   "compendium.familiarslib.layer.eyes": "Eyes",
-  "compendium.familiarslib.layer.second_eyes": "Second Eyes"
+  "compendium.familiarslib.layer.second_eyes": "Second Eyes",
+  "compendium.familiarslib.layer.second_dye": "Second Dye"
 }

@@ -94,10 +94,16 @@ final class CompendiumBuilder {
             Map<Integer, Integer> effect = FamiliarColorOverrides.INSTANCE.find(type, stack)
                     .map(FamiliarColorOverrides.Rule::layers)
                     .orElse(null);
+            boolean overridden = effect != null;
             if (effect == null && profile.dyeable() && item instanceof DyeItem dyeItem) {
                 effect = Map.of(AbstractSpellCastingPet.DYE_LAYER_SLOT, color(dyeItem));
             }
             addEffect(grouped, effect, false, false, item, Effect::new);
+
+            // As a normal dye while sneaking: the second dye slot
+            if (!overridden && profile.sneakingDyeSlot() >= 0 && item instanceof DyeItem dyeItem) {
+                addEffect(grouped, Map.of(profile.sneakingDyeSlot(), color(dyeItem)), false, true, item, Effect::new);
+            }
 
             // As a shrunk dye: "shrunk" override rules, then dyes on the eye slots
             if (FamiliarDyes.canBeShrunk(stack)) {
