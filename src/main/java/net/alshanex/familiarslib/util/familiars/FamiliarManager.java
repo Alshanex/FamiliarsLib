@@ -29,7 +29,11 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
@@ -226,7 +230,10 @@ public class FamiliarManager {
         // Apply health correctly using the helper method
         applyHealthFromNBT(familiar, familiarNBT);
 
-        Vec3 spawnPos = findSafeSpawnPosition(player, level);
+        Vec3 spawnPos = player.isShiftKeyDown() ? findAimedSpawnPosition(player, level, familiar) : null;
+        if (spawnPos == null) {
+            spawnPos = findSpawnPositionNearOwner(player, level, familiar, 0);
+        }
         familiar.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
         familiar.setYRot(player.getYRot());
         familiar.setOldPosAndRot();
@@ -380,92 +387,103 @@ public class FamiliarManager {
  */
     }
 
-    private static Vec3 findSafeSpawnPosition(ServerPlayer player, ServerLevel level) {
-        Vec3 playerPos = player.getEyePosition();
+    // Preferred spots relative to the owner's facing (x = side, z = forward)
+    private static final double[][] SPAWN_OFFSETS = {
+            {2.0, 0.0}, {-2.0, 0.0}, {0.0, 2.0}, {0.0, -2.0},
+            {1.5, 1.5}, {-1.5, 1.5}, {1.5, -1.5}, {-1.5, -1.5},
+            {3.0, 0.0}, {-3.0, 0.0}, {0.0, 3.0}, {0.0, -3.0}
+    };
+    private static final int SPAWN_SEARCH_RADIUS = 4;
+    private static final int[] SPAWN_DY_ORDER = {0, -1, 1, -2, 2, -3};
+    private static final double HEIGHT_CHANGE_PENALTY = 3.0;
 
-        // Try multiple positions around the player
-        double[][] offsets = {
-                {3.0, 0.0}, {-3.0, 0.0}, {0.0, 3.0}, {0.0, -3.0},
-                {2.1, 2.1}, {-2.1, 2.1}, {2.1, -2.1}, {-2.1, -2.1},
-                {4.0, 0.0}, {-4.0, 0.0}, {0.0, 4.0}, {0.0, -4.0},
-                {1.5, 1.5}, {-1.5, 1.5}, {1.5, -1.5}, {-1.5, -1.5}
-        };
+    private static final double AIMED_SUMMON_RANGE = 24.0;
+    private static final int[] AIMED_DY_ORDER = {0, -1, -2, -3, -4, 1};
 
+    private static Vec3 findSpawnPositionNearOwner(ServerPlayer player, ServerLevel level, Entity familiar, int positionIndex) {
+        double[] offset = SPAWN_OFFSETS[Math.floorMod(positionIndex, SPAWN_OFFSETS.length)];
         float yrot = player.getYRot() * Mth.DEG_TO_RAD;
+        double cos = Math.cos(yrot);
+        double sin = Math.sin(yrot);
+        double preferredX = player.getX() + offset[0] * cos - offset[1] * sin;
+        double preferredZ = player.getZ() + offset[0] * sin + offset[1] * cos;
 
-        // Try each offset position
-        for (double[] offset : offsets) {
-            double cos = Math.cos(yrot);
-            double sin = Math.sin(yrot);
+        // Feet level; ceil handles standing on slabs, soul sand, etc.
+        BlockPos feet = new BlockPos(Mth.floor(player.getX()), Mth.ceil(player.getY() - 0.01), Mth.floor(player.getZ()));
+        Vec3 eye = player.getEyePosition();
 
-            double worldX = offset[0] * cos - offset[1] * sin;
-            double worldZ = offset[0] * sin + offset[1] * cos;
+        BlockPos best = null;
+        double bestScore = Double.MAX_VALUE;
 
-            Vec3 targetPos = playerPos.add(worldX, 0, worldZ);
-            Vec3 safePos = findSafePositionNear(level, targetPos);
+        for (int dx = -SPAWN_SEARCH_RADIUS; dx <= SPAWN_SEARCH_RADIUS; dx++) {
+            for (int dz = -SPAWN_SEARCH_RADIUS; dz <= SPAWN_SEARCH_RADIUS; dz++) {
+                if (dx == 0 && dz == 0) continue;
+                if (dx * dx + dz * dz > SPAWN_SEARCH_RADIUS * SPAWN_SEARCH_RADIUS) continue;
 
-            if (safePos != null) {
-                return safePos;
+                for (int dy : SPAWN_DY_ORDER) {
+                    BlockPos candidate = feet.offset(dx, dy, dz);
+                    double ox = candidate.getX() + 0.5 - preferredX;
+                    double oz = candidate.getZ() + 0.5 - preferredZ;
+                    double score = Math.sqrt(ox * ox + oz * oz) + Math.abs(dy) * HEIGHT_CHANGE_PENALTY;
+
+                    if (score >= bestScore) break; // remaining dy values only score worse
+                    if (isValidSpawnSpot(level, player, familiar, candidate, eye)) {
+                        best = candidate;
+                        bestScore = score;
+                        break;
+                    }
+                }
             }
         }
 
-        // Final fallback - try positions directly around player
-        for (int attempts = 0; attempts < 20; attempts++) {
-            double randomAngle = level.random.nextDouble() * 2 * Math.PI;
-            double distance = 2.0 + level.random.nextDouble() * 3.0; // 2-5 blocks away
-
-            double x = playerPos.x + Math.cos(randomAngle) * distance;
-            double z = playerPos.z + Math.sin(randomAngle) * distance;
-
-            Vec3 randomPos = new Vec3(x, playerPos.y, z);
-            Vec3 safePos = findSafePositionNear(level, randomPos);
-
-            if (safePos != null) {
-                return safePos;
-            }
-        }
-
-        // Ultimate fallback - spawn at player position but slightly offset and centered
-        BlockPos playerBlock = BlockPos.containing(playerPos.add(1, 0, 0));
-        return new Vec3(playerBlock.getX() + 0.5, playerPos.y, playerBlock.getZ() + 0.5);
+        return best != null ? Vec3.atBottomCenterOf(best) : player.position();
     }
 
-    private static Vec3 findSafePositionNear(ServerLevel level, Vec3 targetPos) {
-        // Try different Y levels around the target position
-        int baseY = (int) targetPos.y;
+    private static boolean isValidSpawnSpot(ServerLevel level, ServerPlayer player, Entity familiar, BlockPos pos, Vec3 eye) {
+        if (!level.isLoaded(pos)) return false;
 
-        // Check from ground level up to avoid spawning underground
-        int minY = Math.max(level.getMinBuildHeight(), baseY - 5);
-        int maxY = Math.min(level.getMaxBuildHeight() - 2, baseY + 10);
+        Vec3 bottom = Vec3.atBottomCenterOf(pos);
+        if (!isPositionSafeForSpawning(level, bottom)) return false;
 
-        for (int y = baseY; y <= maxY; y++) {
-            Vec3 testPos = new Vec3(targetPos.x, y, targetPos.z);
-            if (isPositionSafeForSpawning(level, testPos)) {
-                // Center the position on the block to prevent suffocation
-                return centerOnBlock(testPos);
-            }
-        }
+        // Use the familiar's real hitbox (handles big/scaled familiars)
+        AABB box = familiar.getDimensions(familiar.getPose()).makeBoundingBox(bottom);
+        if (!level.noCollision(familiar, box) || level.containsAnyLiquid(box)) return false;
 
-        // Try below if above didn't work
-        for (int y = baseY - 1; y >= minY; y--) {
-            Vec3 testPos = new Vec3(targetPos.x, y, targetPos.z);
-            if (isPositionSafeForSpawning(level, testPos)) {
-                // Center the position on the block to prevent suffocation
-                return centerOnBlock(testPos);
-            }
-        }
-
-        return null; // No safe position found
+        // Must be visible from the owner: rejects spots behind walls, floors and ceilings
+        return hasClearPath(level, player, eye, bottom.add(0, 0.5, 0))
+                || hasClearPath(level, player, eye, bottom.add(0, 1.2, 0));
     }
 
-    private static Vec3 centerOnBlock(Vec3 pos) {
-        // Center the entity on the block by using .5 offset for X and Z
-        BlockPos blockPos = BlockPos.containing(pos);
-        return new Vec3(
-                blockPos.getX() + 0.5, // Center X
-                pos.y,                 // Keep original Y
-                blockPos.getZ() + 0.5  // Center Z
-        );
+    private static boolean hasClearPath(ServerLevel level, ServerPlayer player, Vec3 from, Vec3 to) {
+        return level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player))
+                .getType() == HitResult.Type.MISS;
+    }
+
+    private static Vec3 findAimedSpawnPosition(ServerPlayer player, ServerLevel level, Entity familiar) {
+        HitResult hit = player.pick(AIMED_SUMMON_RANGE, 1.0F, false);
+        if (hit.getType() != HitResult.Type.BLOCK || !(hit instanceof BlockHitResult blockHit)) {
+            return null;
+        }
+
+        // The air block on the side of the face you're looking at
+        BlockPos origin = blockHit.getBlockPos().relative(blockHit.getDirection());
+        Vec3 eye = player.getEyePosition();
+
+        // Exact column first, then the 8 blocks around it
+        for (int r = 0; r <= 1; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
+                    for (int dy : AIMED_DY_ORDER) {
+                        BlockPos candidate = origin.offset(dx, dy, dz);
+                        if (isValidSpawnSpot(level, player, familiar, candidate, eye)) {
+                            return Vec3.atBottomCenterOf(candidate);
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private static boolean isPositionSafeForSpawning(ServerLevel level, Vec3 pos) {
@@ -662,7 +680,7 @@ public class FamiliarManager {
 
         applyHealthFromNBT(familiar, familiarNBT);
 
-        Vec3 spawnPos = findSafeSpawnPositionWithIndex(player, level, positionIndex);
+        Vec3 spawnPos = findSpawnPositionNearOwner(player, level, familiar, positionIndex);
         familiar.setPos(spawnPos.x, spawnPos.y, spawnPos.z);
         familiar.setYRot(player.getYRot());
         familiar.setOldPosAndRot();
@@ -675,48 +693,6 @@ public class FamiliarManager {
 
         familiarData.addSummonedFamiliar(familiarId);
         syncFamiliarData(player, familiarData);
-    }
-
-    private static Vec3 findSafeSpawnPositionWithIndex(ServerPlayer player, ServerLevel level, int positionIndex) {
-        double[][] spawnOffsets = {
-                {3.0, 0.0}, {-3.0, 0.0}, {0.0, 3.0}, {0.0, -3.0},
-                {2.1, 2.1}, {-2.1, 2.1}, {2.1, -2.1}, {-2.1, -2.1},
-                {4.0, 0.0}, {0.0, 4.0}, {1.5, 1.5}, {-1.5, -1.5}
-        };
-
-        int offsetIndex = positionIndex % spawnOffsets.length;
-        double[] offset = spawnOffsets[offsetIndex];
-
-        float yrot = player.getYRot() * Mth.DEG_TO_RAD;
-        double cos = Math.cos(yrot);
-        double sin = Math.sin(yrot);
-
-        double worldX = offset[0] * cos - offset[1] * sin;
-        double worldZ = offset[0] * sin + offset[1] * cos;
-
-        Vec3 playerPos = player.getEyePosition();
-        Vec3 targetPos = playerPos.add(worldX, 0, worldZ);
-
-        // Try the intended position first
-        Vec3 safePos = findSafePositionNear(level, targetPos);
-        if (safePos != null) {
-            return safePos;
-        }
-
-        // Try nearby positions with small random offsets
-        for (int attempt = 0; attempt < 8; attempt++) {
-            double randomX = (level.random.nextDouble() - 0.5) * 4; // ±2 blocks
-            double randomZ = (level.random.nextDouble() - 0.5) * 4;
-            Vec3 alternativePos = targetPos.add(randomX, 0, randomZ);
-
-            safePos = findSafePositionNear(level, alternativePos);
-            if (safePos != null) {
-                return safePos;
-            }
-        }
-
-        // Fallback to general safe position finding
-        return findSafeSpawnPosition(player, level);
     }
 
     private static boolean isPositionSafe(ServerLevel level, Vec3 pos) {
