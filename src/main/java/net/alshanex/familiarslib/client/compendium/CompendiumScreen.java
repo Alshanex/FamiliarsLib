@@ -877,8 +877,7 @@ public class CompendiumScreen extends Screen {
             lines.add(Component.literal(" • ").append(describe(origin)).withStyle(ChatFormatting.GRAY));
         }
         for (CompendiumCatalog.Step step : option.steps()) {
-            Item item = BuiltInRegistries.ITEM.get(step.item());
-            MutableComponent itemName = item.getDescription().copy();
+            MutableComponent itemName = new ItemStack(BuiltInRegistries.ITEM.get(step.item())).getHoverName().copy();
             if (step.shrunk()) {
                 itemName = Component.translatable("compendium.familiarslib.step.shrunk", itemName);
             }
@@ -947,7 +946,8 @@ public class CompendiumScreen extends Screen {
             lines.add(slotName.copy().append(": ").append(Component.translatable("screen.familiarslib.compendium.no_cosmetic")));
             return lines;
         }
-        Component itemName = BuiltInRegistries.ITEM.get(item).getDescription();
+        // Through the stack, so items that pick their name per stack (like Iron's wizard hat) show the right one
+        Component itemName = new ItemStack(BuiltInRegistries.ITEM.get(item)).getHoverName();
         if (cosmeticUnlocked(item)) {
             lines.add(slotName.copy().append(": ").append(itemName));
             lines.add(Component.translatable("screen.familiarslib.compendium.click_to_preview").withStyle(ChatFormatting.GREEN));
