@@ -27,6 +27,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
@@ -449,9 +450,21 @@ public class FamiliarManager {
         AABB box = familiar.getDimensions(familiar.getPose()).makeBoundingBox(bottom);
         if (!level.noCollision(familiar, box) || level.containsAnyLiquid(box)) return false;
 
+        // Don't overlap other entities (players, mobs, other familiars, boats, minecarts...)
+        if (isOccupiedByEntity(level, familiar, box)) return false;
+
         // Must be visible from the owner: rejects spots behind walls, floors and ceilings
         return hasClearPath(level, player, eye, bottom.add(0, 0.5, 0))
                 || hasClearPath(level, player, eye, bottom.add(0, 1.2, 0));
+    }
+
+    private static boolean isOccupiedByEntity(ServerLevel level, Entity familiar, AABB box) {
+        // Slightly shrunk so familiars can still spawn right next to something
+        return !level.getEntities(familiar, box.deflate(0.05), other ->
+                other.isAlive()
+                        && !other.isSpectator()
+                        && (other instanceof LivingEntity || other.canBeCollidedWith())
+        ).isEmpty();
     }
 
     private static boolean hasClearPath(ServerLevel level, ServerPlayer player, Vec3 from, Vec3 to) {
