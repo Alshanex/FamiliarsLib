@@ -1062,6 +1062,9 @@ public class FamiliarManager {
             // Marcar como muerto para evitar actualizaciones posteriores
             FamiliarManager.markFamiliarAsDead(familiarId);
 
+            // Keep it so it can be recalled with a Recall Shard
+            FamiliarRecall.recordDeath(familiar, player);
+
             // Remover de los datos del jugador
             familiarData.removeTamedFamiliar(familiarId);
 
@@ -1240,6 +1243,9 @@ public class FamiliarManager {
             //FamiliarsLib.LOGGER.debug("Familiar {} is summoned, desummoning before release", familiarId);
             FamiliarManager.desummonSpecificFamiliar(player, familiarId);
         }
+
+        // Keep it so it can be recalled with a Recall Shard (uses the NBT saved by the desummon above)
+        FamiliarRecall.recordRelease(player, familiarId, familiarData.getFamiliarData(familiarId));
 
         // Eliminar el familiar de los datos del jugador
         familiarData.removeTamedFamiliar(familiarId);

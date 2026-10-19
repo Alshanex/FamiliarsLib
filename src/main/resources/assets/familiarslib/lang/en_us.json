@@ -17,6 +17,10 @@
   "item.familiarslib.familiar_photo": "Familiar Photo",
   "item.familiarslib.familiar_photo.of": "Photo of %s",
 
+  "item.familiarslib.recall_shard": "Familiar Egg",
+  "item.familiarslib.recall_shard.desc": "Brings back a familiar you released or lost in this dimension",
+  "item.familiarslib.recall_shard.usage": "Consumed when a familiar is reborn",
+
   "block.familiarslib.pet_bed": "Familiar Bed",
   "block.familiarslib.familiar_storage": "Familiar House",
   "block.familiarslib.shrinking_station": "Shrinking Station",
@@ -43,6 +47,12 @@
   "ui.familiarslib.confirm_release": "Confirm Release",
   "ui.familiarslib.confirm_release_message": "Are you sure you want to release %s?",
   "ui.familiarslib.familiar_summoned": "★ SUMMONED ★",
+  "ui.familiarslib.recall_shard.title": "Recall a Familiar",
+  "ui.familiarslib.recall_shard.recall": "Recall",
+  "ui.familiarslib.recall_shard.released": "Released",
+  "ui.familiarslib.recall_shard.fallen": "Fallen",
+  "ui.familiarslib.recall_shard.today": "today",
+  "ui.familiarslib.recall_shard.days_ago": "%s days ago",
 
   "screen.familiarslib.multi_selection_curio": "Familiar Selection",
   "screen.familiarslib.multi_selection_curio.selected_count": "Selected: %d/%d",
@@ -122,6 +132,9 @@
   "message.familiarslib.identity_vessel.wrong_familiar": "This identity can only be given to a %s",
   "message.familiarslib.camera.no_subject": "No familiar in focus",
   "message.familiarslib.camera.no_paper": "You need Paper to take a photo",
+  "message.familiarslib.recall_shard.nothing": "There are no familiars to recall in this dimension",
+  "message.familiarslib.recall_shard.recalled": "%s has returned to you",
+  "message.familiarslib.recall_shard.gone": "That familiar can no longer be recalled",
 
   "gui.familiarslib.camera.label": "FAMILIAR CAM",
   "gui.familiarslib.camera.paper": "Paper: %s",
