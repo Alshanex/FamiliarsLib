@@ -1,11 +1,12 @@
 package net.alshanex.familiarslib.util.familiars;
 
 import net.alshanex.familiarslib.FamiliarsLib;
-import net.alshanex.familiarslib.data.FamiliarRoster;
+import net.alshanex.familiarslib.data.BoundFamiliar;
 import net.alshanex.familiarslib.data.RecallableFamiliarsData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.item.RecallShardItem;
+import net.alshanex.familiarslib.item.FamiliarEggItem;
 import net.alshanex.familiarslib.network.ClientboundRecallListPacket;
+import net.alshanex.familiarslib.registry.ComponentRegistry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -23,7 +24,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** Keeps released and dead familiars around per level, and brings them back with a Recall Shard. */
+/**
+ * Keeps released and dead familiars around per level, and binds them to Familiar Eggs.
+ */
 public final class FamiliarRecall {
 
     private FamiliarRecall() {}
@@ -41,7 +44,7 @@ public final class FamiliarRecall {
         try {
             CompoundTag nbt = FamiliarManager.createFamiliarNBT(familiar);
 
-            // Comes back healthy, without the state of its death
+            // Saved healthy and without the state of its death; hatching sets the newborn's health
             float maxHealth = familiar.getMaxHealth();
             nbt.putFloat("currentHealth", maxHealth);
             nbt.putFloat("Health", maxHealth);
@@ -59,7 +62,7 @@ public final class FamiliarRecall {
         }
     }
 
-    /** Recall Shard used: send the player what can be recalled in this level. */
+    /** Empty egg used: send the player what can be bound in this level. */
     public static void openRecallList(ServerPlayer player) {
         ServerLevel level = player.serverLevel();
         List<RecallableFamiliarsData.Entry> entries = RecallableFamiliarsData.get(level).entriesFor(player.getUUID());
@@ -77,11 +80,14 @@ public final class FamiliarRecall {
         PacketDistributor.sendToPlayer(player, new ClientboundRecallListPacket(views));
     }
 
-    /** The player picked a familiar in the recall screen. Consumes one shard on success. */
+    /**
+     * The player picked a familiar in the egg screen: move it out of the level's data and into the held empty egg.
+     * The familiar now lives only in that egg.
+     */
     public static void recall(ServerPlayer player, UUID familiarId) {
-        ItemStack shard = heldShard(player);
-        if (shard.isEmpty()) {
-            return; // shard no longer in hand
+        ItemStack egg = heldEmptyEgg(player);
+        if (egg.isEmpty()) {
+            return; // egg no longer in hand
         }
 
         ServerLevel level = player.serverLevel();
@@ -92,38 +98,12 @@ public final class FamiliarRecall {
             return;
         }
 
-        FamiliarRoster roster = FamiliarRoster.of(player);
-        if (roster.hasFamiliar(familiarId)) {
-            data.remove(player.getUUID(), familiarId); // already back somehow, drop the stale entry
-            return;
-        }
-        if (!roster.canTameMoreFamiliars()) {
-            actionBar(player, Component.translatable("message.familiarslib.limit_familiars", FamiliarRoster.maxFamiliars())
-                    .withStyle(ChatFormatting.RED));
-            return;
-        }
-
-        CompoundTag nbt = entry.data().copy();
-        if (!roster.tryAddTamedFamiliar(familiarId, nbt)) {
-            return;
-        }
-
         data.remove(player.getUUID(), familiarId);
-        FamiliarManager.unmarkFamiliarAsDead(familiarId); // dead familiars are skipped by data updates otherwise
-        if (roster.getSelectedFamiliarId() == null) {
-            roster.setSelectedFamiliarId(familiarId);
-        }
-
-        FamiliarSync.snapshot(player, familiarId);
-        FamiliarManager.syncFamiliarData(player, roster);
-
-        if (!player.getAbilities().instabuild) {
-            shard.shrink(1);
-        }
+        egg.set(ComponentRegistry.BOUND_FAMILIAR, new BoundFamiliar(familiarId, player.getUUID(), entry.data().copy()));
 
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.BEACON_ACTIVATE, SoundSource.PLAYERS, 0.8F, 1.2F);
-        actionBar(player, Component.translatable("message.familiarslib.recall_shard.recalled", familiarName(nbt))
+                SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.0F, 1.0F);
+        actionBar(player, Component.translatable("message.familiarslib.familiar_egg.bound", familiarName(entry.data()))
                 .withStyle(ChatFormatting.GREEN));
     }
 
@@ -137,17 +117,17 @@ public final class FamiliarRecall {
                 .orElse(Component.literal("?"));
     }
 
-    private static ItemStack heldShard(ServerPlayer player) {
+    private static ItemStack heldEmptyEgg(ServerPlayer player) {
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = player.getItemInHand(hand);
-            if (stack.getItem() instanceof RecallShardItem) {
+            if (stack.getItem() instanceof FamiliarEggItem && !FamiliarEggItem.isBound(stack)) {
                 return stack;
             }
         }
         return ItemStack.EMPTY;
     }
 
-    private static void actionBar(ServerPlayer player, Component message) {
+    static void actionBar(ServerPlayer player, Component message) {
         player.connection.send(new ClientboundSetActionBarTextPacket(message));
     }
 }

@@ -24,7 +24,7 @@ public class FCreativeTab {
                 entries.accept(FItemRegistry.FAMILIAR_COMPENDIUM.get());
                 entries.accept(FItemRegistry.FAMILIAR_CAMERA.get());
                 entries.accept(FItemRegistry.IDENTITY_VESSEL.get());
-                entries.accept(FItemRegistry.RECALL_SHARD.get());
+                entries.accept(FItemRegistry.FAMILIAR_EGG.get());
                 entries.accept(FItemRegistry.FAMILIAR_STORAGE.get());
                 entries.accept(FItemRegistry.PET_BED.get());
                 entries.accept(FItemRegistry.SHRINKING_STATION.get());

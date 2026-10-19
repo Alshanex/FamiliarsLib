@@ -2,15 +2,12 @@ package net.alshanex.familiarslib.block.entity;
 
 import net.alshanex.familiarslib.block.PetBedBlock;
 import net.alshanex.familiarslib.registry.FBlockEntityRegistry;
-import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.item.DyeColor;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nonnull;
 
@@ -57,31 +54,20 @@ public class PetBedBlockEntity extends AbstractFamiliarBedBlockEntity {
     }
 
     @Override
+    public float getEggRenderScale() {
+        return 0.8F;
+    }
+
+    @Override
     protected void saveAdditional(@Nonnull CompoundTag tag, HolderLookup.Provider registryAccess) {
+        super.saveAdditional(tag, registryAccess);
         tag.putString("Color", this.color.getName());
     }
 
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider pRegistries) {
-        CompoundTag tag = new CompoundTag();
+        CompoundTag tag = super.getUpdateTag(pRegistries);
         tag.putString("Color", this.color.getName());
         return tag;
-    }
-
-    @Override
-    public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider lookupProvider) {
-        loadAdditional(tag, lookupProvider);
-    }
-
-    @Override
-    public ClientboundBlockEntityDataPacket getUpdatePacket() {
-        var packet = ClientboundBlockEntityDataPacket.create(this);
-        return packet;
-    }
-
-    @Override
-    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider lookupProvider) {
-        handleUpdateTag(pkt.getTag(), lookupProvider);
-        level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
     }
 }

@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /** Lists the familiars that can be recalled with a Recall Shard, with a preview of the selected one. */
-public class RecallShardScreen extends Screen {
+public class FamiliarEggScreen extends Screen {
     private static final int PANEL_W = 280;
     private static final int PANEL_H = 190;
     private static final int LIST_W = 150;
@@ -44,13 +44,13 @@ public class RecallShardScreen extends Screen {
     private int top;
     private Button recallButton;
 
-    public RecallShardScreen(List<ClientboundRecallListPacket.Entry> entries) {
+    public FamiliarEggScreen(List<ClientboundRecallListPacket.Entry> entries) {
         super(Component.translatable("ui.familiarslib.recall_shard.title"));
         this.entries = entries;
     }
 
     public static void open(List<ClientboundRecallListPacket.Entry> entries) {
-        Minecraft.getInstance().setScreen(new RecallShardScreen(entries));
+        Minecraft.getInstance().setScreen(new FamiliarEggScreen(entries));
     }
 
     @Override

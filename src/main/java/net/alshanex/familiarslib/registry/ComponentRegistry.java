@@ -2,6 +2,7 @@ package net.alshanex.familiarslib.registry;
 
 import com.google.common.base.Suppliers;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.data.BoundFamiliar;
 import net.alshanex.familiarslib.data.FamiliarIdentity;
 import net.alshanex.familiarslib.item.camera.FamiliarPhoto;
 import net.alshanex.familiarslib.util.SelectedFamiliarsComponent;
@@ -85,6 +86,13 @@ public class ComponentRegistry {
             COMPONENTS.register("familiar_photo", () -> DataComponentType.<FamiliarPhoto>builder()
                     .persistent(FamiliarPhoto.CODEC)
                     .networkSynchronized(FamiliarPhoto.STREAM_CODEC)
+                    .cacheEncoding()
+                    .build());
+
+    public static final Supplier<DataComponentType<BoundFamiliar>> BOUND_FAMILIAR = COMPONENTS.register("bound_familiar", () ->
+            DataComponentType.<BoundFamiliar>builder()
+                    .persistent(BoundFamiliar.CODEC)
+                    .networkSynchronized(BoundFamiliar.STREAM_CODEC)
                     .cacheEncoding()
                     .build());
 

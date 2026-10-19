@@ -1,7 +1,7 @@
 package net.alshanex.familiarslib.network;
 
 import net.alshanex.familiarslib.FamiliarsLib;
-import net.alshanex.familiarslib.screen.RecallShardScreen;
+import net.alshanex.familiarslib.screen.FamiliarEggScreen;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -55,7 +55,7 @@ public class ClientboundRecallListPacket implements CustomPacketPayload {
     }
 
     public static void handle(ClientboundRecallListPacket packet, IPayloadContext context) {
-        context.enqueueWork(() -> RecallShardScreen.open(packet.entries));
+        context.enqueueWork(() -> FamiliarEggScreen.open(packet.entries));
     }
 
     @Override
