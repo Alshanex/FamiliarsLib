@@ -6,8 +6,7 @@ import net.alshanex.familiarslib.render.LayerColorHolder;
  * The color of a familiar's Familiar Egg: either a set color, or the color of one of its layers.
  */
 public record EggColor(int layerSlot, int color) {
-    /** The fossil beige of the original egg texture. */
-    public static final int DEFAULT_RGB = 0xF3D9AE;
+    public static final int DEFAULT_RGB = 0xfdf5e0;
     public static final EggColor DEFAULT = of(DEFAULT_RGB);
 
     /** Always this color (0xRRGGBB). */
