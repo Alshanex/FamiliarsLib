@@ -12,7 +12,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
 
-/** Client -> server: recall this familiar with the held Recall Shard. */
+/** Client -> server: bind this familiar to the held empty egg, with the chosen layer for its color. */
 public class ServerboundRecallFamiliarPacket implements CustomPacketPayload {
     public static final Type<ServerboundRecallFamiliarPacket> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(FamiliarsLib.MODID, "recall_familiar"));
@@ -21,23 +21,27 @@ public class ServerboundRecallFamiliarPacket implements CustomPacketPayload {
             CustomPacketPayload.codec(ServerboundRecallFamiliarPacket::write, ServerboundRecallFamiliarPacket::new);
 
     private final UUID familiarId;
+    private final int layerSlot;
 
-    public ServerboundRecallFamiliarPacket(UUID familiarId) {
+    public ServerboundRecallFamiliarPacket(UUID familiarId, int layerSlot) {
         this.familiarId = familiarId;
+        this.layerSlot = layerSlot;
     }
 
     public ServerboundRecallFamiliarPacket(FriendlyByteBuf buf) {
         this.familiarId = buf.readUUID();
+        this.layerSlot = buf.readInt();
     }
 
     public void write(FriendlyByteBuf buf) {
         buf.writeUUID(familiarId);
+        buf.writeInt(layerSlot);
     }
 
     public static void handle(ServerboundRecallFamiliarPacket packet, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (context.player() instanceof ServerPlayer serverPlayer) {
-                FamiliarRecall.recall(serverPlayer, packet.familiarId);
+                FamiliarRecall.recall(serverPlayer, packet.familiarId, packet.layerSlot);
             }
         });
     }

@@ -57,6 +57,9 @@
   "ui.familiarslib.recall_shard.fallen": "Fallen",
   "ui.familiarslib.recall_shard.today": "today",
   "ui.familiarslib.recall_shard.days_ago": "%s days ago",
+  "ui.familiarslib.recall_shard.default_color": "Default color",
+  "ui.familiarslib.recall_shard.egg_color": "Egg color",
+  "ui.familiarslib.recall_shard.original": "(original)",
 
   "screen.familiarslib.multi_selection_curio": "Familiar Selection",
   "screen.familiarslib.multi_selection_curio.selected_count": "Selected: %d/%d",

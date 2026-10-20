@@ -1,6 +1,7 @@
 package net.alshanex.familiarslib.util.familiars;
 
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.FamiliarsServerConfig;
 import net.alshanex.familiarslib.data.BoundFamiliar;
 import net.alshanex.familiarslib.data.RecallableFamiliarsData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
@@ -81,10 +82,9 @@ public final class FamiliarRecall {
     }
 
     /**
-     * The player picked a familiar in the egg screen: move it out of the level's data and into the held empty egg.
-     * The familiar now lives only in that egg.
+     * The player picked a familiar in the egg screen.
      */
-    public static void recall(ServerPlayer player, UUID familiarId) {
+    public static void recall(ServerPlayer player, UUID familiarId, int layerSlot) {
         ItemStack egg = heldEmptyEgg(player);
         if (egg.isEmpty()) {
             return; // egg no longer in hand
@@ -101,7 +101,7 @@ public final class FamiliarRecall {
         data.remove(player.getUUID(), familiarId);
         CompoundTag familiarData = entry.data().copy();
         egg.set(ComponentRegistry.BOUND_FAMILIAR,
-                BoundFamiliar.recalled(familiarId, player.getUUID(), familiarData, eggColorOf(level, familiarData)));
+                BoundFamiliar.recalled(familiarId, player.getUUID(), familiarData, eggColorOf(level, familiarData, layerSlot)));
 
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.0F, 1.0F);
@@ -110,15 +110,14 @@ public final class FamiliarRecall {
     }
 
     /**
-     * The egg color for this saved familiar: loads it into a temporary entity (never added to the world)
-     * so {@code getEggColor()} can read its layers.
+     * The egg color for this saved familiar.
      */
-    public static int eggColorOf(ServerLevel level, CompoundTag familiarData) {
+    public static int eggColorOf(ServerLevel level, CompoundTag familiarData, int layerSlot) {
         try {
             EntityType<?> type = EntityType.byString(familiarData.getString("id")).orElse(null);
             if (type != null && type.create(level) instanceof AbstractSpellCastingPet familiar) {
                 familiar.load(familiarData.copy());
-                return familiar.getEggColor().resolve(familiar);
+                return EggColor.layerColor(familiar, layerSlot, familiar.getEggColor().color());
             }
         } catch (Exception e) {
             FamiliarsLib.LOGGER.error("Failed to work out the egg color of a {}", familiarData.getString("id"), e);
