@@ -127,6 +127,7 @@ public final class FamiliarEggHatching {
         FamiliarAttributesHelper.handleFamiliarSummoned(owner, familiar);
 
         FamiliarCompendium.discover(owner, familiar);
+        familiar.onAdoptedBy(owner);
         CriteriaTriggersRegistry.SHARD_TRIGGER.get().trigger(owner);
         FamiliarSync.snapshot(owner, familiar.getUUID());
         FamiliarManager.syncFamiliarData(owner, roster);

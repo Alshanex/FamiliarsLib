@@ -1314,6 +1314,15 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
 
     }
 
+    /**
+     * The familiar became {@code owner}'s without being tamed by hand (hatched from a typed egg):
+     * grants the same advancements and setup as taming it.
+     */
+    public void onAdoptedBy(ServerPlayer owner) {
+        triggerAdvancement(owner);
+        clericSetGoal(owner);
+    }
+
     public @Nullable Holder<Attribute> getPreferredPowerAttribute(){
         return null;
     }
