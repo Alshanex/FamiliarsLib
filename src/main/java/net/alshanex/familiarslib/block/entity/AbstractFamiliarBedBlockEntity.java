@@ -2,8 +2,10 @@ package net.alshanex.familiarslib.block.entity;
 
 import net.alshanex.familiarslib.data.BoundFamiliar;
 import net.alshanex.familiarslib.util.familiars.BedCleanupHelper;
+import net.alshanex.familiarslib.util.familiars.EggColor;
 import net.alshanex.familiarslib.util.familiars.FamiliarEggHatching;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
@@ -14,6 +16,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.Vec3;
 
 import javax.annotation.Nonnull;
@@ -37,6 +40,7 @@ public abstract class AbstractFamiliarBedBlockEntity extends BlockEntity {
     private BoundFamiliar egg;
     private boolean hasEgg;
     private long eggPlacedTime;
+    private int eggColor = EggColor.DEFAULT_RGB;
     private int eggTimer;
 
     public AbstractFamiliarBedBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState blockState) {
@@ -99,6 +103,7 @@ public abstract class AbstractFamiliarBedBlockEntity extends BlockEntity {
         this.egg = familiar;
         this.hasEgg = true;
         this.eggPlacedTime = gameTime;
+        this.eggColor = familiar.color();
         this.eggTimer = 0;
         markUpdated();
     }
@@ -114,14 +119,45 @@ public abstract class AbstractFamiliarBedBlockEntity extends BlockEntity {
         return taken;
     }
 
-    /** 0 when placed, 1 when ready to hatch. */
+    /** Tint of the egg on this bed (0xRRGGBB). Works on both sides. */
+    public int getEggColor() {
+        return eggColor;
+    }
+
+    /** 0 when placed, 1 when ready to hatch. Works on both sides. */
     public float getEggProgress(long gameTime) {
         return Mth.clamp((gameTime - eggPlacedTime) / (float) EGG_HATCH_TICKS, 0F, 1F);
     }
 
-    /** Where the bottom center of the egg sits, relative to the block's corner. Override for beds of other shapes. */
+    /**
+     * Where the bottom center of the egg sits, relative to the block's corner, for a bed facing north.
+     * It's turned with the bed's facing. Override for beds of other shapes.
+     */
     public Vec3 getEggRenderOffset() {
         return new Vec3(0.5, 0.3125, 0.5);
+    }
+
+    /** Which way the bed faces, so the egg turns with it. North (not turned) if the bed has no facing. */
+    public Direction getEggRenderFacing() {
+        BlockState state = getBlockState();
+        return state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
+                ? state.getValue(BlockStateProperties.HORIZONTAL_FACING)
+                : Direction.NORTH;
+    }
+
+    /** The egg's position in the world, with the offset turned to the bed's facing. */
+    public Vec3 getEggPosition() {
+        return Vec3.atLowerCornerOf(worldPosition).add(rotateOffset(getEggRenderOffset(), getEggRenderFacing()));
+    }
+
+    /** Turns an offset given for a north-facing bed around the block's center. */
+    public static Vec3 rotateOffset(Vec3 offset, Direction facing) {
+        return switch (facing) {
+            case EAST -> new Vec3(1 - offset.z, offset.y, offset.x);
+            case SOUTH -> new Vec3(1 - offset.x, offset.y, 1 - offset.z);
+            case WEST -> new Vec3(offset.z, offset.y, 1 - offset.x);
+            default -> offset;
+        };
     }
 
     /** Size of the egg on the bed (1 = a full block tall). */
@@ -147,6 +183,8 @@ public abstract class AbstractFamiliarBedBlockEntity extends BlockEntity {
         this.egg = pTag.contains("Egg") ? BoundFamiliar.fromTag(pTag.getCompound("Egg")) : null;
         this.hasEgg = this.egg != null || pTag.getBoolean("HasEgg");
         this.eggPlacedTime = pTag.getLong("EggPlaced");
+        this.eggColor = this.egg != null ? this.egg.color()
+                : pTag.contains("EggColor") ? pTag.getInt("EggColor") : EggColor.DEFAULT_RGB;
     }
 
     @Override
@@ -166,6 +204,7 @@ public abstract class AbstractFamiliarBedBlockEntity extends BlockEntity {
         tag.putBoolean("isTaken", this.isBedTaken);
         tag.putBoolean("HasEgg", this.hasEgg);
         tag.putLong("EggPlaced", this.eggPlacedTime);
+        tag.putInt("EggColor", this.eggColor);
         return tag;
     }
 

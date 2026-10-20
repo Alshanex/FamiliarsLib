@@ -99,12 +99,31 @@ public final class FamiliarRecall {
         }
 
         data.remove(player.getUUID(), familiarId);
-        egg.set(ComponentRegistry.BOUND_FAMILIAR, new BoundFamiliar(familiarId, player.getUUID(), entry.data().copy()));
+        CompoundTag familiarData = entry.data().copy();
+        egg.set(ComponentRegistry.BOUND_FAMILIAR,
+                BoundFamiliar.recalled(familiarId, player.getUUID(), familiarData, eggColorOf(level, familiarData)));
 
         level.playSound(null, player.getX(), player.getY(), player.getZ(),
                 SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 1.0F, 1.0F);
         actionBar(player, Component.translatable("message.familiarslib.familiar_egg.bound", familiarName(entry.data()))
                 .withStyle(ChatFormatting.GREEN));
+    }
+
+    /**
+     * The egg color for this saved familiar: loads it into a temporary entity (never added to the world)
+     * so {@code getEggColor()} can read its layers.
+     */
+    public static int eggColorOf(ServerLevel level, CompoundTag familiarData) {
+        try {
+            EntityType<?> type = EntityType.byString(familiarData.getString("id")).orElse(null);
+            if (type != null && type.create(level) instanceof AbstractSpellCastingPet familiar) {
+                familiar.load(familiarData.copy());
+                return familiar.getEggColor().resolve(familiar);
+            }
+        } catch (Exception e) {
+            FamiliarsLib.LOGGER.error("Failed to work out the egg color of a {}", familiarData.getString("id"), e);
+        }
+        return EggColor.DEFAULT_RGB;
     }
 
     /** The familiar's custom name, or its type name. */

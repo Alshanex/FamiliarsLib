@@ -12,6 +12,7 @@ import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Unit;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -94,6 +95,12 @@ public class ComponentRegistry {
                     .persistent(BoundFamiliar.CODEC)
                     .networkSynchronized(BoundFamiliar.STREAM_CODEC)
                     .cacheEncoding()
+                    .build());
+
+    public static final Supplier<DataComponentType<ResourceLocation>> FAMILIAR_TYPE = COMPONENTS.register("familiar_type", () ->
+            DataComponentType.<ResourceLocation>builder()
+                    .persistent(ResourceLocation.CODEC)
+                    .networkSynchronized(ResourceLocation.STREAM_CODEC)
                     .build());
 
     public static final Supplier<DataComponentType<CompoundTag>> SOUL_LINK = register("soul_link", CompoundTag::new, op -> op.persistent(CompoundTag.CODEC));

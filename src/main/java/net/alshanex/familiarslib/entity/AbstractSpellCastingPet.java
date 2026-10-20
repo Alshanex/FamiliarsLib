@@ -1407,6 +1407,13 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
 
     public float getCompendiumPreviewScale()  { return 1F; }
 
+    /**
+     * The color of this familiar's Familiar Egg.
+     */
+    public EggColor getEggColor() {
+        return EggColor.DEFAULT;
+    }
+
     //Spawning logic and effects
     @Override
     public void onAddedToLevel() {

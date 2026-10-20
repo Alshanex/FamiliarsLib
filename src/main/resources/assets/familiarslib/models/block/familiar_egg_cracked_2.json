@@ -1,6 +1,7 @@
 {
   "parent": "familiarslib:block/familiar_egg",
   "textures": {
-    "all": "familiarslib:block/familiar_egg_cracked_2"
+    "side": "familiarslib:block/familiar_egg_cracked_2_side",
+    "top": "familiarslib:block/familiar_egg_cracked_2_top"
   }
 }

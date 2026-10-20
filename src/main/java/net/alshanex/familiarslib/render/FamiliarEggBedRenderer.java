@@ -12,12 +12,13 @@ import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-/** Draws a Familiar Egg on a Familiar Bed, cracking and wobbling as it gets closer to hatching. */
+/** Draws a Familiar Egg on a Familiar Bed in its familiar's color, cracking and wobbling as it gets closer to hatching. */
 public class FamiliarEggBedRenderer<T extends AbstractFamiliarBedBlockEntity> implements BlockEntityRenderer<T> {
 
     /** Intact, first cracks, about to hatch. */
@@ -44,11 +45,13 @@ public class FamiliarEggBedRenderer<T extends AbstractFamiliarBedBlockEntity> im
                 : progress < AbstractFamiliarBedBlockEntity.EGG_CRACK_STAGE_2 ? 1 : 2;
         BakedModel model = Minecraft.getInstance().getModelManager().getModel(STAGES[stage]);
 
-        Vec3 offset = bed.getEggRenderOffset();
+        Direction facing = bed.getEggRenderFacing();
+        Vec3 offset = AbstractFamiliarBedBlockEntity.rotateOffset(bed.getEggRenderOffset(), facing);
         float scale = bed.getEggRenderScale();
 
         pose.pushPose();
         pose.translate(offset.x, offset.y, offset.z);
+        pose.mulPose(Axis.YP.rotationDegrees(180F - facing.toYRot()));
 
         // Wobbles more and more in the last stage
         if (stage == 2) {
@@ -61,9 +64,11 @@ public class FamiliarEggBedRenderer<T extends AbstractFamiliarBedBlockEntity> im
 
         pose.scale(scale, scale, scale);
         pose.translate(-0.5, 0, -0.5);
+        int rgb = bed.getEggColor();
         Minecraft.getInstance().getBlockRenderer().getModelRenderer().renderModel(
                 pose.last(), buffers.getBuffer(RenderType.cutout()), null, model,
-                1F, 1F, 1F, packedLight, OverlayTexture.NO_OVERLAY);
+                ((rgb >> 16) & 0xFF) / 255F, ((rgb >> 8) & 0xFF) / 255F, (rgb & 0xFF) / 255F,
+                packedLight, OverlayTexture.NO_OVERLAY);
         pose.popPose();
     }
 }

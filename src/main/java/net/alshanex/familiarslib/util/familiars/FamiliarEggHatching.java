@@ -1,17 +1,21 @@
 package net.alshanex.familiarslib.util.familiars;
 
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.compendium.FamiliarCompendium;
+import net.alshanex.familiarslib.item.FamiliarEggItem;
+import net.alshanex.familiarslib.registry.CriteriaTriggersRegistry;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarBedBlockEntity;
 import net.alshanex.familiarslib.data.BoundFamiliar;
 import net.alshanex.familiarslib.data.FamiliarRoster;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
-import net.alshanex.familiarslib.item.FamiliarEggItem;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableIntegration;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -23,6 +27,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Familiar Eggs on Familiar Beds: cracking effects, and hatching once the owner can take the familiar.
+ * Called by the bed every {@link AbstractFamiliarBedBlockEntity#EGG_CHECK_INTERVAL} ticks while it holds an egg.
  */
 public final class FamiliarEggHatching {
     private static final double HINT_RANGE = 16.0;
@@ -34,7 +39,7 @@ public final class FamiliarEggHatching {
         BoundFamiliar egg = bed.getEgg();
         if (egg == null) return;
 
-        Vec3 eggPos = Vec3.atLowerCornerOf(bed.getBlockPos()).add(bed.getEggRenderOffset()).add(0, 0.25, 0);
+        Vec3 eggPos = bed.getEggPosition().add(0, 0.25, 0);
         float progress = bed.getEggProgress(level.getGameTime());
 
         if (progress < 1F) {
@@ -54,7 +59,7 @@ public final class FamiliarEggHatching {
         }
 
         FamiliarRoster roster = FamiliarRoster.of(owner);
-        if (roster.hasFamiliar(egg.familiarId()) || level.getEntity(egg.familiarId()) != null) {
+        if (!egg.fresh() && (roster.hasFamiliar(egg.familiarId()) || level.getEntity(egg.familiarId()) != null)) {
             // The familiar already exists somehow: give the egg back instead of creating a second copy
             FamiliarsLib.LOGGER.warn("Familiar egg at {} holds familiar {} which already exists, popping the egg", bed.getBlockPos(), egg.familiarId());
             popEgg(bed, level);
@@ -79,7 +84,57 @@ public final class FamiliarEggHatching {
             return;
         }
 
-        hatch(bed, level, owner, roster, egg);
+        if (egg.fresh()) {
+            hatchNew(bed, level, owner, egg);
+        } else {
+            hatch(bed, level, owner, roster, egg);
+        }
+    }
+
+    /** A typed egg: a new familiar of its type, tamed by the owner. Like the old shards, but through the bed. */
+    private static void hatchNew(AbstractFamiliarBedBlockEntity bed, ServerLevel level, ServerPlayer owner, BoundFamiliar egg) {
+        ResourceLocation typeId = egg.type();
+        EntityType<?> type = typeId == null ? null : BuiltInRegistries.ENTITY_TYPE.getOptional(typeId).orElse(null);
+        Entity entity = type != null ? type.create(level) : null;
+        if (!(entity instanceof AbstractSpellCastingPet familiar)) {
+            FamiliarsLib.LOGGER.error("Familiar egg at {} is for an unknown familiar type '{}', popping the egg", bed.getBlockPos(), typeId);
+            popEgg(bed, level);
+            return;
+        }
+
+        // Free the bed first: the newborn is hurt, so its bed goal claims this bed and sleeps in it
+        bed.takeEgg();
+
+        Vec3 sleepPos = bed.getSleepPosition();
+        familiar.setIsImpostor(false);
+        familiar.moveTo(sleepPos.x, sleepPos.y, sleepPos.z, level.random.nextFloat() * 360F, 0F);
+        familiar.setOwnerUUID(owner.getUUID());
+        familiar.setPersistenceRequired();
+        level.addFreshEntity(familiar); // picks its layer colors here (biome colors come from where it hatches)
+        familiar.setHealth(familiar.getMaxHealth() * 0.5F);
+
+        // Into the roster as summoned.
+        FamiliarRoster roster = FamiliarRoster.of(owner);
+        if (!roster.tryAddTamedFamiliar(familiar.getUUID(), FamiliarManager.createFamiliarNBT(familiar))) {
+            familiar.discard();
+            bed.placeEgg(egg, level.getGameTime() - AbstractFamiliarBedBlockEntity.EGG_HATCH_TICKS); // back on the bed, still ready
+            return;
+        }
+        roster.addSummonedFamiliar(familiar.getUUID());
+        if (roster.getSelectedFamiliarId() == null) {
+            roster.setSelectedFamiliarId(familiar.getUUID());
+        }
+        FamiliarAttributesHelper.handleFamiliarSummoned(owner, familiar);
+
+        FamiliarCompendium.discover(owner, familiar);
+        CriteriaTriggersRegistry.SHARD_TRIGGER.get().trigger(owner);
+        FamiliarSync.snapshot(owner, familiar.getUUID());
+        FamiliarManager.syncFamiliarData(owner, roster);
+
+        level.playSound(null, sleepPos.x, sleepPos.y, sleepPos.z, SoundEvents.TURTLE_EGG_HATCH, SoundSource.BLOCKS, 1.0F, 1.0F);
+        level.sendParticles(ParticleTypes.HAPPY_VILLAGER, sleepPos.x, sleepPos.y + 0.4, sleepPos.z, 12, 0.3, 0.3, 0.3, 0.05);
+        FamiliarRecall.actionBar(owner, Component.translatable("message.familiarslib.familiar_egg.hatched", familiar.getDisplayName())
+                .withStyle(ChatFormatting.GREEN));
     }
 
     private static void hatch(AbstractFamiliarBedBlockEntity bed, ServerLevel level, ServerPlayer owner, FamiliarRoster roster, BoundFamiliar egg) {

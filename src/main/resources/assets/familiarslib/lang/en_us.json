@@ -22,6 +22,8 @@
   "item.familiarslib.familiar_egg.usage": "Right click to choose which one. This can't be changed afterwards",
   "item.familiarslib.familiar_egg.holds": "Holds %s",
   "item.familiarslib.familiar_egg.usage_bound": "Place it on a Familiar Bed to hatch it",
+  "item.familiarslib.familiar_egg.typed": "%s Egg",
+  "item.familiarslib.familiar_egg.typed_desc": "Hatches a new %s that's yours from birth",
 
   "block.familiarslib.pet_bed": "Familiar Bed",
   "block.familiarslib.familiar_storage": "Familiar House",
