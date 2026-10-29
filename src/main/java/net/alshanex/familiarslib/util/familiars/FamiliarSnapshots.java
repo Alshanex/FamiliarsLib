@@ -1,5 +1,6 @@
 package net.alshanex.familiarslib.util.familiars;
 
+import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
 import net.minecraft.nbt.CompoundTag;
 
 public final class FamiliarSnapshots {
@@ -17,5 +18,12 @@ public final class FamiliarSnapshots {
         return nbt;
     }
 
-    private FamiliarSnapshots() {}
+    /**
+     * Armor to show in screens.
+     */
+    public static int displayArmor(CompoundTag nbt, FamiliarConsumableSystem.ConsumableData consumables) {
+        return nbt.contains("currentArmor")
+                ? nbt.getInt("currentArmor")
+                : consumables.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
+    }
 }

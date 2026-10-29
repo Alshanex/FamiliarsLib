@@ -13,6 +13,7 @@ import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.CurioUtils;
 import net.alshanex.familiarslib.util.consumables.ConsumableUtils;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
+import net.alshanex.familiarslib.util.familiars.FamiliarSnapshots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -118,7 +119,7 @@ public class MultiSelectionCurioScreen extends Screen {
                         displayHealth = baseMaxHealth;
                     }
 
-                    int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
+                    int armor = FamiliarSnapshots.displayArmor(nbt, consumableData);
                     int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
                     boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
 

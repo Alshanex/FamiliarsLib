@@ -603,7 +603,8 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
 
         float currentHealth = getHealth();
         pCompound.putFloat("currentHealth", currentHealth);
-        pCompound.putFloat("baseMaxHealth", getBaseMaxHealth()); // Keep for reference
+        pCompound.putFloat("baseMaxHealth", getBaseMaxHealth());
+        pCompound.putInt("currentArmor", getArmorValue());
 /*
         FamiliarsLib.LOGGER.debug("Saving health for familiar {}: current={}, max={}, base={}",
                 getUUID(), currentHealth, getMaxHealth(), getBaseMaxHealth());

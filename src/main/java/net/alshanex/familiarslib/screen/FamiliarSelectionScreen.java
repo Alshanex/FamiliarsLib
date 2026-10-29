@@ -12,6 +12,7 @@ import net.alshanex.familiarslib.network.SelectFamiliarPacket;
 import net.alshanex.familiarslib.registry.AttachmentRegistry;
 import net.alshanex.familiarslib.util.consumables.ConsumableUtils;
 import net.alshanex.familiarslib.util.consumables.FamiliarConsumableSystem;
+import net.alshanex.familiarslib.util.familiars.FamiliarSnapshots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -169,7 +170,7 @@ public class FamiliarSelectionScreen extends Screen {
                     }
 
                     // Get current values from consumable system
-                    int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
+                    int armor = FamiliarSnapshots.displayArmor(nbt, consumableData);
                     int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
                     boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
 
@@ -319,7 +320,7 @@ public class FamiliarSelectionScreen extends Screen {
                             displayHealth = baseMaxHealth;
                         }
 
-                        int armor = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ARMOR);
+                        int armor = FamiliarSnapshots.displayArmor(nbt, consumableData);
                         int enraged = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.ENRAGED);
                         boolean canBlock = consumableData.getValue(FamiliarConsumableSystem.ConsumableType.BLOCKING) > 0;
 
