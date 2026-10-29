@@ -1525,6 +1525,11 @@ public abstract class AbstractSpellCastingPet extends AbstractSpellCastingMob im
         super.customServerAiStep();
     }
 
+    /** Familiars that swim underwater (e.g. aquatic looks) can be teleported into water next to their owner. */
+    public boolean canTeleportIntoWater() {
+        return false;
+    }
+
     @Override
     public void setSyncedSpellData(SyncedSpellData syncedSpellData) {
         if (!level().isClientSide) {

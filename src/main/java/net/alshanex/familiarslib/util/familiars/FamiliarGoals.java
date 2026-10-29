@@ -34,6 +34,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.effect.MobEffect;
@@ -717,6 +718,12 @@ public class FamiliarGoals {
 
             if (!level.isLoaded(pPos)) return false;
 
+            if (mob.canTeleportIntoWater()
+                    && level.getFluidState(pPos).is(FluidTags.WATER)
+                    && level.getFluidState(pPos.above()).is(FluidTags.WATER)) {
+                return level.noCollision(mob, mob.getBoundingBox().move(Vec3.atBottomCenterOf(pPos).subtract(mob.position())));
+            }
+
             if (!level.getBlockState(pPos).isAir() || !level.getBlockState(pPos.above()).isAir()) {
                 return false;
             }
@@ -891,7 +898,6 @@ public class FamiliarGoals {
         private LivingEntity owner;
         private Supplier<LivingEntity> ownerGetter;
         private final double speedModifier;
-        private final PathNavigation navigation;
         private int timeToRecalcPath;
         private final float stopDistance;
         private final float startDistance;
@@ -903,7 +909,6 @@ public class FamiliarGoals {
             this.pet = pet;
             this.ownerGetter = ownerGetter;
             this.speedModifier = speedModifier;
-            this.navigation = pet.getNavigation();
             this.startDistance = startDistance;
             this.stopDistance = stopDistance;
             this.teleportDistance = teleportDistance;
@@ -940,7 +945,7 @@ public class FamiliarGoals {
                 return false;
             }
 
-            if (this.navigation.isDone()) {
+            if (this.pet.getNavigation().isDone()) {
                 return false;
             } else {
                 return !(this.pet.distanceToSqr(this.owner) <= (double) (this.stopDistance * this.stopDistance));
@@ -957,7 +962,7 @@ public class FamiliarGoals {
         @Override
         public void stop() {
             this.owner = null;
-            this.navigation.stop();
+            this.pet.getNavigation().stop();
             this.pet.setPathfindingMalus(PathType.WATER, this.oldWaterCost);
         }
 
@@ -977,7 +982,7 @@ public class FamiliarGoals {
                         Vec3 vec3 = owner.position();
                         this.pet.getMoveControl().setWantedPosition(vec3.x, vec3.y + 2, vec3.z, this.speedModifier);
                     } else {
-                        this.navigation.moveTo(this.owner, this.speedModifier);
+                        this.pet.getNavigation().moveTo(this.owner, this.speedModifier);
                     }
                 }
             }
@@ -1013,14 +1018,15 @@ public class FamiliarGoals {
                 return false;
             } else {
                 pet.moveTo((double) pX + 0.5, (double) pY, (double) pZ + 0.5, pet.getYRot(), pet.getXRot());
-                this.navigation.stop();
+                this.pet.getNavigation().stop();
                 return true;
             }
         }
 
         private boolean canTeleportTo(BlockPos pPos) {
             PathType pathtype = WalkNodeEvaluator.getPathTypeStatic(pet, pPos);
-            if (pathtype != PathType.WALKABLE) {
+            boolean water = pathtype == PathType.WATER && pet.canTeleportIntoWater();
+            if (pathtype != PathType.WALKABLE && !water) {
                 return false;
             } else {
                 BlockState blockstate = pet.level().getBlockState(pPos.below());
