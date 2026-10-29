@@ -49,7 +49,7 @@ public class FamiliarColorLayer<T extends Entity & GeoAnimatable & LayerColorHol
                        int packedLight, int packedOverlay) {
         int rgb = animatable.getLayerColor(slot);
         boolean tinted = rgb != LayerColorHolder.NO_LAYER_COLOR;
-        ResourceLocation texture = tinted ? tintTexture : defaultTexture;
+        ResourceLocation texture = tinted ? getTintTexture(animatable) : getDefaultTexture(animatable);
         if (texture == null) {
             return;
         }
@@ -108,5 +108,17 @@ public class FamiliarColorLayer<T extends Entity & GeoAnimatable & LayerColorHol
         }
 
         return invisible ? null : AutoGlowingTexture.getRenderType(texture);
+    }
+
+    /** Texture drawn when the slot has no color. Override to vary it per entity. */
+    @Nullable
+    protected ResourceLocation getDefaultTexture(T animatable) {
+        return defaultTexture;
+    }
+
+    /** Greyscale texture tinted with the slot's color. Override to vary it per entity. */
+    @Nullable
+    protected ResourceLocation getTintTexture(T animatable) {
+        return tintTexture;
     }
 }
