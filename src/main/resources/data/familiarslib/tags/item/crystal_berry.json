@@ -1,6 +1,9 @@
 {
   "replace": false,
   "values": [
-    "alshanex_familiars:crystal_berry"
+    {
+      "id":"alshanex_familiars:crystal_berry",
+      "required": false
+    }
   ]
 }

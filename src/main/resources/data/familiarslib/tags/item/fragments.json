@@ -1,6 +1,9 @@
 {
   "replace": false,
   "values": [
-    "alshanex_familiars:memory_fragment"
+    {
+      "id":"alshanex_familiars:memory_fragment",
+      "required": false
+    }
   ]
 }

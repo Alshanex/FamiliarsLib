@@ -3,6 +3,9 @@
   "values": [
       "#c:bosses",
       "#irons_spellbooks:summons",
-      "#alshanex_familiars:familiars"
+      {
+        "id":"#alshanex_familiars:familiars",
+        "required": false
+      }
   ]
 }
