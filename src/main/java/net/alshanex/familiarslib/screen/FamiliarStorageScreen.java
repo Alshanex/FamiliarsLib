@@ -3,8 +3,11 @@ package net.alshanex.familiarslib.screen;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.client.FamiliarPreviewHelper;
+import net.alshanex.familiarslib.client.gui.GuiSprite;
+import net.alshanex.familiarslib.client.gui.TexturedButton;
 import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
@@ -43,6 +46,21 @@ public class FamiliarStorageScreen extends Screen {
     private static final int BASE_FAMILIAR_ITEM_HEIGHT = 60;
     private static final int BASE_SCROLL_SPEED = 20;
     private static final int BASE_PADDING = 20;
+    private static final int PANEL_BORDER = 4;
+    private static final int TITLE_SPACE = 50;
+    private static final int BOTTOM_MARGIN = 6;
+    private static final int MIN_PANEL_HEIGHT = 120;
+    private static final int TEXT_COLOR = 0x404040;
+
+    private static final GuiSprite SHEET = GuiSprite.sheet(FamiliarsLib.id("textures/gui/familiar_storage.png"), 512, 512);
+    private static final GuiSprite STORED_PANEL = SHEET.at(0, 0, 200, 320);
+    private static final GuiSprite PLAYER_PANEL = SHEET.at(202, 0, 200, 320);
+    private static final GuiSprite ROW_SELECTED = SHEET.at(0, 322, 200, 60);
+    private static final GuiSprite ROW_HOVER = SHEET.at(202, 322, 200, 60);
+    private static final TexturedButton.Sprites WANDER_BUTTON = new TexturedButton.Sprites(
+            SHEET.at(0, 384, 120, 20), SHEET.at(122, 384, 120, 20), SHEET.at(244, 384, 120, 20));
+    private static final TexturedButton.Sprites ARROW_BUTTON = new TexturedButton.Sprites(
+            SHEET.at(404, 0, 80, 18), SHEET.at(404, 20, 80, 18), SHEET.at(404, 40, 80, 18));
 
     // Tamaños escalados que se calculan en init()
     private int PANEL_WIDTH;
@@ -84,13 +102,12 @@ public class FamiliarStorageScreen extends Screen {
     protected void init() {
         super.init();
 
-        // Calculate scaling
-        double scale = Math.min(this.width / 1000.0, this.height / 600.0);
-        scale = Math.max(0.7, Math.min(1.5, scale));
+        // Fixed scale: the panels are drawn from a texture
+        double scale = 1.0;
 
         // Apply scaling
         PANEL_WIDTH = (int) (BASE_PANEL_WIDTH * scale);
-        PANEL_HEIGHT = (int) (BASE_PANEL_HEIGHT * scale);
+        PANEL_HEIGHT = Math.max(MIN_PANEL_HEIGHT, Math.min(BASE_PANEL_HEIGHT, this.height - TITLE_SPACE - BOTTOM_MARGIN * 2));
         BUTTON_PANEL_WIDTH = (int) (BASE_BUTTON_PANEL_WIDTH * scale);
         FAMILIAR_ITEM_HEIGHT = (int) (BASE_FAMILIAR_ITEM_HEIGHT * scale);
         SCROLL_SPEED = (int) (BASE_SCROLL_SPEED * scale);
@@ -103,7 +120,7 @@ public class FamiliarStorageScreen extends Screen {
         this.storedPanelX = startX;
         this.buttonPanelX = startX + PANEL_WIDTH + PADDING;
         this.playerPanelX = startX + PANEL_WIDTH + BUTTON_PANEL_WIDTH + PADDING * 2;
-        this.panelY = (this.height - PANEL_HEIGHT) / 2 + 30;
+        this.panelY = (this.height - TITLE_SPACE - PANEL_HEIGHT) / 2 + TITLE_SPACE;
 
         // Calculate scaled measurements
         int buttonWidth = Math.max(120, (int) (120 * scale));
@@ -111,26 +128,22 @@ public class FamiliarStorageScreen extends Screen {
         int smallButtonHeight = Math.max(18, (int) (18 * scale));
 
         // Switch to Wander Mode button
-        this.switchToWanderModeButton = Button.builder(
-                        Component.translatable("ui.familiarslib.familiar_storage_screen.switch_to_wander"),
-                        button -> switchToWanderMode())
-                .pos(buttonPanelX + (BUTTON_PANEL_WIDTH - buttonWidth) / 2, panelY)
-                .size(buttonWidth, buttonHeight)
-                .build();
+        this.switchToWanderModeButton = new TexturedButton(
+                buttonPanelX + (BUTTON_PANEL_WIDTH - buttonWidth) / 2, panelY, buttonWidth, buttonHeight,
+                Component.translatable("ui.familiarslib.familiar_storage_screen.switch_to_wander"),
+                WANDER_BUTTON, button -> switchToWanderMode());
 
         // Move buttons
         int screenCenterY = this.height / 2;
         int moveButtonWidth = Math.max(80, (int) (80 * scale));
 
-        this.storeButton = Button.builder(Component.literal("←"), button -> moveToStorage())
-                .pos(buttonPanelX + (BUTTON_PANEL_WIDTH - moveButtonWidth) / 2, screenCenterY - 30)
-                .size(moveButtonWidth, smallButtonHeight)
-                .build();
+        this.storeButton = new TexturedButton(
+                buttonPanelX + (BUTTON_PANEL_WIDTH - moveButtonWidth) / 2, screenCenterY - 30, moveButtonWidth, smallButtonHeight,
+                Component.literal("←"), ARROW_BUTTON, button -> moveToStorage());
 
-        this.retrieveButton = Button.builder(Component.literal("→"), button -> moveToPlayer())
-                .pos(buttonPanelX + (BUTTON_PANEL_WIDTH - moveButtonWidth) / 2, screenCenterY + 30)
-                .size(moveButtonWidth, smallButtonHeight)
-                .build();
+        this.retrieveButton = new TexturedButton(
+                buttonPanelX + (BUTTON_PANEL_WIDTH - moveButtonWidth) / 2, screenCenterY + 30, moveButtonWidth, smallButtonHeight,
+                Component.literal("→"), ARROW_BUTTON, button -> moveToPlayer());
 
         addRenderableWidget(switchToWanderModeButton);
         addRenderableWidget(storeButton);
@@ -205,9 +218,21 @@ public class FamiliarStorageScreen extends Screen {
     }
 
     private void calculateMaxScroll() {
-        int visibleItems = PANEL_HEIGHT / FAMILIAR_ITEM_HEIGHT;
-        storedMaxScroll = Math.max(0, (storedFamiliars.size() - visibleItems) * FAMILIAR_ITEM_HEIGHT);
-        playerMaxScroll = Math.max(0, (playerFamiliars.size() - visibleItems) * FAMILIAR_ITEM_HEIGHT);
+        storedMaxScroll = Math.max(0, storedFamiliars.size() * FAMILIAR_ITEM_HEIGHT - listHeight());
+        playerMaxScroll = Math.max(0, playerFamiliars.size() * FAMILIAR_ITEM_HEIGHT - listHeight());
+    }
+
+    private int listTop() {
+        return panelY + PANEL_BORDER;
+    }
+
+    private int listHeight() {
+        return PANEL_HEIGHT - PANEL_BORDER * 2;
+    }
+
+    private boolean isInList(double mouseX, double mouseY, int panelX) {
+        return mouseX >= panelX + PANEL_BORDER && mouseX < panelX + PANEL_WIDTH - PANEL_BORDER &&
+                mouseY >= listTop() && mouseY < listTop() + listHeight();
     }
 
     public void reloadFamiliarData() {
@@ -248,7 +273,7 @@ public class FamiliarStorageScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
         if (blockEntity instanceof AbstractFamiliarStorageBlockEntity storageEntity) {
@@ -267,8 +292,6 @@ public class FamiliarStorageScreen extends Screen {
         // Render panels
         renderFamiliarPanel(guiGraphics, storedFamiliars, storedPanelX, panelY, storedScrollOffset, selectedStoredFamiliar, mouseX, mouseY, partialTick);
         renderFamiliarPanel(guiGraphics, playerFamiliars, playerPanelX, panelY, playerScrollOffset, selectedPlayerFamiliar, mouseX, mouseY, partialTick);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     private void renderTitle(GuiGraphics guiGraphics, Component title, int x, int y) {
@@ -277,15 +300,12 @@ public class FamiliarStorageScreen extends Screen {
     }
 
     private void renderFamiliarPanel(GuiGraphics guiGraphics, List<FamiliarEntry> familiars, int panelX, int panelY, int scrollOffset, UUID selectedId, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(panelX - 2, panelY - 2, panelX + PANEL_WIDTH + 2, panelY + PANEL_HEIGHT + 2, 0xFF555555);
-        guiGraphics.fill(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT, 0xFF222222);
+        enableScissor(panelX + PANEL_BORDER, listTop(), panelX + PANEL_WIDTH - PANEL_BORDER, listTop() + listHeight());
 
-        enableScissor(panelX, panelY, panelX + PANEL_WIDTH, panelY + PANEL_HEIGHT);
-
-        int currentY = panelY - scrollOffset;
+        int currentY = listTop() - scrollOffset;
 
         for (FamiliarEntry entry : familiars) {
-            if (currentY + FAMILIAR_ITEM_HEIGHT > panelY && currentY < panelY + PANEL_HEIGHT) {
+            if (currentY + FAMILIAR_ITEM_HEIGHT > listTop() && currentY < listTop() + listHeight()) {
                 renderFamiliarItem(guiGraphics, entry, panelX, currentY, selectedId, mouseX, mouseY, partialTick);
             }
             currentY += FAMILIAR_ITEM_HEIGHT;
@@ -296,13 +316,13 @@ public class FamiliarStorageScreen extends Screen {
 
     private void renderFamiliarItem(GuiGraphics guiGraphics, FamiliarEntry entry, int x, int y, UUID selectedId, int mouseX, int mouseY, float partialTick) {
         boolean isSelected = entry.id.equals(selectedId);
-        boolean isHovered = mouseX >= x && mouseX < x + PANEL_WIDTH &&
+        boolean isHovered = isInList(mouseX, mouseY, x) &&
                 mouseY >= y && mouseY < y + FAMILIAR_ITEM_HEIGHT;
 
         if (isSelected) {
-            guiGraphics.fill(x, y, x + PANEL_WIDTH, y + FAMILIAR_ITEM_HEIGHT, 0x4400FF00);
+            ROW_SELECTED.draw(guiGraphics, x + PANEL_BORDER, y, PANEL_WIDTH - PANEL_BORDER * 2, FAMILIAR_ITEM_HEIGHT);
         } else if (isHovered) {
-            guiGraphics.fill(x, y, x + PANEL_WIDTH, y + FAMILIAR_ITEM_HEIGHT, 0x44FFFFFF);
+            ROW_HOVER.draw(guiGraphics, x + PANEL_BORDER, y, PANEL_WIDTH - PANEL_BORDER * 2, FAMILIAR_ITEM_HEIGHT);
         }
 
         // Ajustar tamaño y posición del familiar renderizado según la escala
@@ -325,7 +345,7 @@ public class FamiliarStorageScreen extends Screen {
         Component nameComponent = Component.literal(entry.displayName);
         int textX = x + (int)(FAMILIAR_ITEM_HEIGHT * 1.1f);
         int textY = y + FAMILIAR_ITEM_HEIGHT / 2 - font.lineHeight / 2;
-        guiGraphics.drawString(font, nameComponent, textX, textY, 0xFFFFFF);
+        guiGraphics.drawString(font, nameComponent, textX, textY, TEXT_COLOR, false);
     }
 
     private void renderEntity(GuiGraphics guiGraphics, LivingEntity entity, float x, float y, float z) {
@@ -371,10 +391,9 @@ public class FamiliarStorageScreen extends Screen {
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
-            if (mouseX >= storedPanelX && mouseX < storedPanelX + PANEL_WIDTH &&
-                    mouseY >= panelY && mouseY < panelY + PANEL_HEIGHT) {
+            if (isInList(mouseX, mouseY, storedPanelX)) {
 
-                int relativeY = (int) (mouseY - panelY + storedScrollOffset);
+                int relativeY = (int) (mouseY - listTop() + storedScrollOffset);
                 int itemIndex = relativeY / FAMILIAR_ITEM_HEIGHT;
 
                 if (itemIndex >= 0 && itemIndex < storedFamiliars.size()) {
@@ -385,10 +404,9 @@ public class FamiliarStorageScreen extends Screen {
                 }
             }
 
-            if (mouseX >= playerPanelX && mouseX < playerPanelX + PANEL_WIDTH &&
-                    mouseY >= panelY && mouseY < panelY + PANEL_HEIGHT) {
+            if (isInList(mouseX, mouseY, playerPanelX)) {
 
-                int relativeY = (int) (mouseY - panelY + playerScrollOffset);
+                int relativeY = (int) (mouseY - listTop() + playerScrollOffset);
                 int itemIndex = relativeY / FAMILIAR_ITEM_HEIGHT;
 
                 if (itemIndex >= 0 && itemIndex < playerFamiliars.size()) {
@@ -437,6 +455,8 @@ public class FamiliarStorageScreen extends Screen {
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
+        STORED_PANEL.drawShortened(guiGraphics, storedPanelX, panelY, PANEL_HEIGHT, PANEL_BORDER * 2);
+        PLAYER_PANEL.drawShortened(guiGraphics, playerPanelX, panelY, PANEL_HEIGHT, PANEL_BORDER * 2);
     }
 
     @Override
@@ -470,4 +490,4 @@ public class FamiliarStorageScreen extends Screen {
             this.displayName = displayName;
         }
     }
-}
+}

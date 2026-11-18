@@ -4,7 +4,10 @@ import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
+import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.client.compendium.ClientCompendium;
+import net.alshanex.familiarslib.client.gui.GuiSprite;
+import net.alshanex.familiarslib.client.gui.TexturedButton;
 import net.alshanex.familiarslib.compendium.CompendiumCatalog;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
 import net.alshanex.familiarslib.network.ClientboundRecallListPacket;
@@ -54,12 +57,18 @@ public class FamiliarEggScreen extends Screen {
     private static final int LAYER_ROW_H = 12;
     private static final int SWATCH = 8;
 
-    private static final int COLOR_PANEL = 0xE0101010;
-    private static final int COLOR_BORDER = 0xFF555555;
-    private static final int COLOR_SELECTED = 0x50FFFFFF;
-    private static final int COLOR_HOVER = 0x20FFFFFF;
     private static final int COLOR_RELEASED = 0xAAAAAA;
     private static final int COLOR_FALLEN = 0xFF5555;
+
+    private static final GuiSprite SHEET = GuiSprite.sheet(FamiliarsLib.id("textures/gui/recall_shard.png"), 512, 512);
+    private static final GuiSprite PANEL = SHEET.at(0, 0, PANEL_W, PANEL_H);
+    private static final GuiSprite ROW_SELECTED = SHEET.at(342, 66, 150, 20);
+    private static final GuiSprite ROW_HOVER = SHEET.at(342, 88, 150, 20);
+    private static final GuiSprite LAYER_SELECTED = SHEET.at(342, 110, 164, 11);
+    private static final GuiSprite LAYER_HOVER = SHEET.at(342, 123, 164, 11);
+    private static final GuiSprite SCROLL_THUMB = SHEET.at(508, 0, 2, 20);
+    private static final TexturedButton.Sprites RECALL_BUTTON = new TexturedButton.Sprites(
+            SHEET.at(342, 0, 164, 20), SHEET.at(342, 22, 164, 20), SHEET.at(342, 44, 164, 20));
 
     /** One entry of the layer list. {@code slot} -1 is the set color; {@code rgb} is what the egg would look like. */
     private record LayerChoice(int slot, Component name, int rgb, boolean original) {}
@@ -109,9 +118,8 @@ public class FamiliarEggScreen extends Screen {
         top = (height - PANEL_H) / 2;
 
         int x = left + RIGHT_X;
-        recallButton = Button.builder(Component.translatable("ui.familiarslib.recall_shard.recall"), b -> recallSelected())
-                .bounds(x, top + PANEL_H - 28, left + PANEL_W - 8 - x, 20)
-                .build();
+        recallButton = new TexturedButton(x, top + PANEL_H - 28, left + PANEL_W - 8 - x, 20,
+                Component.translatable("ui.familiarslib.recall_shard.recall"), RECALL_BUTTON, b -> recallSelected());
         addRenderableWidget(recallButton);
         updateButton();
     }
@@ -221,9 +229,7 @@ public class FamiliarEggScreen extends Screen {
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.fill(left, top, left + PANEL_W, top + PANEL_H, COLOR_PANEL);
-        graphics.renderOutline(left, top, PANEL_W, PANEL_H, COLOR_BORDER);
-        graphics.fill(left + LIST_W + 10, top + LIST_TOP, left + LIST_W + 11, top + PANEL_H - 8, COLOR_BORDER);
+        PANEL.draw(graphics, left, top);
     }
 
     @Override
@@ -248,9 +254,9 @@ public class FamiliarEggScreen extends Screen {
             int y = top + LIST_TOP + (i - scroll) * ROW_H;
 
             if (i == selected) {
-                graphics.fill(x, y, x + LIST_W, y + ROW_H - 2, COLOR_SELECTED);
+                ROW_SELECTED.draw(graphics, x + 1, y + 1, LIST_W - 2, ROW_H - 3);
             } else if (i == hovered) {
-                graphics.fill(x, y, x + LIST_W, y + ROW_H - 2, COLOR_HOVER);
+                ROW_HOVER.draw(graphics, x + 1, y + 1, LIST_W - 2, ROW_H - 3);
             }
 
             graphics.drawString(font, font.plainSubstrByWidth(row.name.getString(), LIST_W - 6), x + 3, y + 2, 0xFFFFFF);
@@ -271,8 +277,7 @@ public class FamiliarEggScreen extends Screen {
             int trackHeight = VISIBLE_ROWS * ROW_H - 2;
             int thumbHeight = Math.max(10, trackHeight * VISIBLE_ROWS / rows.size());
             int thumbY = trackTop + (trackHeight - thumbHeight) * scroll / (rows.size() - VISIBLE_ROWS);
-            graphics.fill(x + LIST_W + 1, trackTop, x + LIST_W + 3, trackTop + trackHeight, 0x40FFFFFF);
-            graphics.fill(x + LIST_W + 1, thumbY, x + LIST_W + 3, thumbY + thumbHeight, 0xFFAAAAAA);
+            SCROLL_THUMB.draw(graphics, x + LIST_W + 1, thumbY, 2, thumbHeight);
         }
     }
 
@@ -336,9 +341,9 @@ public class FamiliarEggScreen extends Screen {
             LayerChoice choice = row.layers.get(i);
             int rowY = y + i * LAYER_ROW_H;
             if (i == row.selectedLayer) {
-                graphics.fill(x, rowY, x + w, rowY + LAYER_ROW_H - 1, COLOR_SELECTED);
+                LAYER_SELECTED.draw(graphics, x + 1, rowY + 1, w - 2, LAYER_ROW_H - 2);
             } else if (i == hovered) {
-                graphics.fill(x, rowY, x + w, rowY + LAYER_ROW_H - 1, COLOR_HOVER);
+                LAYER_HOVER.draw(graphics, x + 1, rowY + 1, w - 2, LAYER_ROW_H - 2);
             }
 
             graphics.fill(x + 2, rowY + 2, x + 2 + SWATCH, rowY + 2 + SWATCH, 0xFF000000 | choice.rgb());
@@ -408,4 +413,4 @@ public class FamiliarEggScreen extends Screen {
     public boolean isPauseScreen() {
         return false;
     }
-}
+}

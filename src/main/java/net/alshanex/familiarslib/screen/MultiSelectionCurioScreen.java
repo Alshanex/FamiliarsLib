@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.client.FamiliarPreviewHelper;
+import net.alshanex.familiarslib.client.gui.GuiSprite;
 import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
@@ -41,6 +42,16 @@ public class MultiSelectionCurioScreen extends Screen {
     private static final int PANEL_HEIGHT = GRID_ROWS * CELL_SIZE + 40;
     private static final int SCROLL_SPEED = 20;
 
+    private static final GuiSprite SHEET = GuiSprite.sheet(FamiliarsLib.id("textures/gui/multi_selection_curio.png"), 512, 512);
+    private static final int FRAME_HEIGHT = 300;
+    private static final int FRAME_BORDER = 20;
+    private static final GuiSprite PANEL = SHEET.at(0, 0, PANEL_WIDTH, FRAME_HEIGHT);
+    private static final GuiSprite CARD = SHEET.at(402, 0, 110, 110);
+    private static final GuiSprite CARD_HOVER = SHEET.at(402, 112, 110, 110);
+    private static final GuiSprite CARD_SELECTED = SHEET.at(0, 302, 110, 110);
+    private static final int STATS_BG = 0x66101830;
+    private static final int STATS_BORDER = 0xFF46669C;
+
     private final List<FamiliarGridEntry> familiarEntries = new ArrayList<>();
     private final Set<UUID> selectedFamiliars = new HashSet<>();
     private int scrollOffset = 0;
@@ -67,9 +78,8 @@ public class MultiSelectionCurioScreen extends Screen {
 
         this.gridStartX = (this.width - PANEL_WIDTH) / 2 + 20;
 
-        int availableHeight = this.height - 55;
-        this.gridStartY = 40 + (availableHeight - PANEL_HEIGHT) / 2;
-        this.gridStartY = Math.max(40, this.gridStartY);
+        int frameTop = Math.max(4, (this.height - FRAME_HEIGHT) / 2);
+        this.gridStartY = frameTop + FRAME_BORDER;
 
         calculateMaxScroll();
     }
@@ -210,21 +220,21 @@ public class MultiSelectionCurioScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
 
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
+
+        int frameX = gridStartX - FRAME_BORDER;
+        int textY = gridStartY - FRAME_BORDER + (FRAME_BORDER - font.lineHeight) / 2 + 1;
 
         // Título
         Component title = Component.translatable("screen.familiarslib.multi_selection_curio");
-        int titleWidth = font.width(title);
-        guiGraphics.drawString(font, title, (width - titleWidth) / 2, 10, 0xFFFFFF);
+        guiGraphics.drawString(font, title, frameX + FRAME_BORDER, textY, 0xFFFFFF);
 
         // Contador de seleccionados
         Component counter = Component.translatable("screen.familiarslib.multi_selection_curio.selected_count", selectedFamiliars.size(), 10);
         int counterWidth = font.width(counter);
-        guiGraphics.drawString(font, counter, (width - counterWidth) / 2, 25, 0xFFFF55);
+        guiGraphics.drawString(font, counter, frameX + PANEL_WIDTH - FRAME_BORDER - counterWidth, textY, 0xFFFF55);
 
         renderFamiliarGrid(guiGraphics, mouseX, mouseY, partialTick);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     private void renderFamiliarGrid(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
@@ -267,18 +277,8 @@ public class MultiSelectionCurioScreen extends Screen {
                 mouseY >= y + 5 && mouseY < y + CELL_SIZE - 5;
 
         // Fondo de la celda
-        int backgroundColor = 0x44000000;
-        if (isSelected) {
-            backgroundColor = 0x4400FF00; // Verde para seleccionado
-        } else if (isHovered) {
-            backgroundColor = 0x44FFFFFF; // Blanco para hover
-        }
-
-        guiGraphics.fill(x + 5, y + 5, x + CELL_SIZE - 5, y + CELL_SIZE - 5, backgroundColor);
-
-        // Borde
-        int borderColor = isSelected ? 0xFF00FF00 : (isHovered ? 0xFFFFFFFF : 0xFF666666);
-        guiGraphics.renderOutline(x + 5, y + 5, CELL_SIZE - 10, CELL_SIZE - 10, borderColor);
+        GuiSprite card = isSelected ? CARD_SELECTED : isHovered ? CARD_HOVER : CARD;
+        card.draw(guiGraphics, x + 5, y + 5, CELL_SIZE - 10, CELL_SIZE - 10);
 
         // Renderizar familiar en 3D
         poseStack.pushPose();
@@ -317,12 +317,8 @@ public class MultiSelectionCurioScreen extends Screen {
         int boxWidth = 80;
         int boxHeight = 40;
 
-        // Dibujar fondo gris claro con bordes
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xAAC0C0C0); // Gris claro con transparencia
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + 1, 0xFF808080); // Borde superior
-        guiGraphics.fill(boxX, boxY + boxHeight - 1, boxX + boxWidth, boxY + boxHeight, 0xFF808080); // Borde inferior
-        guiGraphics.fill(boxX, boxY, boxX + 1, boxY + boxHeight, 0xFF808080); // Borde izquierdo
-        guiGraphics.fill(boxX + boxWidth - 1, boxY, boxX + boxWidth, boxY + boxHeight, 0xFF808080); // Borde derecho
+        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, STATS_BG);
+        guiGraphics.renderOutline(boxX, boxY, boxWidth, boxHeight, STATS_BORDER);
 
         // Posiciones para cada estadística (dividido en 4 cuadrantes)
         int halfWidth = boxWidth / 2;
@@ -471,6 +467,7 @@ public class MultiSelectionCurioScreen extends Screen {
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
+        PANEL.draw(guiGraphics, gridStartX - 20, gridStartY - 20);
     }
 
     @Override
@@ -512,4 +509,4 @@ public class MultiSelectionCurioScreen extends Screen {
             this.canBlock = canBlock;
         }
     }
-}
+}

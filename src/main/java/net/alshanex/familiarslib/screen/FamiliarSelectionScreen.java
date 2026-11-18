@@ -4,6 +4,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.client.FamiliarPreviewHelper;
+import net.alshanex.familiarslib.client.gui.GuiSprite;
+import net.alshanex.familiarslib.client.gui.TexturedButton;
 import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
 import net.alshanex.familiarslib.entity.AbstractSpellCastingPet;
@@ -37,6 +39,19 @@ public class FamiliarSelectionScreen extends Screen {
     private static final int PANEL_HEIGHT = 300;
     private static final int FAMILIAR_ITEM_HEIGHT = 80;
     private static final int SCROLL_SPEED = 20;
+    private static final int LIST_BORDER = 2;
+
+    private static final GuiSprite SHEET = GuiSprite.sheet(FamiliarsLib.id("textures/gui/familiar_selection.png"), 512, 512);
+    private static final GuiSprite PANELS = SHEET.at(0, 0, 420, 300);
+    private static final GuiSprite ROW_SELECTED = SHEET.at(0, 302, 200, 80);
+    private static final GuiSprite ROW_HOVER = SHEET.at(202, 302, 200, 80);
+    private static final TexturedButton.Sprites RELEASE_BUTTON = new TexturedButton.Sprites(
+            SHEET.at(422, 0, 80, 20), SHEET.at(422, 22, 80, 20), SHEET.at(422, 44, 80, 20));
+
+    private static final GuiSprite DIALOG_SHEET = GuiSprite.sheet(FamiliarsLib.id("textures/gui/familiar_release_dialog.png"), 512, 256);
+    private static final GuiSprite DIALOG_PANEL = DIALOG_SHEET.at(0, 0, 300, 120);
+    private static final TexturedButton.Sprites DIALOG_BUTTON = new TexturedButton.Sprites(
+            DIALOG_SHEET.at(302, 0, 60, 20), DIALOG_SHEET.at(364, 0, 60, 20), DIALOG_SHEET.at(426, 0, 60, 20));
 
     private static final ResourceLocation HEART_CONTAINER = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/container.png");
     private static final ResourceLocation HEART_FULL = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/full.png");
@@ -67,7 +82,7 @@ public class FamiliarSelectionScreen extends Screen {
 
         this.leftPanelX = (this.width - PANEL_WIDTH * 2 - 20) / 2;
         this.rightPanelX = this.leftPanelX + PANEL_WIDTH + 20;
-        this.panelY = ((this.height - PANEL_HEIGHT) / 2) + 30;
+        this.panelY = Math.max(4, Math.min(((this.height - PANEL_HEIGHT) / 2) + 30, this.height - PANEL_HEIGHT - 4));
 
         // Crear botón de liberar
         int buttonWidth = 80;
@@ -75,10 +90,8 @@ public class FamiliarSelectionScreen extends Screen {
         int buttonX = leftPanelX + (PANEL_WIDTH - buttonWidth) / 2;
         int buttonY = panelY + PANEL_HEIGHT - 85;
 
-        releaseButton = Button.builder(
-                Component.translatable("ui.familiarslib.release_familiar"),
-                this::onReleaseButtonPressed
-        ).bounds(buttonX, buttonY, buttonWidth, buttonHeight).build();
+        releaseButton = new TexturedButton(buttonX, buttonY, buttonWidth, buttonHeight,
+                Component.translatable("ui.familiarslib.release_familiar"), RELEASE_BUTTON, this::onReleaseButtonPressed);
 
         addRenderableWidget(releaseButton);
 
@@ -422,13 +435,11 @@ public class FamiliarSelectionScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
 
-        renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         renderSelectedFamiliar(guiGraphics, mouseX, mouseY, partialTick);
 
         renderFamiliarList(guiGraphics, mouseX, mouseY, partialTick);
-
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     private void renderSelectedFamiliar(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
@@ -464,13 +475,6 @@ public class FamiliarSelectionScreen extends Screen {
         int boxY = infoY + 25;
         int boxWidth = 120;
         int boxHeight = 60;
-
-        // Dibujar fondo gris claro con bordes
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xAAC0C0C0); // Gris claro con transparencia
-        guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + 1, 0xFF808080); // Borde superior
-        guiGraphics.fill(boxX, boxY + boxHeight - 1, boxX + boxWidth, boxY + boxHeight, 0xFF808080); // Borde inferior
-        guiGraphics.fill(boxX, boxY, boxX + 1, boxY + boxHeight, 0xFF808080); // Borde izquierdo
-        guiGraphics.fill(boxX + boxWidth - 1, boxY, boxX + boxWidth, boxY + boxHeight, 0xFF808080); // Borde derecho
 
         // Posiciones para cada estadística (dividido en 4 cuadrantes)
         int halfWidth = boxWidth / 2;
@@ -525,10 +529,10 @@ public class FamiliarSelectionScreen extends Screen {
     private void renderFamiliarList(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         PoseStack poseStack = guiGraphics.pose();
 
-        int scissorX = rightPanelX;
-        int scissorY = panelY;
-        int scissorWidth = PANEL_WIDTH;
-        int scissorHeight = PANEL_HEIGHT;
+        int scissorX = rightPanelX + LIST_BORDER;
+        int scissorY = panelY + LIST_BORDER;
+        int scissorWidth = PANEL_WIDTH - LIST_BORDER * 2;
+        int scissorHeight = PANEL_HEIGHT - LIST_BORDER * 2;
 
         enableScissor(scissorX, scissorY, scissorX + scissorWidth, scissorY + scissorHeight);
 
@@ -555,9 +559,9 @@ public class FamiliarSelectionScreen extends Screen {
                 mouseY >= y && mouseY < y + FAMILIAR_ITEM_HEIGHT;
 
         if (isSelected) {
-            guiGraphics.fill(x, y, x + PANEL_WIDTH, y + FAMILIAR_ITEM_HEIGHT, 0x4400FF00);
+            ROW_SELECTED.draw(guiGraphics, x + LIST_BORDER, y, PANEL_WIDTH - LIST_BORDER * 2, FAMILIAR_ITEM_HEIGHT);
         } else if (isHovered) {
-            guiGraphics.fill(x, y, x + PANEL_WIDTH, y + FAMILIAR_ITEM_HEIGHT, 0x44FFFFFF);
+            ROW_HOVER.draw(guiGraphics, x + LIST_BORDER, y, PANEL_WIDTH - LIST_BORDER * 2, FAMILIAR_ITEM_HEIGHT);
         }
 
         poseStack.pushPose();
@@ -694,6 +698,7 @@ public class FamiliarSelectionScreen extends Screen {
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
+        PANELS.draw(guiGraphics, leftPanelX, panelY);
     }
 
     @Override
@@ -762,27 +767,25 @@ public class FamiliarSelectionScreen extends Screen {
             int buttonY = this.height / 2 + 20;
 
             // Botón Confirmar
-            addRenderableWidget(Button.builder(
-                    Component.translatable("gui.yes"),
+            addRenderableWidget(new TexturedButton(startX, buttonY, buttonWidth, buttonHeight,
+                    Component.translatable("gui.yes"), DIALOG_BUTTON,
                     (button) -> {
                         callback.accept(true);
                         minecraft.setScreen(parent);
-                    }
-            ).bounds(startX, buttonY, buttonWidth, buttonHeight).build());
+                    }));
 
             // Botón Cancelar
-            addRenderableWidget(Button.builder(
-                    Component.translatable("gui.cancel"),
+            addRenderableWidget(new TexturedButton(startX + buttonWidth + spacing, buttonY, buttonWidth, buttonHeight,
+                    Component.translatable("gui.cancel"), DIALOG_BUTTON,
                     (button) -> {
                         callback.accept(false);
                         minecraft.setScreen(parent);
-                    }
-            ).bounds(startX + buttonWidth + spacing, buttonY, buttonWidth, buttonHeight).build());
+                    }));
         }
 
         @Override
         public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-            renderBackground(guiGraphics, mouseX, mouseY, partialTick);
+            super.render(guiGraphics, mouseX, mouseY, partialTick);
 
             // Dibujar título centrado
             Component titleComponent = this.getTitle();
@@ -794,8 +797,6 @@ public class FamiliarSelectionScreen extends Screen {
             int messageWidth = font.width(message);
             guiGraphics.drawString(font, message,
                     (this.width - messageWidth) / 2, this.height / 2 - 10, 0xFFFFFF);
-
-            super.render(guiGraphics, mouseX, mouseY, partialTick);
         }
 
         @Override
@@ -808,11 +809,7 @@ public class FamiliarSelectionScreen extends Screen {
             int boxX = (this.width - boxWidth) / 2;
             int boxY = (this.height - boxHeight) / 2;
 
-            guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xCC222222);
-            guiGraphics.fill(boxX, boxY, boxX + boxWidth, boxY + 1, 0xFFFFFFFF);
-            guiGraphics.fill(boxX, boxY + boxHeight - 1, boxX + boxWidth, boxY + boxHeight, 0xFFFFFFFF);
-            guiGraphics.fill(boxX, boxY, boxX + 1, boxY + boxHeight, 0xFFFFFFFF);
-            guiGraphics.fill(boxX + boxWidth - 1, boxY, boxX + boxWidth, boxY + boxHeight, 0xFFFFFFFF);
+            DIALOG_PANEL.draw(guiGraphics, boxX, boxY);
         }
 
         @Override
@@ -830,4 +827,4 @@ public class FamiliarSelectionScreen extends Screen {
             return false;
         }
     }
-}
+}
