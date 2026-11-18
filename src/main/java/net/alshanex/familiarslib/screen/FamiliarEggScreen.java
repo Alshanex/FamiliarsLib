@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import net.alshanex.familiarslib.FamiliarsLib;
+import net.alshanex.familiarslib.client.FamiliarPreviewHelper;
 import net.alshanex.familiarslib.client.compendium.ClientCompendium;
 import net.alshanex.familiarslib.client.gui.GuiSprite;
 import net.alshanex.familiarslib.client.gui.TexturedButton;
@@ -16,11 +17,11 @@ import net.alshanex.familiarslib.render.FamiliarEggBedRenderer;
 import net.alshanex.familiarslib.render.LayerColorHolder;
 import net.alshanex.familiarslib.util.familiars.EggColor;
 import net.alshanex.familiarslib.util.familiars.FamiliarRecall;
+import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.block.model.BakedQuad;
@@ -48,14 +49,18 @@ public class FamiliarEggScreen extends Screen {
     private static final int PANEL_W = 340;
     private static final int PANEL_H = 220;
     private static final int LIST_W = 150;
-    private static final int ROW_H = 22;
+    // Rows fit two lines of text inside the 2px card border; 7 of them fill the list frame (176px)
+    private static final int ROW_H = 25;
+    private static final int TEXT_INSET = 5;
     private static final int LIST_TOP = 24;
     private static final int VISIBLE_ROWS = (PANEL_H - LIST_TOP - 8) / ROW_H;
 
     private static final int RIGHT_X = LIST_W + 18;
     private static final int PREVIEW_H = 76;
-    private static final int LAYER_ROW_H = 12;
+    private static final int LAYER_ROW_H = 15;
     private static final int SWATCH = 8;
+    /** One full turn of the familiar preview. */
+    private static final long SPIN_PERIOD_MS = 12000L;
 
     private static final int COLOR_RELEASED = 0xAAAAAA;
     private static final int COLOR_FALLEN = 0xFF5555;
@@ -219,7 +224,10 @@ public class FamiliarEggScreen extends Screen {
     private int rightW() { return PANEL_W - RIGHT_X - 8; }
     private int previewTop() { return top + LIST_TOP; }
     private int previewBottom(Row row) {
-        return showLayerList(row) ? previewTop() + PREVIEW_H : top + PANEL_H - 34;
+        if (!showLayerList(row)) return top + PANEL_H - 34;
+        // The preview gives up height when the familiar has many layers, so every layer row fits
+        int roomForLayers = row.layers.size() * LAYER_ROW_H + 14;
+        return Math.min(previewTop() + PREVIEW_H, top + PANEL_H - 34 - roomForLayers);
     }
     private int layersTop(Row row) { return previewBottom(row) + 14; }
     private int visibleLayerRows(Row row) { return (top + PANEL_H - 34 - layersTop(row)) / LAYER_ROW_H; }
@@ -259,7 +267,8 @@ public class FamiliarEggScreen extends Screen {
                 ROW_HOVER.draw(graphics, x + 1, y + 1, LIST_W - 2, ROW_H - 3);
             }
 
-            graphics.drawString(font, font.plainSubstrByWidth(row.name.getString(), LIST_W - 6), x + 3, y + 2, 0xFFFFFF);
+            int textWidth = LIST_W - TEXT_INSET * 2;
+            graphics.drawString(font, fit(row.name.getString(), textWidth), x + TEXT_INSET, y + 3, 0xFFFFFF);
 
             ClientboundRecallListPacket.Entry entry = row.entry;
             Component status = Component.translatable(entry.dead()
@@ -268,8 +277,8 @@ public class FamiliarEggScreen extends Screen {
             Component age = days == 0
                     ? Component.translatable("ui.familiarslib.recall_shard.today")
                     : Component.translatable("ui.familiarslib.recall_shard.days_ago", days);
-            graphics.drawString(font, status.copy().append(" · ").append(age), x + 3, y + 11,
-                    entry.dead() ? COLOR_FALLEN : COLOR_RELEASED);
+            graphics.drawString(font, fit(status.copy().append(" · ").append(age).getString(), textWidth),
+                    x + TEXT_INSET, y + 12, entry.dead() ? COLOR_FALLEN : COLOR_RELEASED);
         }
 
         if (rows.size() > VISIBLE_ROWS) {
@@ -290,10 +299,12 @@ public class FamiliarEggScreen extends Screen {
 
         AbstractSpellCastingPet familiar = row.preview;
         if (familiar != null) {
-            float size = Math.max(familiar.getBbHeight(), familiar.getBbWidth());
-            int scale = Mth.clamp((int) ((y2 - y1) * 0.6F / Math.max(size, 0.5F)), 10, 50);
-            InventoryScreen.renderEntityInInventoryFollowsMouse(graphics, x, y1, x + half, y2, scale, 0.0625F,
-                    mouseX, mouseY, familiar);
+            // Same as the familiar selection screen: fitted by what it really draws, centered, slowly turning
+            float spin = (Util.getMillis() % SPIN_PERIOD_MS) / (float) SPIN_PERIOD_MS * 2F * (float) Math.PI;
+            graphics.enableScissor(x + 1, y1 + 1, x + half, y2 - 1);
+            FamiliarPreviewHelper.renderInBox(graphics, familiar, x + 4, y1 + 4, x + half - 2, y2 - 4,
+                    50F, spin, FamiliarPreviewHelper.Anchor.CENTER);
+            graphics.disableScissor();
         }
 
         // The egg: the same model as on the beds
@@ -333,7 +344,7 @@ public class FamiliarEggScreen extends Screen {
         int x = rightX();
         int w = rightW();
         int y = layersTop(row);
-        graphics.drawString(font, Component.translatable("ui.familiarslib.recall_shard.egg_color"), x, y - 11, 0xAAAAAA);
+        graphics.drawString(font, Component.translatable("ui.familiarslib.recall_shard.egg_color"), x + 4, y - 11, 0xAAAAAA);
 
         int hovered = layerAt(row, mouseX, mouseY);
         int visible = Math.min(row.layers.size(), visibleLayerRows(row));
@@ -346,15 +357,24 @@ public class FamiliarEggScreen extends Screen {
                 LAYER_HOVER.draw(graphics, x + 1, rowY + 1, w - 2, LAYER_ROW_H - 2);
             }
 
-            graphics.fill(x + 2, rowY + 2, x + 2 + SWATCH, rowY + 2 + SWATCH, 0xFF000000 | choice.rgb());
-            graphics.renderOutline(x + 2, rowY + 2, SWATCH, SWATCH, 0xFF000000);
+            int swatchX = x + 4;
+            int swatchY = rowY + (LAYER_ROW_H - SWATCH) / 2;
+            graphics.fill(swatchX, swatchY, swatchX + SWATCH, swatchY + SWATCH, 0xFF000000 | choice.rgb());
+            graphics.renderOutline(swatchX, swatchY, SWATCH, SWATCH, 0xFF000000);
 
             Component label = choice.original()
                     ? choice.name().copy().append(" ").append(Component.translatable("ui.familiarslib.recall_shard.original"))
                     : choice.name();
-            graphics.drawString(font, font.plainSubstrByWidth(label.getString(), w - SWATCH - 8), x + SWATCH + 6, rowY + 2,
+            int labelX = swatchX + SWATCH + 4;
+            graphics.drawString(font, fit(label.getString(), x + w - 4 - labelX), labelX, rowY + 3,
                     choice.original() ? COLOR_RELEASED : 0xFFFFFF);
         }
+    }
+
+    /** Cuts the text to the width with an ellipsis, so it never runs over a card's border. */
+    private String fit(String text, int maxWidth) {
+        if (font.width(text) <= maxWidth) return text;
+        return font.plainSubstrByWidth(text, maxWidth - font.width("…")) + "…";
     }
 
     // Input
@@ -413,4 +433,4 @@ public class FamiliarEggScreen extends Screen {
     public boolean isPauseScreen() {
         return false;
     }
-}
+}

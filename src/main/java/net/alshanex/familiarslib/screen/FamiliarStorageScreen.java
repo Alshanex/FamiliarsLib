@@ -1,11 +1,12 @@
-
 package net.alshanex.familiarslib.screen;
 
+import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.block.entity.AbstractFamiliarStorageBlockEntity;
 import net.alshanex.familiarslib.client.FamiliarPreviewHelper;
+import net.alshanex.familiarslib.client.gui.GuiFit;
 import net.alshanex.familiarslib.client.gui.GuiSprite;
 import net.alshanex.familiarslib.client.gui.TexturedButton;
 import net.alshanex.familiarslib.data.ClientFamiliarData;
@@ -50,6 +51,7 @@ public class FamiliarStorageScreen extends Screen {
     private static final int TITLE_SPACE = 50;
     private static final int BOTTOM_MARGIN = 6;
     private static final int MIN_PANEL_HEIGHT = 120;
+    private static final int SHRINK_TO_HEIGHT = 240;
     private static final int TEXT_COLOR = 0x404040;
 
     private static final GuiSprite SHEET = GuiSprite.sheet(FamiliarsLib.id("textures/gui/familiar_storage.png"), 512, 512);
@@ -89,6 +91,11 @@ public class FamiliarStorageScreen extends Screen {
     private int playerPanelX;
     private int panelY;
 
+    // Whole-screen scale so the fixed-size panels fit at any GUI scale
+    private float uiScale = 1F;
+    private int layoutWidth;
+    private int layoutHeight;
+
     private Button storeButton;
     private Button retrieveButton;
     private Button switchToWanderModeButton;
@@ -102,12 +109,18 @@ public class FamiliarStorageScreen extends Screen {
     protected void init() {
         super.init();
 
-        // Fixed scale: the panels are drawn from a texture
+        // Panels are drawn from a texture at a fixed size: if they don't fit, scale the whole screen down
         double scale = 1.0;
+        int layoutW = BASE_PANEL_WIDTH * 2 + BASE_BUTTON_PANEL_WIDTH + BASE_PADDING * 2;
+        // Short of height the panels get shorter first (down to SHRINK_TO_HEIGHT), so the screen only scales when it must
+        int layoutH = TITLE_SPACE + SHRINK_TO_HEIGHT + BOTTOM_MARGIN * 2;
+        this.uiScale = GuiFit.fitScale(this.width, this.height, layoutW, layoutH);
+        this.layoutWidth = GuiFit.virtual(this.width, uiScale);
+        this.layoutHeight = GuiFit.virtual(this.height, uiScale);
 
         // Apply scaling
         PANEL_WIDTH = (int) (BASE_PANEL_WIDTH * scale);
-        PANEL_HEIGHT = Math.max(MIN_PANEL_HEIGHT, Math.min(BASE_PANEL_HEIGHT, this.height - TITLE_SPACE - BOTTOM_MARGIN * 2));
+        PANEL_HEIGHT = Math.max(MIN_PANEL_HEIGHT, Math.min(BASE_PANEL_HEIGHT, layoutHeight - TITLE_SPACE - BOTTOM_MARGIN * 2));
         BUTTON_PANEL_WIDTH = (int) (BASE_BUTTON_PANEL_WIDTH * scale);
         FAMILIAR_ITEM_HEIGHT = (int) (BASE_FAMILIAR_ITEM_HEIGHT * scale);
         SCROLL_SPEED = (int) (BASE_SCROLL_SPEED * scale);
@@ -115,12 +128,12 @@ public class FamiliarStorageScreen extends Screen {
 
         // Calculate positions
         int totalWidth = PANEL_WIDTH * 2 + BUTTON_PANEL_WIDTH + PADDING * 2;
-        int startX = (this.width - totalWidth) / 2;
+        int startX = (layoutWidth - totalWidth) / 2;
 
         this.storedPanelX = startX;
         this.buttonPanelX = startX + PANEL_WIDTH + PADDING;
         this.playerPanelX = startX + PANEL_WIDTH + BUTTON_PANEL_WIDTH + PADDING * 2;
-        this.panelY = (this.height - TITLE_SPACE - PANEL_HEIGHT) / 2 + TITLE_SPACE;
+        this.panelY = (layoutHeight - TITLE_SPACE - PANEL_HEIGHT) / 2 + TITLE_SPACE;
 
         // Calculate scaled measurements
         int buttonWidth = Math.max(120, (int) (120 * scale));
@@ -134,7 +147,7 @@ public class FamiliarStorageScreen extends Screen {
                 WANDER_BUTTON, button -> switchToWanderMode());
 
         // Move buttons
-        int screenCenterY = this.height / 2;
+        int screenCenterY = layoutHeight / 2;
         int moveButtonWidth = Math.max(80, (int) (80 * scale));
 
         this.storeButton = new TexturedButton(
@@ -273,6 +286,12 @@ public class FamiliarStorageScreen extends Screen {
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
+
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(uiScale, uiScale, 1F);
+        mouseX = (int) (mouseX / uiScale);
+        mouseY = (int) (mouseY / uiScale);
+
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         BlockEntity blockEntity = minecraft.level.getBlockEntity(blockPos);
@@ -280,7 +299,7 @@ public class FamiliarStorageScreen extends Screen {
             // Render mode title at the top
             Component modeTitle = Component.translatable("ui.familiarslib.familiar_storage_screen.store_mode_title");
             int titleWidth = font.width(modeTitle);
-            guiGraphics.drawString(font, modeTitle, (this.width - titleWidth) / 2, panelY - 50, 0x00FF00);
+            guiGraphics.drawString(font, modeTitle, (layoutWidth - titleWidth) / 2, panelY - 50, 0x00FF00);
 
             // Render panel titles (ajustados para la nueva escala)
             renderTitle(guiGraphics, Component.translatable("ui.familiarslib.familiar_storage_screen.storage_familiars",
@@ -292,6 +311,8 @@ public class FamiliarStorageScreen extends Screen {
         // Render panels
         renderFamiliarPanel(guiGraphics, storedFamiliars, storedPanelX, panelY, storedScrollOffset, selectedStoredFamiliar, mouseX, mouseY, partialTick);
         renderFamiliarPanel(guiGraphics, playerFamiliars, playerPanelX, panelY, playerScrollOffset, selectedPlayerFamiliar, mouseX, mouseY, partialTick);
+
+        guiGraphics.pose().popPose();
     }
 
     private void renderTitle(GuiGraphics guiGraphics, Component title, int x, int y) {
@@ -300,7 +321,7 @@ public class FamiliarStorageScreen extends Screen {
     }
 
     private void renderFamiliarPanel(GuiGraphics guiGraphics, List<FamiliarEntry> familiars, int panelX, int panelY, int scrollOffset, UUID selectedId, int mouseX, int mouseY, float partialTick) {
-        enableScissor(panelX + PANEL_BORDER, listTop(), panelX + PANEL_WIDTH - PANEL_BORDER, listTop() + listHeight());
+        GuiFit.enableScissor(guiGraphics, panelX + PANEL_BORDER, listTop(), panelX + PANEL_WIDTH - PANEL_BORDER, listTop() + listHeight());
 
         int currentY = listTop() - scrollOffset;
 
@@ -311,7 +332,7 @@ public class FamiliarStorageScreen extends Screen {
             currentY += FAMILIAR_ITEM_HEIGHT;
         }
 
-        disableScissor();
+        GuiFit.disableScissor();
     }
 
     private void renderFamiliarItem(GuiGraphics guiGraphics, FamiliarEntry entry, int x, int y, UUID selectedId, int mouseX, int mouseY, float partialTick) {
@@ -371,25 +392,16 @@ public class FamiliarStorageScreen extends Screen {
                 new Vector3f(-0.2f, -1.0f, 0.0f)
         );
 
-        try {
-            var bufferSource = guiGraphics.bufferSource();
-            entityRenderDispatcher.render(entity, 0, 0, 0, 0, 0, poseStack, bufferSource, 15728880);
-            guiGraphics.flush();
-        } catch (Exception e) {
-            poseStack.popPose();
-            poseStack.pushPose();
-            poseStack.translate(x, y, z);
-
-            Component errorText = Component.literal("Error");
-            int textWidth = font.width(errorText);
-            guiGraphics.drawString(font, errorText, (int)x - textWidth/2, (int)y, 0xFF5555);
-        }
+        FamiliarPreviewHelper.renderWithoutShadow(guiGraphics, entityRenderDispatcher, entity, poseStack);
 
         poseStack.popPose();
+        Lighting.setupFor3DItems();
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        mouseX /= uiScale;
+        mouseY /= uiScale;
         if (button == 0) {
             if (isInList(mouseX, mouseY, storedPanelX)) {
 
@@ -423,6 +435,8 @@ public class FamiliarStorageScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        mouseX /= uiScale;
+        mouseY /= uiScale;
         if (mouseX >= storedPanelX && mouseX < storedPanelX + PANEL_WIDTH &&
                 mouseY >= panelY && mouseY < panelY + PANEL_HEIGHT) {
 
@@ -443,6 +457,21 @@ public class FamiliarStorageScreen extends Screen {
     }
 
     @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        return super.mouseReleased(mouseX / uiScale, mouseY / uiScale, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        return super.mouseDragged(mouseX / uiScale, mouseY / uiScale, button, dragX / uiScale, dragY / uiScale);
+    }
+
+    @Override
+    public void mouseMoved(double mouseX, double mouseY) {
+        super.mouseMoved(mouseX / uiScale, mouseY / uiScale);
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == 256) { // ESC
             onClose();
@@ -454,7 +483,7 @@ public class FamiliarStorageScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
+        guiGraphics.fill(0, 0, layoutWidth, layoutHeight, 0x88000000);
         STORED_PANEL.drawShortened(guiGraphics, storedPanelX, panelY, PANEL_HEIGHT, PANEL_BORDER * 2);
         PLAYER_PANEL.drawShortened(guiGraphics, playerPanelX, panelY, PANEL_HEIGHT, PANEL_BORDER * 2);
     }
@@ -462,20 +491,6 @@ public class FamiliarStorageScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
-    }
-
-    private void enableScissor(int x1, int y1, int x2, int y2) {
-        double scale = minecraft.getWindow().getGuiScale();
-        RenderSystem.enableScissor(
-                (int) (x1 * scale),
-                (int) (minecraft.getWindow().getHeight() - y2 * scale),
-                (int) ((x2 - x1) * scale),
-                (int) ((y2 - y1) * scale)
-        );
-    }
-
-    private void disableScissor() {
-        RenderSystem.disableScissor();
     }
 
     //Helper to store familiars data
@@ -490,4 +505,4 @@ public class FamiliarStorageScreen extends Screen {
             this.displayName = displayName;
         }
     }
-}
+}

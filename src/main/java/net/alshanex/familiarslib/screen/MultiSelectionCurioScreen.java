@@ -1,9 +1,11 @@
 package net.alshanex.familiarslib.screen;
 
+import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.alshanex.familiarslib.FamiliarsLib;
 import net.alshanex.familiarslib.client.FamiliarPreviewHelper;
+import net.alshanex.familiarslib.client.gui.GuiFit;
 import net.alshanex.familiarslib.client.gui.GuiSprite;
 import net.alshanex.familiarslib.data.ClientFamiliarData;
 import net.alshanex.familiarslib.data.PlayerFamiliarData;
@@ -61,6 +63,11 @@ public class MultiSelectionCurioScreen extends Screen {
     private int gridStartX;
     private int gridStartY;
 
+    // Whole-screen scale so the fixed-size panel fits at any GUI scale
+    private float uiScale = 1F;
+    private int layoutWidth;
+    private int layoutHeight;
+
     private static final ResourceLocation HEART_CONTAINER = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/container.png");
     private static final ResourceLocation HEART_FULL = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/heart/full.png");
     private static final ResourceLocation ARMOR_FULL = ResourceLocation.withDefaultNamespace("textures/gui/sprites/hud/armor_full.png");
@@ -76,9 +83,13 @@ public class MultiSelectionCurioScreen extends Screen {
         loadFamiliarData();
         loadSelectedFamiliars();
 
-        this.gridStartX = (this.width - PANEL_WIDTH) / 2 + 20;
+        this.uiScale = GuiFit.fitScale(this.width, this.height, PANEL_WIDTH, FRAME_HEIGHT);
+        this.layoutWidth = GuiFit.virtual(this.width, uiScale);
+        this.layoutHeight = GuiFit.virtual(this.height, uiScale);
 
-        int frameTop = Math.max(4, (this.height - FRAME_HEIGHT) / 2);
+        this.gridStartX = (layoutWidth - PANEL_WIDTH) / 2 + 20;
+
+        int frameTop = Math.max(4, (layoutHeight - FRAME_HEIGHT) / 2);
         this.gridStartY = frameTop + FRAME_BORDER;
 
         calculateMaxScroll();
@@ -220,6 +231,11 @@ public class MultiSelectionCurioScreen extends Screen {
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         animationTime += partialTick;
 
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().scale(uiScale, uiScale, 1F);
+        mouseX = (int) (mouseX / uiScale);
+        mouseY = (int) (mouseY / uiScale);
+
         super.render(guiGraphics, mouseX, mouseY, partialTick);
 
         int frameX = gridStartX - FRAME_BORDER;
@@ -235,6 +251,8 @@ public class MultiSelectionCurioScreen extends Screen {
         guiGraphics.drawString(font, counter, frameX + PANEL_WIDTH - FRAME_BORDER - counterWidth, textY, 0xFFFF55);
 
         renderFamiliarGrid(guiGraphics, mouseX, mouseY, partialTick);
+
+        guiGraphics.pose().popPose();
     }
 
     private void renderFamiliarGrid(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
@@ -244,7 +262,7 @@ public class MultiSelectionCurioScreen extends Screen {
         int scissorWidth = PANEL_WIDTH - 40;
         int scissorHeight = GRID_ROWS * CELL_SIZE + 20;
 
-        enableScissor(scissorX, scissorY, scissorX + scissorWidth, scissorY + scissorHeight);
+        GuiFit.enableScissor(guiGraphics, scissorX, scissorY, scissorX + scissorWidth, scissorY + scissorHeight);
 
         int currentIndex = 0;
 
@@ -263,7 +281,7 @@ public class MultiSelectionCurioScreen extends Screen {
             currentIndex++;
         }
 
-        disableScissor();
+        GuiFit.disableScissor();
     }
 
     private void renderFamiliarCell(GuiGraphics guiGraphics, FamiliarGridEntry entry, int x, int y, int mouseX, int mouseY, float partialTick) {
@@ -386,25 +404,16 @@ public class MultiSelectionCurioScreen extends Screen {
                 new Vector3f(-0.2f, -1.0f, 0.0f)
         );
 
-        try {
-            var bufferSource = guiGraphics.bufferSource();
-            entityRenderDispatcher.render(entity, 0, 0, 0, 0, 0, poseStack, bufferSource, 15728880);
-            guiGraphics.flush();
-        } catch (Exception e) {
-            poseStack.popPose();
-            poseStack.pushPose();
-            poseStack.translate(x, y, z);
-
-            Component errorText = Component.literal("Error");
-            int textWidth = font.width(errorText);
-            guiGraphics.drawString(font, errorText, (int)x - textWidth/2, (int)y, 0xFF5555);
-        }
+        FamiliarPreviewHelper.renderWithoutShadow(guiGraphics, entityRenderDispatcher, entity, poseStack);
 
         poseStack.popPose();
+        Lighting.setupFor3DItems();
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        mouseX /= uiScale;
+        mouseY /= uiScale;
         if (button == 0) {
             int currentIndex = 0;
             for (FamiliarGridEntry entry : familiarEntries) {
@@ -444,6 +453,8 @@ public class MultiSelectionCurioScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        mouseX /= uiScale;
+        mouseY /= uiScale;
         // Solo verificar que no sea scroll hacia los lados y que tengamos contenido para scrollear
         if (maxScroll > 0) {
             scrollOffset -= (int) (scrollY * SCROLL_SPEED);
@@ -452,6 +463,21 @@ public class MultiSelectionCurioScreen extends Screen {
         }
 
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        return super.mouseReleased(mouseX / uiScale, mouseY / uiScale, button);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        return super.mouseDragged(mouseX / uiScale, mouseY / uiScale, button, dragX / uiScale, dragY / uiScale);
+    }
+
+    @Override
+    public void mouseMoved(double mouseX, double mouseY) {
+        super.mouseMoved(mouseX / uiScale, mouseY / uiScale);
     }
 
     @Override
@@ -466,27 +492,13 @@ public class MultiSelectionCurioScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, 0x88000000);
+        guiGraphics.fill(0, 0, layoutWidth, layoutHeight, 0x88000000);
         PANEL.draw(guiGraphics, gridStartX - 20, gridStartY - 20);
     }
 
     @Override
     public boolean isPauseScreen() {
         return false;
-    }
-
-    private void enableScissor(int x1, int y1, int x2, int y2) {
-        double scale = minecraft.getWindow().getGuiScale();
-        RenderSystem.enableScissor(
-                (int) (x1 * scale),
-                (int) (minecraft.getWindow().getHeight() - y2 * scale),
-                (int) ((x2 - x1) * scale),
-                (int) ((y2 - y1) * scale)
-        );
-    }
-
-    private void disableScissor() {
-        RenderSystem.disableScissor();
     }
 
     private static class FamiliarGridEntry {
@@ -509,4 +521,4 @@ public class MultiSelectionCurioScreen extends Screen {
             this.canBlock = canBlock;
         }
     }
-}
+}
